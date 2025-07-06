@@ -4,6 +4,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import planillaRouter from './routes/planillaRoutes';
 import jobRoutes      from './routes/JobRoutes';
 import empresaRoutes  from './routes/empresaRoutes';
+import planillaDiaRoutes from './routes/planillaDiaRoutes';
 
 const app = express();
 
@@ -12,6 +13,8 @@ app.use('/api/auth', authRouter);
 app.use('/api/planillas', planillaRouter);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
+app.use("/planillas/:planillaId/dias", planillaDiaRoutes);
+
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;

@@ -1,8 +1,8 @@
 import { RequestHandler } from "express";
 import { PlanillaService } from "../services/PlanillaService";
 import { ApiResponse }      from "../dtos/ApiResponse";
-import type { CreatePlanillaDto, PlanillaResponse } from "../dtos/planilla/planillaDtos";
-import type { PlanillaDetailResponse } from "../dtos/planilla/planillaDtos";
+import type { CreatePlanillaDto, PlanillaResponse } from "../dtos/planillaDtos";
+import type { PlanillaDetailResponse } from "../dtos/planillaDtos";
 import { AuthRequest }      from "../middlewares/authMiddleware";
 
 // POST /planillas

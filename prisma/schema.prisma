@@ -137,7 +137,11 @@ model PlanillaDia {
   horaSalida       DateTime @map("hora_salida")
   jornada          String?  @db.VarChar(1)
   esDiaLibre       Boolean? @map("es_dia_libre")
-  comentario       String?  @db.VarChar(250)
+  comentarioEmpleado     String?  @db.VarChar(500)
+  aprobacionSupervisor   String?  @db.VarChar(45)  @map("aprobacion_supervisor")
+  aprobacionRRHH         String?  @db.VarChar(45)  @map("aprobacion_rrhh")
+  comentarioSupervisor   String?  @db.VarChar(500) @map("comentario_supervisor")
+  comentarioRRHH         String?  @db.VarChar(500) @map("comentario_rrhh")
   planillaId       Int      @map("planilla_id")
   createdAt        DateTime? @default(now())@map("created_at")
   updatedAt        DateTime? @map("updated_at")
@@ -160,7 +164,7 @@ model Job {
 
   empresaId         Int       @map("empresa_id")
   mostrarEmpresaId  Int       @map("mostrar_empresa_id")
-  
+
   empresa           Empresa   @relation("EmpresaJobs",         fields: [empresaId],         references: [id])
   empresaMostrar    Empresa   @relation("EmpresaMostrarJobs", fields: [mostrarEmpresaId], references: [id])
 
