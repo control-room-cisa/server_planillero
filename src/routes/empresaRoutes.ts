@@ -6,7 +6,7 @@ import { listEmpresasConDepartamentos } from "../controllers/EmpresaController";
 const router = Router();
 
 // Protegemos la ruta
-router.use(authenticateJWT);
+//router.use(authenticateJWT);
 
 // GET /empresas
 router.get("/", listEmpresasConDepartamentos);
