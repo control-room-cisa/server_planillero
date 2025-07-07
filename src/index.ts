@@ -4,7 +4,7 @@ import { errorHandler } from './middlewares/errorHandler';
 import planillaRouter from './routes/planillaRoutes';
 import jobRoutes      from './routes/JobRoutes';
 import empresaRoutes  from './routes/empresaRoutes';
-import planillaDiaRoutes from './routes/planillaDiaRoutes';
+import registroDiarioRoutes from './routes/RegistroDiarioRoutes';
 
 const app = express();
 
@@ -13,7 +13,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/planillas', planillaRouter);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
-app.use("/planillas/:planillaId/dias", planillaDiaRoutes);
+app.use("/api/registrodiario", registroDiarioRoutes);
 
 app.use(errorHandler);
 
