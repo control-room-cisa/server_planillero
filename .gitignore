@@ -89,3 +89,4 @@ Desktop.ini
 coverage/
 junit-report.xml
 report.xml
+.env
