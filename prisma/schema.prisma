@@ -9,74 +9,77 @@ datasource db {
 
 // ---------- roles ----------
 model Rol {
-  id        Int       @id              // según DDL no es autoincremental
-  nombre    String    @db.VarChar(45)
-  createdAt DateTime? @default(now())@map("created_at")
-  updatedAt DateTime? @map("updated_at")
-  deletedAt DateTime? @map("deleted_at")
+  id        Int        @id                             // Manual según DDL
+  nombre    String     @db.VarChar(45)
+  createdAt DateTime?  @default(now()) @map("created_at")
+  updatedAt DateTime?                @map("updated_at")
+  deletedAt DateTime?                @map("deleted_at")
 
   empleados Empleado[]
+
+  @@map("roles")
 }
 
 // --------- empresas ---------
 model Empresa {
-  id        Int           @id @default(autoincrement())
-  codigo    String?       @db.VarChar(45)
-  nombre    String?       @db.VarChar(100)
-  createdAt DateTime?     @default(now()) @map("created_at")
-  updatedAt DateTime?     @map("updated_at")
-  deletedAt DateTime?     @map("deleted_at")
+  id           Int            @id @default(autoincrement())
+  codigo       String?        @db.VarChar(45)
+  nombre       String?        @db.VarChar(100)
+  createdAt    DateTime?      @default(now()) @map("created_at")
+  updatedAt    DateTime?                     @map("updated_at")
+  deletedAt    DateTime?                     @map("deleted_at")
 
   departamentos Departamento[]
-
-  /// Relación original de Job → empresaId Empresa a la cual pertenece el Job
-  jobs          Job[]      @relation("EmpresaJobs")
-  /// Relación nueva de Job → mostrarEmpresaId empresaId Empresa a la cual se le mostrara el Job
-  jobsMostrar   Job[]      @relation("EmpresaMostrarJobs")
-
+  jobs          Job[]         @relation("EmpresaJobs")
+  jobsMostrar   Job[]         @relation("EmpresaMostrarJobs")
   planillas     Planilla[]
+
+  @@map("empresas")
 }
 
 // ------ departamentos -------
 model Departamento {
-  id         Int       @id @default(autoincrement())
-  empresaId  Int       @map("empresa_id")   
+  id         Int         @id @default(autoincrement())
+  empresaId  Int         @map("empresa_id")
   nombre     String?     @db.VarChar(100)
-  codigo     String?   @db.VarChar(45)
-  createdAt  DateTime? @default(now())@map("created_at")
-  updatedAt  DateTime? @map("updated_at")
-  deletedAt  DateTime? @map("deleted_at")
+  codigo     String?     @db.VarChar(45)
+  createdAt  DateTime?   @default(now()) @map("created_at")
+  updatedAt  DateTime?                @map("updated_at")
+  deletedAt  DateTime?                @map("deleted_at")
 
-  empresa    Empresa   @relation(fields: [empresaId], references: [id])
+  empresa    Empresa     @relation(fields: [empresaId], references: [id])
   empleados  Empleado[]
 
-  @@index([empresaId])
+  @@index([empresaId], name: "fk_departamentos_empresas_idx")
+  @@map("departamentos")
 }
 
 // ------- empleados --------
 model Empleado {
-  id                     Int        @id @default(autoincrement())
-  codigo                 String?    @db.VarChar(20) @unique
-  nombre                 String     @db.VarChar(100)
-  apellido               String?    @db.VarChar(100)
-  horasDiariasTrabajadas Int?       @map("horas_diarias_trabajadas")
-  correoElectronico      String?    @map("correo_electronico") @db.VarChar(45)
-  contrasena             String?    @db.VarChar(255)
-  createdAt              DateTime?  @default(now())@map("created_at")
-  dni                    String?    @db.VarChar(45)
-  updatedAt              DateTime?  @map("updated_at")
-  deletedAt              DateTime?  @map("deleted_at")
+  id                     Int                  @id @default(autoincrement())
+  codigo                 String?              @db.VarChar(20) @unique
+  nombre                 String               @db.VarChar(100)
+  apellido               String?              @db.VarChar(100)
+  horasDiariasTrabajadas Int?                 @map("horas_diarias_trabajadas")
+  correoElectronico      String?              @map("correo_electronico") @db.VarChar(45)
+  contrasena             String?              @db.VarChar(255)
+  createdAt              DateTime?            @default(now()) @map("created_at")
+  dni                    String?              @db.VarChar(45)
+  updatedAt              DateTime?            @map("updated_at")
+  deletedAt              DateTime?            @map("deleted_at")
 
-  rolId           Int
-  rol             Rol        @relation(fields: [rolId], references: [id])
+  rolId          Int
+  rol            Rol                  @relation(fields: [rolId], references: [id])
 
-  departamentoId  Int        @map("departamento_id")
-  departamento    Departamento @relation(fields: [departamentoId], references: [id])
+  departamentoId Int                  @map("departamento_id")
+  departamento   Departamento         @relation(fields: [departamentoId], references: [id])
 
-  planillas         Planilla[]
-  aprobaciones      Aprobacion[]
-  accesosComoSup   PlanillaAcceso[] @relation("SupervisorAccesos")
-  accesosComoEmp   PlanillaAcceso[] @relation("EmpleadoAccesos")
+  planillas      Planilla[]
+  accesosComoSupervisor PlanillaAcceso[] @relation("SupervisorAccesos")
+  accesosComoEmpleado   PlanillaAcceso[] @relation("EmpleadoAccesos")
+  registrosDiarios     RegistroDiario[]
+
+  @@map("empleados")
 }
 
 // -------- planillas -------
@@ -85,70 +88,84 @@ enum EstadoPlanilla {
   R
 }
 model Planilla {
-  id          Int              @id @default(autoincrement())
-  fechaInicio DateTime         @map("fecha_inicio")
-  fechaFin    DateTime         @map("fecha_fin")
-  estado      EstadoPlanilla   @map("estado")
-  empleadoId  Int               @map("empleado_id")
-  empresaId   Int               @map("empresa_id")
-  createdAt   DateTime         @default(now())@map("created_at")
-  updatedAt   DateTime?        @map("updated_at")
-  deletedAt   DateTime?        @map("deleted_at")
+  id          Int            @id @default(autoincrement())
+  fechaInicio DateTime       @map("fecha_inicio")
+  fechaFin    DateTime       @map("fecha_fin")
+  estado      EstadoPlanilla @map("estado")
+  empleadoId  Int            @map("empleado_id")
+  empresaId   Int            @map("empresa_id")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime?      @map("updated_at")
+  deletedAt   DateTime?      @map("deleted_at")
 
-  empleado    Empleado         @relation(fields: [empleadoId], references: [id])
-  empresa     Empresa          @relation(fields: [empresaId], references: [id])
+  empleado    Empleado       @relation(fields: [empleadoId], references: [id])
+  empresa     Empresa        @relation(fields: [empresaId], references: [id])
 
-  aprobaciones Aprobacion[]
-  planillaDias PlanillaDia[]
+
+  @@index([empleadoId], name: "fk_planillas_empleados_idx")
+  @@index([empresaId],  name: "fk_planillas_empresas_idx")
+  @@map("planillas")
 }
 
-// ------ aprobaciones ------
-model Aprobacion {
-  id         Int       @id @default(autoincrement())
-  estado     String?   @db.VarChar(45)
-  comentario String?   @db.VarChar(250)
-  createdAt  DateTime? @default(now())@map("created_at")
-  updatedAt  DateTime? @map("updated_at")
-  deletedAt  DateTime? @map("deleted_at")
-  planillaId Int       @map("planilla_id")
-  empleadoId Int       @map("empleado_id")
-
-  planilla   Planilla  @relation(fields: [planillaId], references: [id])
-  empleado   Empleado  @relation(fields: [empleadoId], references: [id])
-}
-
-// ---- planilla_accesos -----
+// ---- planilla accesos ----
 model PlanillaAcceso {
-  id           Int       @id @default(autoincrement())
-  createdAt    DateTime? @default(now())@map("created_at")
-  updatedAt    DateTime? @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
-  supervisorId Int       @map("supervisor_id")
-  empleadoId   Int       @map("empleado_id")
+  id           Int      @id @default(autoincrement())
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime?                @map("updated_at")
+  deletedAt    DateTime?                @map("deleted_at")
+  supervisorId Int      @map("supervisor_id")
+  empleadoId   Int      @map("empleado_id")
 
-  supervisor   Empleado  @relation("SupervisorAccesos", fields: [supervisorId], references: [id])
-  empleado     Empleado  @relation("EmpleadoAccesos", fields: [empleadoId],   references: [id])
+  supervisor   Empleado @relation("SupervisorAccesos", fields: [supervisorId], references: [id])
+  empleado     Empleado @relation("EmpleadoAccesos",   fields: [empleadoId],   references: [id])
+
+  @@index([supervisorId], name: "fk_accesos_supervisor_idx")
+  @@index([empleadoId],   name: "fk_accesos_empleado_idx")
+  @@map("planilla_accesos")
 }
 
-// ------ planilla_dias ------
-model PlanillaDia {
-  id               Int      @id @default(autoincrement())
-  horaEntrada      DateTime @map("hora_entrada")
-  horaSalida       DateTime @map("hora_salida")
-  jornada          String?  @db.VarChar(1)
-  esDiaLibre       Boolean? @map("es_dia_libre")
-  comentarioEmpleado     String?  @db.VarChar(500)
-  aprobacionSupervisor   String?  @db.VarChar(45)  @map("aprobacion_supervisor")
-  aprobacionRRHH         String?  @db.VarChar(45)  @map("aprobacion_rrhh")
-  comentarioSupervisor   String?  @db.VarChar(500) @map("comentario_supervisor")
-  comentarioRRHH         String?  @db.VarChar(500) @map("comentario_rrhh")
-  planillaId       Int      @map("planilla_id")
-  createdAt        DateTime? @default(now())@map("created_at")
-  updatedAt        DateTime? @map("updated_at")
-  deletedAt        DateTime? @map("deleted_at")
+// -- registros diarios ----
+model RegistroDiario {
+  id                   Int             @id @default(autoincrement())
+  horaEntrada          DateTime        @map("hora_entrada")
+  horaSalida           DateTime        @map("hora_salida")
+  jornada              String?         @db.VarChar(1)
+  esDiaLibre           Boolean?        @map("es_dia_libre")
+  comentarioEmpleado   String?         @db.VarChar(500)
+  aprobacionSupervisor String?         @db.VarChar(45)  @map("aprobacion_supervisor")
+  aprobacionRrhh       String?         @db.VarChar(45)  @map("aprobacion_rrhh")
+  comentarioSupervisor String?         @db.VarChar(500) @map("comentario_supervisor")
+  comentarioRrhh       String?         @db.VarChar(500) @map("comentario_rrhh")
+  empleadoId           Int             @map("empleado_id")
+  createdAt            DateTime?       @default(now())   @map("created_at")
+  updatedAt            DateTime?                     @map("updated_at")
+  deletedAt            DateTime?                     @map("deleted_at")
 
-  planilla         Planilla @relation(fields: [planillaId], references: [id])
-  actividades      PlanillaDiaActividad[]
+  empleado             Empleado        @relation(fields: [empleadoId], references: [id])
+  actividades          Actividad[]
+
+  @@index([empleadoId], name: "idx_registro_empleado")
+  @@map("registros_diarios")
+}
+
+// -- actividades ----
+model Actividad {
+  id                 Int              @id @default(autoincrement()) @map("id")
+  registroDiarioId   Int              @map("planilla_dia_id")
+  jobId              Int              @map("job_id")
+  duracionHoras      Int              @map("duracion_horas")
+  esExtra            Boolean?         @map("es_extra")
+  className          String?          @db.VarChar(45) @map("class")
+  descripcion        String           @db.VarChar(250)
+  createdAt          DateTime?        @default(now()) @map("created_at")
+  updatedAt          DateTime?                      @map("updated_at")
+  deletedAt          DateTime?                      @map("deleted_at")
+
+  registroDiario     RegistroDiario   @relation(fields: [registroDiarioId], references: [id])
+  job                Job              @relation(fields: [jobId],            references: [id])
+
+  @@unique([registroDiarioId, jobId], name: "uq_actividad_registro_job")
+  @@map("actividades")
 }
 
 // --------- jobs ---------
@@ -158,38 +175,17 @@ model Job {
   codigo            String?   @db.VarChar(10)
   descripcion       String?   @db.VarChar(45)
   createdAt         DateTime? @default(now()) @map("created_at")
-  updatedAt         DateTime? @map("updated_at")
-  deletedAt         DateTime? @map("deleted_at")
-
-
+  updatedAt         DateTime?                @map("updated_at")
+  deletedAt         DateTime?                @map("deleted_at")
   empresaId         Int       @map("empresa_id")
   mostrarEmpresaId  Int       @map("mostrar_empresa_id")
 
-  empresa           Empresa   @relation("EmpresaJobs",         fields: [empresaId],         references: [id])
-  empresaMostrar    Empresa   @relation("EmpresaMostrarJobs", fields: [mostrarEmpresaId], references: [id])
+  empresa           Empresa   @relation("EmpresaJobs",         fields: [empresaId],        references: [id])
+  empresaMostrar    Empresa   @relation("EmpresaMostrarJobs",  fields: [mostrarEmpresaId], references: [id])
 
-  actividades       PlanillaDiaActividad[]
+  actividades       Actividad[]
 
-  @@index([empresaId],        name: "fk_jobs_empresas1_idx")
-  @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa1_idx")
+  @@index([empresaId],        name: "fk_jobs_empresa_idx")
+  @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa_idx")
   @@map("jobs")
-}
-
-// -- planilla_dia_actividades --
-model PlanillaDiaActividad {
-  id            Int      @map("id") @default(autoincrement())
-  planillaDiaId Int      @map("planilla_dia_id")
-  jobId         Int      @map("job_id")
-  duracionHoras Int      @map("duracion_horas")
-  esExtra       Boolean? @map("es_extra")
-  className     String?  @map("class") @db.VarChar(45)
-  descripcion   String   @db.VarChar(250)
-  createdAt     DateTime? @default(now())@map("created_at")
-  updatedAt     DateTime? @map("updated_at")
-  deletedAt     DateTime? @map("deleted_at")
-
-  planillaDia   PlanillaDia @relation(fields: [planillaDiaId], references: [id])
-  job           Job         @relation(fields: [jobId], references: [id])
-
-  @@id([id, planillaDiaId, jobId])
 }
