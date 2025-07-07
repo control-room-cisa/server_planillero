@@ -88,20 +88,41 @@ export class RegistroDiarioRepository {
     }
   }
 
-  /** Lectura con actividades→job */
+  // src/repositories/RegistroDiarioRepository.ts
   static async findByEmpleadoAndDateWithActivities(
     empleadoId: number,
     fecha:      Date
   ): Promise<RegistroDiarioDetail | null> {
-    const inicio = new Date(fecha); inicio.setHours(0,0,0,0);
-    const fin    = new Date(inicio); fin .setDate(inicio.getDate()+1);
+    // Usa los getters UTC para no mezclar local vs UTC
+    const y = fecha.getUTCFullYear();
+    const m = fecha.getUTCMonth();   // 0 = enero, …, 6 = julio
+    const d = fecha.getUTCDate();    // el día “real” de la ISO
+
+    const inicio = new Date(y, m, d, 0, 0, 0, 0);
+    const fin    = new Date(y, m, d + 1, 0, 0, 0, 0);
+
+    console.log(
+      "rango local:",
+      inicio.toISOString(),
+      fin.toISOString(),
+      "empleado",
+      empleadoId
+    );
+
     return prisma.registroDiario.findFirst({
       where: {
         empleadoId,
         deletedAt: null,
         horaEntrada: { gte: inicio, lt: fin },
       },
-      include: { actividades: { where: { deletedAt: null }, include: { job: true } } },
+      include: {
+        actividades: {
+          where: { deletedAt: null },
+          include: { job: true }
+        }
+      }
     });
   }
+
+
 }
