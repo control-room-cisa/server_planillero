@@ -35,6 +35,9 @@ Aplicación RESTful construida con Node.js, TypeScript, Express y Prisma ORM sob
     ### Genera (o regenera) el cliente de Prisma
     `npx prisma generate`
 
+    ### Aplicar semillero en base de datos
+    `npx prisma db seed`
+
 5. **Scripts disponibles**
 
     `npm run dev`
