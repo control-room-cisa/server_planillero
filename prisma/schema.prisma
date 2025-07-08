@@ -127,6 +127,7 @@ model PlanillaAcceso {
 // -- registros diarios ----
 model RegistroDiario {
   id                   Int             @id @default(autoincrement())
+  fecha                String          @db.VarChar(10)
   horaEntrada          DateTime        @map("hora_entrada")
   horaSalida           DateTime        @map("hora_salida")
   jornada              String?         @db.VarChar(1)
@@ -146,6 +147,7 @@ model RegistroDiario {
   empleado             Empleado        @relation(fields: [empleadoId], references: [id])
   actividades          Actividad[]
 
+  @@unique([empleadoId, fecha], name: "uq_registro_empleado_fecha")
   @@index([empleadoId], name: "idx_registro_empleado")
   @@map("registros_diarios")
 }
@@ -153,7 +155,7 @@ model RegistroDiario {
 // -- actividades ----
 model Actividad {
   id                 Int              @id @default(autoincrement()) @map("id")
-  registroDiarioId   Int              @map("planilla_dia_id")
+  registroDiarioId   Int              @map("registro_diario_id")
   jobId              Int              @map("job_id")
   duracionHoras      Int              @map("duracion_horas")
   esExtra            Boolean?         @map("es_extra")
