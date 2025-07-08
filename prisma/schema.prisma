@@ -160,13 +160,13 @@ model Actividad {
   className          String?          @db.VarChar(45) @map("class")
   descripcion        String           @db.VarChar(250)
   createdAt          DateTime?        @default(now()) @map("created_at")
-  updatedAt          DateTime?                      @map("updated_at")
-  deletedAt          DateTime?                      @map("deleted_at")
+  updatedAt          DateTime?        @map("updated_at")
+  deletedAt          DateTime?        @map("deleted_at")
 
   registroDiario     RegistroDiario   @relation(fields: [registroDiarioId], references: [id])
   job                Job              @relation(fields: [jobId],            references: [id])
 
-  @@unique([registroDiarioId, jobId], name: "uq_actividad_registro_job")
+  @@unique([registroDiarioId], name: "uq_actividad_registro_job")
   @@map("actividades")
 }
 
