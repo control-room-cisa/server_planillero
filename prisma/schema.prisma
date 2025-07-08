@@ -126,26 +126,26 @@ model PlanillaAcceso {
 
 // -- registros diarios ----
 model RegistroDiario {
-  id                   Int             @id @default(autoincrement())
-  fecha                String          @db.VarChar(10)
-  horaEntrada          DateTime        @map("hora_entrada")
-  horaSalida           DateTime        @map("hora_salida")
-  jornada              String?         @db.VarChar(1)
-  esDiaLibre           Boolean?        @map("es_dia_libre")
-  comentarioEmpleado   String?         @db.VarChar(500)
-  aprobacionSupervisor Boolean?        @map("aprobacion_supervisor")
-  aprobacionRrhh       Boolean?        @map("aprobacion_rrhh")
-  codigoSupervisor     String?         @db.VarChar(45)@map("codigo_supervisor")
-  codigoRrhh           String?         @db.VarChar(45)@map("codigo_rrhh")
-  comentarioSupervisor String?         @db.VarChar(500) @map("comentario_supervisor")
-  comentarioRrhh       String?         @db.VarChar(500) @map("comentario_rrhh")
-  empleadoId           Int             @map("empleado_id")
-  createdAt            DateTime?       @default(now())   @map("created_at")
-  updatedAt            DateTime?       @map("updated_at")
-  deletedAt            DateTime?       @map("deleted_at")
+  id                   Int       @id @default(autoincrement())
+  fecha                String    @db.VarChar(10)
+  horaEntrada          DateTime  @map("hora_entrada")
+  horaSalida           DateTime  @map("hora_salida")
+  jornada              String?   @db.VarChar(1)
+  esDiaLibre           Boolean?  @map("es_dia_libre")
+  comentarioEmpleado   String?   @db.VarChar(500)
+  aprobacionSupervisor Boolean?  @map("aprobacion_supervisor")
+  aprobacionRrhh       Boolean?  @map("aprobacion_rrhh")
+  codigoSupervisor     String?   @db.VarChar(45) @map("codigo_supervisor")
+  codigoRrhh           String?   @db.VarChar(45) @map("codigo_rrhh")
+  comentarioSupervisor String?   @db.VarChar(500) @map("comentario_supervisor")
+  comentarioRrhh       String?   @db.VarChar(500) @map("comentario_rrhh")
+  empleadoId           Int       @map("empleado_id")
+  createdAt            DateTime? @default(now())   @map("created_at")
+  updatedAt            DateTime? @map("updated_at")
+  deletedAt            DateTime? @map("deleted_at")
 
-  empleado             Empleado        @relation(fields: [empleadoId], references: [id])
-  actividades          Actividad[]
+  empleado   Empleado  @relation(fields: [empleadoId], references: [id])
+  actividades Actividad[]
 
   @@unique([empleadoId, fecha], name: "uq_registro_empleado_fecha")
   @@index([empleadoId], name: "idx_registro_empleado")
@@ -168,7 +168,6 @@ model Actividad {
   registroDiario     RegistroDiario   @relation(fields: [registroDiarioId], references: [id])
   job                Job              @relation(fields: [jobId],            references: [id])
 
-  @@unique([registroDiarioId], name: "uq_actividad_registro_job")
   @@map("actividades")
 }
 

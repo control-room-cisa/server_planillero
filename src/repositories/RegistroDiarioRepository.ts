@@ -102,8 +102,11 @@ export class RegistroDiarioRepository {
       // 3b) Si no existe, creamos uno nuevo
       return prisma.registroDiario.create({
         data: {
-          empleadoId,
-          fecha,               // asigna "YYYY-MM-DD"
+          // ✏️ conecta al empleado existente en vez de usar el escalar directamente
+          empleado: {
+            connect: { id: empleadoId }
+          },
+          fecha,
           horaEntrada:          restOfDia.horaEntrada,
           horaSalida:           restOfDia.horaSalida,
           jornada:              restOfDia.jornada,
@@ -124,6 +127,7 @@ export class RegistroDiarioRepository {
           actividades: { include: { job: true } },
         },
       });
+
     }
   }
 
@@ -135,7 +139,7 @@ export class RegistroDiarioRepository {
     empleadoId: number,
     fecha:      string
   ): Promise<RegistroDiarioDetail | null> {
-    
+
     return prisma.registroDiario.findFirst({
       where: {
         empleadoId,
