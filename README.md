@@ -16,7 +16,7 @@ Aplicación RESTful construida con Node.js, TypeScript, Express y Prisma ORM sob
 
 1. **Clonar el repositorio**  
    ```bash
-   git clone <tu-repo-url> planillero-backend
+   git clone https://github.com/angelflxgrp/server_planillero.git planillero-backend
    cd planillero-backend
 
 2. **Instalar dependencias**
@@ -30,7 +30,7 @@ Aplicación RESTful construida con Node.js, TypeScript, Express y Prisma ORM sob
     `
 4. **Aplicar migraciones y generar cliente Prisma**
     ### Crea la migración inicial (o nuevas migraciones tras cambios)
-    `npx prisma migrate dev --name init`
+    `npx prisma migrate deploy`
 
     ### Genera (o regenera) el cliente de Prisma
     `npx prisma generate`
