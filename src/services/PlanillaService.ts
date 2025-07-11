@@ -71,5 +71,18 @@ export class PlanillaService {
       throw new AppError("No se encontró ninguna planilla para este empleado", 404);
     }
     return detalles;
+  };
+
+  // Para rango de fechas (nuevo)
+  static async getPlanillaDetalleRango(empleadoId: number, start: string, end: string) {
+    const [registros, empleado] = await Promise.all([
+      PlanillaRepository.findByEmpleadoAndDateRange(empleadoId, start, end),
+      PlanillaRepository.getEmpleadoBasicData(empleadoId)
+    ]);
+
+    return {
+      empleado,
+      registrosDiarios: registros
+    };
   }
 }

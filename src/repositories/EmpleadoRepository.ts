@@ -40,7 +40,7 @@ export class EmpleadoRepository {
     });
   }
 
-  static async findLastCodigo(): Promise<{ codigo: string | null; } | null > {
+  static async findLastCodigo(): Promise<{ codigo: string | null; } | null> {
     return prisma.empleado.findFirst({
       where: {
         codigo: {
@@ -51,5 +51,26 @@ export class EmpleadoRepository {
       orderBy: { codigo: "desc" },
       select: { codigo: true }
     });
+  };
+
+  static async findByDepartment(departamentoId: number): Promise<any[]> {
+    return prisma.empleado.findMany({
+      where: {
+        departamentoId,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true,
+        codigo: true,
+        departamento: {
+          select: {
+            nombre: true
+          }
+        }
+      }
+    });
   }
+
 }

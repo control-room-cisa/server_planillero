@@ -113,4 +113,33 @@ export interface PlanillaDiaResponse {
       descripcion?:string | null;
     };
   }>;
+};
+
+// Para obtener planillas por empleado y departamento
+export interface PlanillaDetalleDto {
+  empleado: {
+    id: number;
+    nombre: string;
+    apellido: string;
+    codigo?: string;
+  } | null;
+  registroDiario: {
+    id: number;
+    fecha: string;
+    horaEntrada: string;
+    horaSalida: string;
+    comentarioEmpleado: string | null;
+    comentarioSupervisor: string | null;
+    actividades: {
+      id: number;
+      descripcion: string;
+      duracionHoras: number;
+      job: {
+        id: number;
+        nombre: string;
+        descripcion: string;
+      }
+    }[]
+  } | null;
 }
+

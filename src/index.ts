@@ -6,6 +6,7 @@ import planillaRouter from './routes/planillaRoutes';
 import jobRoutes      from './routes/JobRoutes';
 import empresaRoutes  from './routes/empresaRoutes';
 import registroDiarioRoutes from './routes/RegistroDiarioRoutes';
+import empleadoRoutes from './routes/empleadoRoutes';
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/planillas', planillaRouter);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
 app.use("/api/registrodiario", registroDiarioRoutes);
+app.use('/api/empleadosByDepartamento', empleadoRoutes);
 
 app.use(errorHandler);
 

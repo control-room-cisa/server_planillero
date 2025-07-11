@@ -15,7 +15,7 @@ export class PlanillaRepository {
         deletedAt: null,
         AND: [
           { fechaInicio: { lte: fechaFin } },
-          { fechaFin:    { gte: fechaInicio } },
+          { fechaFin: { gte: fechaInicio } },
         ],
       },
     });
@@ -23,19 +23,19 @@ export class PlanillaRepository {
 
   /** Crea una nueva planilla */
   static async createPlanilla(data: {
-    empleadoId:  number;
-    empresaId:   number;
+    empleadoId: number;
+    empresaId: number;
     fechaInicio: Date;
-    fechaFin:    Date;
+    fechaFin: Date;
   }): Promise<Planilla> {
     return prisma.planilla.create({
       data: {
         fechaInicio: data.fechaInicio,
-        fechaFin:    data.fechaFin,
-        estado:      "A",
+        fechaFin: data.fechaFin,
+        estado: "A",
         // conecta la relación en vez de usar el scalar empleadoId directo
         empleado: { connect: { id: data.empleadoId } },
-        empresa:  { connect: { id: data.empresaId  } },
+        empresa: { connect: { id: data.empresaId } },
       },
     });
   }
@@ -62,9 +62,9 @@ export class PlanillaRepository {
       grouped.map(g =>
         prisma.planilla.findFirst({
           where: {
-            empleadoId:  g.empleadoId,
+            empleadoId: g.empleadoId,
             fechaInicio: g._max.fechaInicio!,
-            deletedAt:   null,
+            deletedAt: null,
           },
         })
       )
@@ -136,5 +136,59 @@ export class PlanillaRepository {
         },
       },
     });
+  };
+
+
+  static async findByEmpleadoAndDateRange(empleadoId: number, start: string, end: string) {
+  return prisma.registroDiario.findMany({
+    where: {
+      empleadoId,
+      fecha: {
+        gte: start,
+        lte: end,
+      },
+      deletedAt: null
+    },
+    select: {
+      id: true,
+      fecha: true,
+      horaEntrada: true,
+      horaSalida: true,
+      comentarioEmpleado: true,
+      comentarioSupervisor: true,
+      actividades: {
+        where: { deletedAt: null },
+        select: {
+          id: true,
+          descripcion: true,
+          duracionHoras: true,
+          job: {
+            select: {
+              id: true,
+              nombre: true,
+              descripcion: true
+            }
+          }
+        }
+      }
+    }
+  });
+}
+
+
+  static async getEmpleadoBasicData(empleadoId: number) {
+    return prisma.empleado.findFirst({
+      where: {
+        id: empleadoId,
+        deletedAt: null
+      },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true,
+        codigo: true
+      }
+    });
   }
+
 }
