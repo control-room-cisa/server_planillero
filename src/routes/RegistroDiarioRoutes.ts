@@ -2,7 +2,9 @@ import { Router } from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 import {
   upsertRegistroDiario,
-  getRegistroDiarioByDate
+  getRegistroDiarioByDate,
+  aprobacionRrhh,
+  aprobacionSupervisor,
 } from "../controllers/RegistroDiarioController";
 
 const router = Router();
@@ -15,5 +17,11 @@ router.post("/", upsertRegistroDiario);
 
 // GET  /registros?date=YYYY-MM-DD  → obtiene el registro con actividades→job
 router.get("/", getRegistroDiarioByDate);
+
+router.patch("/aprobacion-supervisor/:id", aprobacionSupervisor);
+
+// PATCH  /registros/:id/aprobacion-rrhh
+//         → actualiza aprobación, código y comentario de RRHH
+router.patch("/aprobacion-rrhh/:id", aprobacionRrhh);
 
 export default router;

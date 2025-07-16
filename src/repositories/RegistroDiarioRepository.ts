@@ -4,30 +4,30 @@ import type { RegistroDiario, Actividad, Job } from "@prisma/client";
 
 /** DTO reutilizable para cada actividad */
 export type ActividadInput = {
-  jobId:         number;
+  jobId: number;
   duracionHoras: number;
-  esExtra?:      boolean;
-  className?:    string;
-  descripcion:   string;
+  esExtra?: boolean;
+  className?: string;
+  descripcion: string;
 };
 
 /** Parámetros de upsert: datos obligatorios y opcionales */
 export type UpsertRegistroDiarioParams = {
-  empleadoId:           number;
+  empleadoId: number;
   /** Fecha en formato "YYYY-MM-DD" */
-  fecha:                string;
-  horaEntrada:          Date;
-  horaSalida:           Date;
-  jornada?:             string;
-  esDiaLibre?:          boolean;
-  comentarioEmpleado?:  string;
+  fecha: string;
+  horaEntrada: Date;
+  horaSalida: Date;
+  jornada?: string;
+  esDiaLibre?: boolean;
+  comentarioEmpleado?: string;
   aprobacionSupervisor?: boolean;
-  aprobacionRrhh?:      boolean;
-  codigoSupervisor?:    string;
-  codigoRrhh?:          string;
+  aprobacionRrhh?: boolean;
+  codigoSupervisor?: string;
+  codigoRrhh?: string;
   comentarioSupervisor?: string;
-  comentarioRrhh?:      string;
-  actividades?:         ActividadInput[];
+  comentarioRrhh?: string;
+  actividades?: ActividadInput[];
 };
 
 /** Detalle con actividades y su job */
@@ -43,30 +43,26 @@ export class RegistroDiarioRepository {
   static async upsertWithActivities(
     params: UpsertRegistroDiarioParams
   ): Promise<RegistroDiarioDetail> {
-    const {
-      empleadoId,
-      fecha,
-      actividades,
-      ...restOfDia
-    } = params;
+    const { empleadoId, fecha, actividades, ...restOfDia } = params;
 
     // 1) Buscamos existente por empleadoId + fecha
     const existente = await prisma.registroDiario.findFirst({
       where: {
         empleadoId,
         deletedAt: null,
-        fecha,               // ya es "YYYY-MM-DD"
+        fecha, // ya es "YYYY-MM-DD"
       },
     });
 
     // 2) Preparamos payload de actividades
-    const actPayload = actividades?.map(a => ({
-      jobId:         a.jobId,
-      duracionHoras: a.duracionHoras,
-      esExtra:       a.esExtra,
-      className:     a.className,
-      descripcion:   a.descripcion,
-    })) ?? [];
+    const actPayload =
+      actividades?.map((a) => ({
+        jobId: a.jobId,
+        duracionHoras: a.duracionHoras,
+        esExtra: a.esExtra,
+        className: a.className,
+        descripcion: a.descripcion,
+      })) ?? [];
 
     if (existente) {
       // 3a) Si existe, borra actividades previas y actualiza el resto
@@ -78,17 +74,17 @@ export class RegistroDiarioRepository {
         where: { id: existente.id },
         data: {
           // no reasignamos `fecha`
-          horaEntrada:          restOfDia.horaEntrada,
-          horaSalida:           restOfDia.horaSalida,
-          jornada:              restOfDia.jornada,
-          esDiaLibre:           restOfDia.esDiaLibre,
-          comentarioEmpleado:   restOfDia.comentarioEmpleado,
+          horaEntrada: restOfDia.horaEntrada,
+          horaSalida: restOfDia.horaSalida,
+          jornada: restOfDia.jornada,
+          esDiaLibre: restOfDia.esDiaLibre,
+          comentarioEmpleado: restOfDia.comentarioEmpleado,
           aprobacionSupervisor: restOfDia.aprobacionSupervisor,
-          aprobacionRrhh:       restOfDia.aprobacionRrhh,
-          codigoSupervisor:     restOfDia.codigoSupervisor,
-          codigoRrhh:           restOfDia.codigoRrhh,
+          aprobacionRrhh: restOfDia.aprobacionRrhh,
+          codigoSupervisor: restOfDia.codigoSupervisor,
+          codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
-          comentarioRrhh:       restOfDia.comentarioRrhh,
+          comentarioRrhh: restOfDia.comentarioRrhh,
 
           actividades: {
             create: actPayload,
@@ -104,20 +100,20 @@ export class RegistroDiarioRepository {
         data: {
           // ✏️ conecta al empleado existente en vez de usar el escalar directamente
           empleado: {
-            connect: { id: empleadoId }
+            connect: { id: empleadoId },
           },
           fecha,
-          horaEntrada:          restOfDia.horaEntrada,
-          horaSalida:           restOfDia.horaSalida,
-          jornada:              restOfDia.jornada,
-          esDiaLibre:           restOfDia.esDiaLibre,
-          comentarioEmpleado:   restOfDia.comentarioEmpleado,
+          horaEntrada: restOfDia.horaEntrada,
+          horaSalida: restOfDia.horaSalida,
+          jornada: restOfDia.jornada,
+          esDiaLibre: restOfDia.esDiaLibre,
+          comentarioEmpleado: restOfDia.comentarioEmpleado,
           aprobacionSupervisor: restOfDia.aprobacionSupervisor,
-          aprobacionRrhh:       restOfDia.aprobacionRrhh,
-          codigoSupervisor:     restOfDia.codigoSupervisor,
-          codigoRrhh:           restOfDia.codigoRrhh,
+          aprobacionRrhh: restOfDia.aprobacionRrhh,
+          codigoSupervisor: restOfDia.codigoSupervisor,
+          codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
-          comentarioRrhh:       restOfDia.comentarioRrhh,
+          comentarioRrhh: restOfDia.comentarioRrhh,
 
           actividades: {
             create: actPayload,
@@ -127,7 +123,6 @@ export class RegistroDiarioRepository {
           actividades: { include: { job: true } },
         },
       });
-
     }
   }
 
@@ -137,9 +132,8 @@ export class RegistroDiarioRepository {
    */
   static async findByEmpleadoAndDateWithActivities(
     empleadoId: number,
-    fecha:      string
+    fecha: string
   ): Promise<RegistroDiarioDetail | null> {
-
     return prisma.registroDiario.findFirst({
       where: {
         empleadoId,
@@ -151,6 +145,47 @@ export class RegistroDiarioRepository {
           where: { deletedAt: null },
           include: { job: true },
         },
+      },
+    });
+  }
+
+  static async updateSupervisorApproval(
+    id: number,
+    data: {
+      aprobacionSupervisor: boolean;
+      codigoSupervisor?: string;
+      comentarioSupervisor?: string;
+    }
+  ): Promise<RegistroDiario> {
+    return prisma.registroDiario.update({
+      where: { id },
+      data: {
+        aprobacionSupervisor: data.aprobacionSupervisor,
+        codigoSupervisor: data.codigoSupervisor,
+        comentarioSupervisor: data.comentarioSupervisor,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
+   * Actualiza sólo los campos de aprobación de RRHH en un registro diario.
+   */
+  static async updateRrhhApproval(
+    id: number,
+    data: {
+      aprobacionRrhh: boolean;
+      codigoRrhh?: string;
+      comentarioRrhh?: string;
+    }
+  ): Promise<RegistroDiario> {
+    return prisma.registroDiario.update({
+      where: { id },
+      data: {
+        aprobacionRrhh: data.aprobacionRrhh,
+        codigoRrhh: data.codigoRrhh,
+        comentarioRrhh: data.comentarioRrhh,
+        updatedAt: new Date(),
       },
     });
   }

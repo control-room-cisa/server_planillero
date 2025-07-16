@@ -1,4 +1,5 @@
 // src/services/RegistroDiarioService.ts
+import { SupervisorApprovalDto, RrhhApprovalDto } from "../dtos/RegistroDiarioApprovalDtos";
 import {
   RegistroDiarioRepository,
   UpsertRegistroDiarioParams,
@@ -31,5 +32,21 @@ export class RegistroDiarioService {
       empleadoId,
       fecha
     );
+  }
+  static aprobarSupervisor(
+    registroDiarioId: number,
+    dto: SupervisorApprovalDto
+  ) {
+    return RegistroDiarioRepository.updateSupervisorApproval(registroDiarioId, dto);
+  }
+
+  /**
+   * Actualiza la aprobación de RRHH de un registro diario.
+   */
+  static aprobarRrhh(
+    registroDiarioId: number,
+    dto: RrhhApprovalDto
+  ) {
+    return RegistroDiarioRepository.updateRrhhApproval(registroDiarioId, dto);
   }
 }

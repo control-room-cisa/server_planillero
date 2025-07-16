@@ -4,6 +4,13 @@ import type { Empleado } from "@prisma/client";
 
 export class EmpleadoRepository {
   /** Busca un empleado por su código (ahora marcado @unique) */
+  static async findById(id: number): Promise<Empleado | null> {
+    return prisma.empleado.findFirst({
+      where: { id },
+    });
+  }
+
+  /** Busca un empleado por su código (ahora marcado @unique) */
   static async findByCodigo(codigo: string): Promise<Empleado | null> {
     return prisma.empleado.findUnique({
       where: { codigo },
@@ -11,7 +18,9 @@ export class EmpleadoRepository {
   }
 
   /** Busca un empleado por su correo electrónico */
-  static async findByEmail(correoElectronico: string): Promise<Empleado | null> {
+  static async findByEmail(
+    correoElectronico: string
+  ): Promise<Empleado | null> {
     return prisma.empleado.findFirst({
       where: { correoElectronico },
     });
@@ -40,24 +49,24 @@ export class EmpleadoRepository {
     });
   }
 
-  static async findLastCodigo(): Promise<{ codigo: string | null; } | null> {
+  static async findLastCodigo(): Promise<{ codigo: string | null } | null> {
     return prisma.empleado.findFirst({
       where: {
         codigo: {
           not: null,
-          startsWith: "EMP"
-        }
+          startsWith: "EMP",
+        },
       },
       orderBy: { codigo: "desc" },
-      select: { codigo: true }
+      select: { codigo: true },
     });
-  };
+  }
 
   static async findByDepartment(departamentoId: number): Promise<any[]> {
     return prisma.empleado.findMany({
       where: {
         departamentoId,
-        deletedAt: null
+        deletedAt: null,
       },
       select: {
         id: true,
@@ -66,11 +75,33 @@ export class EmpleadoRepository {
         codigo: true,
         departamento: {
           select: {
-            nombre: true
-          }
-        }
-      }
+            nombre: true,
+          },
+        },
+      },
     });
   }
 
+  static async findByCompany(empresaId: number): Promise<any[]> {
+    return prisma.empleado.findMany({
+      where: {
+        deletedAt: null,
+        departamento: {
+          empresaId: empresaId,
+        },
+      },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true,
+        codigo: true,
+        departamento: {
+          select: {
+            nombre: true,
+            empresaId: true,
+          },
+        },
+      },
+    });
+  }
 }

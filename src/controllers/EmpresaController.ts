@@ -2,15 +2,13 @@
 import { RequestHandler } from "express";
 import { EmpresaService } from "../services/EmpresaService";
 import { ApiResponse } from "../dtos/ApiResponse";
-import type {
-  EmpresaConDepartamentosDto,
-} from "../dtos/empresaDtos";
+import type { EmpresaConDepartamentosDto } from "../dtos/empresaDtos";
 
 export const listEmpresasConDepartamentos: RequestHandler<
-  {},                                   // params
+  {}, // params
   ApiResponse<EmpresaConDepartamentosDto[]>, // res body
-  {},                                   // req body
-  {}                                    // query
+  {}, // req body
+  {} // query
 > = async (_req, res, next) => {
   try {
     const empresas = await EmpresaService.listWithDepartments();
