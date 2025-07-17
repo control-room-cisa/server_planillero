@@ -28,4 +28,37 @@ static async getByDepartment(departamentoId: number): Promise<EmployeeDto[]> {
     }));
   }
 
+static async getById(id: number) {
+  return EmpleadoRepository.findById(id);
+}
+
+static async getByCompany(empresaId?: number): Promise<EmployeeDto[]> {
+  // Si no se proporciona empresaId, obtener todos los empleados de todas las empresas
+  let rows;
+  if (empresaId) {
+    rows = await EmpleadoRepository.findByCompany(empresaId);
+  } else {
+    // Obtener todos los empleados con sus departamentos
+    rows = await EmpleadoRepository.findAllWithDepartment();
+  }
+  
+  return rows.map((e: { 
+    id: number; 
+    nombre: string; 
+    apellido: string; 
+    codigo?: string; 
+    departamento: { 
+      nombre: string; 
+      empresaId: number; 
+    } 
+  }) => ({
+    id: e.id,
+    nombre: e.nombre,
+    apellido: e.apellido,
+    codigo: e.codigo,
+    departamento: e.departamento.nombre,
+    empresaId: e.departamento.empresaId
+  }));
+}
+
 }

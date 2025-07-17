@@ -104,4 +104,24 @@ export class EmpleadoRepository {
       },
     });
   }
+
+  static async findAllWithDepartment(): Promise<any[]> {
+    return prisma.empleado.findMany({
+      where: {
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        apellido: true,
+        codigo: true,
+        departamento: {
+          select: {
+            nombre: true,
+            empresaId: true,
+          },
+        },
+      },
+    });
+  }
 }
