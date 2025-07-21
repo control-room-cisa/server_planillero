@@ -12,7 +12,7 @@ import { RegistroDiario } from "@prisma/client";
 import {
   RrhhApprovalDto,
   SupervisorApprovalDto,
-} from "../dtos/RegistroDiarioApprovalDtos";
+} from "../dtos/RegistroDiarioApproval.dto";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 

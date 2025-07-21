@@ -2,7 +2,7 @@
 import { RequestHandler } from "express";
 import { EmpresaService } from "../services/EmpresaService";
 import { ApiResponse } from "../dtos/ApiResponse";
-import type { EmpresaConDepartamentosDto } from "../dtos/empresaDtos";
+import type { EmpresaConDepartamentosDto } from "../dtos/empresa.dto";
 
 export const listEmpresasConDepartamentos: RequestHandler<
   {}, // params

@@ -1,9 +1,12 @@
 // src/services/RegistroDiarioService.ts
-import { SupervisorApprovalDto, RrhhApprovalDto } from "../dtos/RegistroDiarioApprovalDtos";
+import {
+  SupervisorApprovalDto,
+  RrhhApprovalDto,
+} from "../dtos/RegistroDiarioApproval.dto";
 import {
   RegistroDiarioRepository,
   UpsertRegistroDiarioParams,
-  RegistroDiarioDetail
+  RegistroDiarioDetail,
 } from "../repositories/RegistroDiarioRepository";
 
 export class RegistroDiarioService {
@@ -17,7 +20,7 @@ export class RegistroDiarioService {
   ): Promise<RegistroDiarioDetail> {
     return RegistroDiarioRepository.upsertWithActivities({
       empleadoId,
-      ...dto
+      ...dto,
     });
   }
 
@@ -37,16 +40,16 @@ export class RegistroDiarioService {
     registroDiarioId: number,
     dto: SupervisorApprovalDto
   ) {
-    return RegistroDiarioRepository.updateSupervisorApproval(registroDiarioId, dto);
+    return RegistroDiarioRepository.updateSupervisorApproval(
+      registroDiarioId,
+      dto
+    );
   }
 
   /**
    * Actualiza la aprobación de RRHH de un registro diario.
    */
-  static aprobarRrhh(
-    registroDiarioId: number,
-    dto: RrhhApprovalDto
-  ) {
+  static aprobarRrhh(registroDiarioId: number, dto: RrhhApprovalDto) {
     return RegistroDiarioRepository.updateRrhhApproval(registroDiarioId, dto);
   }
 }

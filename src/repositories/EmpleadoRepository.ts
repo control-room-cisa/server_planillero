@@ -1,6 +1,6 @@
 // src/repositories/EmpleadoRepository.ts
 import { prisma } from "../config/prisma";
-import type { Empleado } from "@prisma/client";
+import type { Empleado, Prisma } from "@prisma/client";
 
 export class EmpleadoRepository {
   /** Busca un empleado por su código (ahora marcado @unique) */
@@ -27,28 +27,25 @@ export class EmpleadoRepository {
   }
 
   /** Crea un nuevo empleado */
-  static async createEmpleado(data: {
-    codigo?: string;
-    nombre: string;
-    apellido?: string | null;
-    correoElectronico: string;
-    contrasena: string;
-    departamentoId: number;
-    rolId: number;
-  }): Promise<Empleado> {
+  static async createEmpleado(
+    data: Prisma.EmpleadoCreateInput
+  ): Promise<Empleado> {
     return prisma.empleado.create({
-      data: {
-        codigo: data.codigo,
-        nombre: data.nombre,
-        apellido: data.apellido,
-        correoElectronico: data.correoElectronico,
-        contrasena: data.contrasena,
-        departamentoId: data.departamentoId,
-        rolId: data.rolId,
-      },
+      data,
+      include: { departamento: true },
     });
   }
 
+  static async updateEmpleado(
+    id: number,
+    data: Prisma.EmpleadoUpdateInput
+  ): Promise<Empleado> {
+    return prisma.empleado.update({
+      where: { id },
+      data,
+      include: { departamento: true },
+    });
+  }
   static async findLastCodigo(): Promise<{ codigo: string | null } | null> {
     return prisma.empleado.findFirst({
       where: {
