@@ -1,10 +1,10 @@
 import { RequestHandler } from "express";
 import { PlanillaService } from "../services/PlanillaService";
-import { ApiResponse }      from "../dtos/ApiResponse";
+import { ApiResponse } from "../dtos/ApiResponse";
 import type { CreatePlanillaDto, PlanillaResponse } from "../dtos/planillaDtos";
 import type { PlanillaDetailResponse } from "../dtos/planillaDtos";
 import { prisma } from "../config/prisma";
-import { AuthRequest }      from "../middlewares/authMiddleware";
+import { AuthRequest } from "../middlewares/authMiddleware";
 
 // POST /planillas
 export const createPlanilla: RequestHandler<
@@ -18,10 +18,14 @@ export const createPlanilla: RequestHandler<
     const { fechaInicio, fechaFin } = req.body;
 
     console.log(req);
-    
-    console.log("EmpleadoID:",empleadoId);
-    
-    const planilla = await PlanillaService.create({ empleadoId, fechaInicio, fechaFin });
+
+    console.log("EmpleadoID:", empleadoId);
+
+    const planilla = await PlanillaService.create({
+      empleadoId,
+      fechaInicio,
+      fechaFin,
+    });
 
     return res.status(201).json({
       success: true,
@@ -52,33 +56,11 @@ export const getAllLatestPlanillas: RequestHandler<
   }
 };
 
-// GET /planillas/last-detail -> última planilla del empleado autenticado con detalle
-export const getLatestPlanillaDetail: RequestHandler<
-  {},
-  ApiResponse<PlanillaDetailResponse>,
-  {},
-  {}
-> = async (req, res, next) => {
-  try {
-    const empleadoId = (req as AuthRequest).user.id;
-    const planilla = await PlanillaService.getDetailById(empleadoId);
-
-    return res.json({
-      success: true,
-      message: "Planilla con detalle",
-      data: planilla as PlanillaDetailResponse,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
-
-
 export const getPlanillaDepartamentoDetalle: RequestHandler<
-  { empleadoId: string },                  // params
-  ApiResponse<any>,                        // response
-  {},                                      // body
-  { start?: string; end?: string }         // query
+  { empleadoId: string }, // params
+  ApiResponse<any>, // response
+  {}, // body
+  { start?: string; end?: string } // query
 > = async (req, res, next) => {
   try {
     const user = (req as AuthRequest).user;
@@ -87,7 +69,7 @@ export const getPlanillaDepartamentoDetalle: RequestHandler<
       return res.status(403).json({
         success: false,
         message: "Solo supervisores",
-        data: null
+        data: null,
       });
     }
 
@@ -98,7 +80,7 @@ export const getPlanillaDepartamentoDetalle: RequestHandler<
       return res.status(400).json({
         success: false,
         message: "Parámetros start y end obligatorios (YYYY-MM-DD)",
-        data: null
+        data: null,
       });
     }
 
@@ -107,15 +89,15 @@ export const getPlanillaDepartamentoDetalle: RequestHandler<
       where: {
         id: Number(empleadoId),
         departamentoId: user.departamentoId,
-        deletedAt: null
-      }
+        deletedAt: null,
+      },
     });
 
     if (!empleado) {
       return res.status(404).json({
         success: false,
         message: "Empleado no encontrado o no pertenece a tu departamento",
-        data: null
+        data: null,
       });
     }
 
@@ -128,11 +110,9 @@ export const getPlanillaDepartamentoDetalle: RequestHandler<
     res.json({
       success: true,
       message: "Planillas del empleado",
-      data
+      data,
     });
   } catch (err) {
     next(err);
   }
 };
-
-

@@ -95,7 +95,7 @@ export const getRegistroDiarioByDate: RequestHandler<
 
       const empleado = await EmpleadoService.getById(usuarioId);
       // Si intenta ver otro empleado, validar rol
-      if (empleadoIdNum !== usuarioId && empleado.rolId === 1) {
+      if (empleadoIdNum !== usuarioId && empleado?.rolId === 1) {
         return res.status(403).json({
           success: false,
           message: "No tienes permisos para ver registros de otros empleados",

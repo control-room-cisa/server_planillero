@@ -41,9 +41,7 @@ export class PlanillaRepository {
   }
 
   /** Listar planillas “planas” de un empleado */
-  static async findByEmpleado(
-    empleadoId: number
-  ): Promise<Planilla[]> {
+  static async findByEmpleado(empleadoId: number): Promise<Planilla[]> {
     return prisma.planilla.findMany({
       where: { empleadoId, deletedAt: null },
       orderBy: { fechaInicio: "desc" },
@@ -59,7 +57,7 @@ export class PlanillaRepository {
     });
 
     const planillas = await Promise.all(
-      grouped.map(g =>
+      grouped.map((g) =>
         prisma.planilla.findFirst({
           where: {
             empleadoId: g.empleadoId,
@@ -73,31 +71,38 @@ export class PlanillaRepository {
     return planillas.filter((p): p is Planilla => p !== null);
   }
 
-  /**
-   * Lista todas las planillas de un empleado con sus días,
-   * actividades diarias y datos del job (array ordenado por fechaInicio desc).
-   */
-  static async findByEmpleadoWithDetails(
-    empleadoId: number
-  ): Promise<Planilla[]> {
-    return prisma.planilla.findMany({
-      where: { empleadoId, deletedAt: null },
-      orderBy: { fechaInicio: "desc" },
-      include: {
-        planillaDias: {
+  static async findByEmpleadoAndDateRange(
+    empleadoId: number,
+    start: string,
+    end: string
+  ) {
+    return prisma.registroDiario.findMany({
+      where: {
+        empleadoId,
+        fecha: {
+          gte: start,
+          lte: end,
+        },
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+        fecha: true,
+        horaEntrada: true,
+        horaSalida: true,
+        comentarioEmpleado: true,
+        comentarioSupervisor: true,
+        actividades: {
           where: { deletedAt: null },
-          include: {
-            actividades: {
-              where: { deletedAt: null },
-              include: {
-                job: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    codigo: true,
-                    descripcion: true,
-                  },
-                },
+          select: {
+            id: true,
+            descripcion: true,
+            duracionHoras: true,
+            job: {
+              select: {
+                id: true,
+                nombre: true,
+                descripcion: true,
               },
             },
           },
@@ -105,90 +110,19 @@ export class PlanillaRepository {
       },
     });
   }
-
-  /**
-   * Obtiene UNA planilla (por id) incluyendo sus días,
-   * actividades diarias y datos del job.
-   */
-  static async findByIdWithDetails(
-    planillaId: number
-  ): Promise<Planilla | null> {
-    return prisma.planilla.findUnique({
-      where: { id: planillaId },
-      include: {
-        planillaDias: {
-          where: { deletedAt: null },
-          include: {
-            actividades: {
-              where: { deletedAt: null },
-              include: {
-                job: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    codigo: true,
-                    descripcion: true,
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
-  };
-
-
-  static async findByEmpleadoAndDateRange(empleadoId: number, start: string, end: string) {
-  return prisma.registroDiario.findMany({
-    where: {
-      empleadoId,
-      fecha: {
-        gte: start,
-        lte: end,
-      },
-      deletedAt: null
-    },
-    select: {
-      id: true,
-      fecha: true,
-      horaEntrada: true,
-      horaSalida: true,
-      comentarioEmpleado: true,
-      comentarioSupervisor: true,
-      actividades: {
-        where: { deletedAt: null },
-        select: {
-          id: true,
-          descripcion: true,
-          duracionHoras: true,
-          job: {
-            select: {
-              id: true,
-              nombre: true,
-              descripcion: true
-            }
-          }
-        }
-      }
-    }
-  });
-}
-
 
   static async getEmpleadoBasicData(empleadoId: number) {
     return prisma.empleado.findFirst({
       where: {
         id: empleadoId,
-        deletedAt: null
+        deletedAt: null,
       },
       select: {
         id: true,
         nombre: true,
         apellido: true,
-        codigo: true
-      }
+        codigo: true,
+      },
     });
   }
-
 }

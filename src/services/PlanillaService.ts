@@ -8,9 +8,9 @@ import type { Planilla } from "@prisma/client";
  * Parámetros internos para crear una planilla
  */
 interface CreatePlanillaParams {
-  empleadoId:  number;
+  empleadoId: number;
   fechaInicio: Date;
-  fechaFin:    Date;
+  fechaFin: Date;
 }
 
 export class PlanillaService {
@@ -34,22 +34,21 @@ export class PlanillaService {
     // 2) Obtener empresa a través del departamento del empleado
     const empleado = await prisma.empleado.findFirst({
       where: {
-        id:        data.empleadoId,
-        deletedAt: null,            // aquí filtras “no borrado”
+        id: data.empleadoId,
+        deletedAt: null, // aquí filtras “no borrado”
       },
-      include: { departamento: true }
+      include: { departamento: true },
     });
     if (!empleado) {
       throw new AppError("Empleado no encontrado", 404);
     }
 
-
     // 3) Crear la planilla
     return PlanillaRepository.createPlanilla({
-      empleadoId:  data.empleadoId,
-      empresaId:   empleado.departamento.empresaId,
+      empleadoId: data.empleadoId,
+      empresaId: empleado.departamento.empresaId,
       fechaInicio: data.fechaInicio,
-      fechaFin:    data.fechaFin,
+      fechaFin: data.fechaFin,
     });
   }
 
@@ -60,29 +59,20 @@ export class PlanillaService {
     return PlanillaRepository.findLastByEmpleado();
   }
 
-  /**
-   * Devuelve la **última** planilla del empleado indicado, con TODOS los detalles anidados
-   */
-  static async getDetailById(planillaId: number): Promise<Planilla> {
-    const detalles = await PlanillaRepository.findByIdWithDetails (
-      planillaId
-    );
-    if (!detalles) {
-      throw new AppError("No se encontró ninguna planilla para este empleado", 404);
-    }
-    return detalles;
-  };
-
   // Para rango de fechas (nuevo)
-  static async getPlanillaDetalleRango(empleadoId: number, start: string, end: string) {
+  static async getPlanillaDetalleRango(
+    empleadoId: number,
+    start: string,
+    end: string
+  ) {
     const [registros, empleado] = await Promise.all([
       PlanillaRepository.findByEmpleadoAndDateRange(empleadoId, start, end),
-      PlanillaRepository.getEmpleadoBasicData(empleadoId)
+      PlanillaRepository.getEmpleadoBasicData(empleadoId),
     ]);
 
     return {
       empleado,
-      registrosDiarios: registros
+      registrosDiarios: registros,
     };
   }
 }
