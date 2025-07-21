@@ -54,33 +54,87 @@ model Departamento {
   @@map("departamentos")
 }
 
-// ------- empleados --------
+/// ─── Enums ───────────────────────────────────────────────────────────────────
+
+/// Turnos disponibles
+enum TipoHorario {
+  H1
+  H2
+  H3
+  H4
+  H5
+  H6
+  H7
+}
+
+/// Estado civil del empleado
+enum EstadoCivil {
+  SOLTERO      @map("Soltero")
+  CASADO       @map("Casado")
+  UNION_LIBRE  @map("Union Libre")
+}
+
+/// Modalidad de contrato
+enum TipoContrato {
+  T7X7             @map("7x7")
+  T14X14           @map("14x14")
+  INDEFINIDO_NORMAL @map("Indefinido Normal")
+  POR_HORA         @map("Por Hora")
+  T21X7            @map("21x7")
+  TEMPORAL         @map("Temporal")
+}
+
+/// ─── Modelo Empleado ────────────────────────────────────────────────────────
+
 model Empleado {
-  id                     Int                  @id @default(autoincrement())
-  codigo                 String?              @db.VarChar(20) @unique
-  nombre                 String               @db.VarChar(100)
-  apellido               String?              @db.VarChar(100)
-  horasDiariasTrabajadas Int?                 @map("horas_diarias_trabajadas")
-  correoElectronico      String?              @map("correo_electronico") @db.VarChar(45)
-  contrasena             String?              @db.VarChar(255)
-  createdAt              DateTime?            @default(now()) @map("created_at")
-  dni                    String?              @db.VarChar(45)
-  updatedAt              DateTime?            @map("updated_at")
-  deletedAt              DateTime?            @map("deleted_at")
+  id                         Int                  @id @default(autoincrement())
+  codigo                     String?              @db.VarChar(20) @unique
+  nombre                     String               @db.VarChar(100)
+  apellido                   String?              @db.VarChar(100)
+  nombreUsuario              String?              @db.VarChar(15)
+  correoElectronico          String?              @map("correo_electronico") @db.VarChar(45)
+  dni                        String?              @db.VarChar(45)
+  profesion                  String?              @db.VarChar(30)
+  tipoHorario                TipoHorario?         @map("tipo_horario")
+  estadoCivil                EstadoCivil?         @map("estado_civil")
+  nombreConyugue             String?              @map("nombre_conyugue") @db.VarChar(40)
+  cargo                      String?              @db.VarChar(30)
+  sueldoMensual              Float?
+  tipoContrato               TipoContrato?        @map("tipo_contrato")
+  condicionSalud             String?              @map("condicion_salud") @db.VarChar(50)
+  nombreContactoEmergencia   String?              @map("nombre_contacto_emergencia") @db.VarChar(40)
+  numeroContactoEmergencia   String?              @map("numero_contacto_emergencia") @db.VarChar(20)
+  banco                      String?              @db.VarChar(25)
+  tipoCuenta                 String?              @map("tipo_cuenta") @db.VarChar(20)
+  numeroCuenta               String?              @map("numero_cuenta") @db.VarChar(20)
+  muerteBeneficiario         String?              @map("muerte_beneficiario") @db.VarChar(40)
+  nombreMadre                String?              @map("nombre_madre") @db.VarChar(40)
+  nombrePadre                String?              @map("nombre_padre") @db.VarChar(40)
+  activo                     Boolean
+  telefono                   String?              @db.VarChar(45)
+  direccion                  String?              @db.VarChar(250)
+  fechaInicioIngreso         DateTime?            @map("fecha_ingreso")
+  contrasena                 String?              @db.VarChar(255)
+  urlFotoPerfil              String?              @map("url_foto_perfil") @db.VarChar(50)
+  urlCv                      String?              @map("url_cv") @db.VarChar(50)
+  createdAt                  DateTime?            @default(now()) @map("created_at")
+  updatedAt                  DateTime?            @map("updated_at")
+  deletedAt                  DateTime?            @map("deleted_at")
 
-  rolId          Int
-  rol            Rol                  @relation(fields: [rolId], references: [id])
+  rolId                      Int
+  rol                        Rol                  @relation(fields: [rolId], references: [id])
 
-  departamentoId Int                  @map("departamento_id")
-  departamento   Departamento         @relation(fields: [departamentoId], references: [id])
+  departamentoId             Int                  @map("departamento_id")
+  departamento               Departamento         @relation(fields: [departamentoId], references: [id])
 
-  planillas      Planilla[]
-  accesosComoSupervisor PlanillaAcceso[] @relation("SupervisorAccesos")
-  accesosComoEmpleado   PlanillaAcceso[] @relation("EmpleadoAccesos")
-  registrosDiarios     RegistroDiario[]
+  planillas                  Planilla[]
+  accesosComoSupervisor      PlanillaAcceso[]     @relation("SupervisorAccesos")
+  accesosComoEmpleado        PlanillaAcceso[]     @relation("EmpleadoAccesos")
+  registrosDiarios           RegistroDiario[]
 
   @@map("empleados")
 }
+
 
 // -------- planillas -------
 enum EstadoPlanilla {
@@ -157,7 +211,9 @@ model Actividad {
   id                 Int              @id @default(autoincrement()) @map("id")
   registroDiarioId   Int              @map("registro_diario_id")
   jobId              Int              @map("job_id")
-  duracionHoras      Int              @map("duracion_horas")
+  horaInicio         DateTime         @map("hora_inicio")
+  horaFin            DateTime         @map("hora_fin")
+  esCorrida          Boolean?         @map("es_corrida")
   esExtra            Boolean?         @map("es_extra")
   className          String?          @db.VarChar(45) @map("class")
   descripcion        String           @db.VarChar(250)
