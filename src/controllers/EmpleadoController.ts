@@ -12,32 +12,34 @@ import {
 } from "../validators/empleado.validator";
 import type { ApiResponse } from "../dtos/ApiResponse";
 
-// Create
-// CREATE
 export const createEmpleado: RequestHandler<
   {}, // params
-  ApiResponse<EmployeeDto>, // response
-  CreateEmpleadoDto, // body
+  ApiResponse<EmployeeDto>, // res JSON
+  CreateEmpleadoDto, // req.body
   {} // query
 > = async (req, res, next) => {
   // 1) Validación
   const parsed = createEmpleadoSchema.safeParse(req.body);
   if (!parsed.success) {
-    return res.status(400).json({
+    // Mapear issues → { field, message }
+    const resp400 = {
       success: false,
       message: "Errores de validación",
       data: null,
-      errors: parsed.error
-        .format()
-        ._errors.map((msg) => ({ field: "_", message: msg })),
-    });
+      errors: parsed.error.issues.map((issue) => ({
+        field: issue.path.join(".") || "_",
+        message: issue.message,
+      })),
+    };
+    return res.status(400).json(resp400);
   }
 
   try {
-    // 2) Crear en DB
+    // 2) Generar código y crear
     parsed.data.codigo = await EmpleadoService.generateCodigo();
     const emp = await EmpleadoService.createEmpleado(parsed.data);
-    // 3) Mapear a DTO de salida
+
+    // 3) Mapear a DTO
     const dto: EmployeeDto = {
       id: emp.id,
       nombre: emp.nombre,
@@ -45,12 +47,13 @@ export const createEmpleado: RequestHandler<
       codigo: emp.codigo ?? undefined,
     };
 
-    // 4) Responder
-    return res.status(201).json({
+    // 4) Responder OK
+    const resp201: ApiResponse<EmployeeDto> = {
       success: true,
       message: "Empleado creado correctamente",
       data: dto,
-    } as ApiResponse<EmployeeDto>);
+    };
+    return res.status(201).json(resp201);
   } catch (err) {
     next(err);
   }
