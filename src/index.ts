@@ -7,6 +7,7 @@ import jobRoutes from "./routes/JobRoutes";
 import empresaRoutes from "./routes/empresaRoutes";
 import registroDiarioRoutes from "./routes/RegistroDiarioRoutes";
 import empleadoRoutes from "./routes/empleadoRoutes";
+import overtimeRoutes from "./routes/overtimeRoutes";
 
 const app = express();
 
@@ -27,6 +28,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
 app.use("/api/registrodiario", registroDiarioRoutes);
 app.use("/api/empleados", empleadoRoutes);
+app.use("/api", overtimeRoutes);
 
 app.use(errorHandler);
 
