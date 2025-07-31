@@ -5,31 +5,31 @@
  */
 export interface CreatePlanillaDto {
   fechaInicio: Date;
-  fechaFin:    Date;
+  fechaFin: Date;
 }
 
 /**
  * Representación “plana” de una planilla
  */
 export interface PlanillaResponse {
-  id:           number;
-  fechaInicio:  Date;
-  fechaFin:     Date;
-  estado:       'A' | 'R';
-  empleadoId:   number;
-  empresaId:    number;
-  createdAt:    Date;
-  updatedAt?:   Date | null;
-  deletedAt?:   Date | null;
+  id: number;
+  fechaInicio: Date;
+  fechaFin: Date;
+  estado: "A" | "R";
+  empleadoId: number;
+  empresaId: number;
+  createdAt: Date;
+  updatedAt?: Date | null;
+  deletedAt?: Date | null;
 }
 
 /**
  * Job asociado a una actividad
  */
 export interface JobDto {
-  id:          number;
-  nombre?:     string | null;
-  codigo?:     string | null;
+  id: number;
+  nombre?: string | null;
+  codigo?: string | null;
   descripcion?: string | null;
 }
 
@@ -37,26 +37,27 @@ export interface JobDto {
  * Actividad diaria dentro de un día de planilla
  */
 export interface PlanillaActividadDto {
-  id:            number;
+  id: number;
   duracionHoras: number;
-  esExtra:       boolean;
-  class?:        string | null;
-  descripcion:   string;
-  job:           JobDto;
+  esExtra: boolean;
+  class?: string | null;
+  descripcion: string;
+  job: JobDto;
 }
 
 /**
  * Día de la planilla con sus actividades
  */
 export interface PlanillaDiaDto {
-  id:               number;
-  horaEntrada:      Date;
-  horaSalida:       Date;
-  jornada?:         string | null;
-  esDiaLibre?:      boolean | null;
-  comentario?:      string | null;
+  id: number;
+  horaEntrada: Date;
+  horaSalida: Date;
+  jornada?: string | null;
+  esDiaLibre?: boolean | null;
+  esHoraCorrida?: boolean | null;
+  comentario?: string | null;
   diasPlanillaCol?: string | null;
-  actividades:      PlanillaActividadDto[];
+  actividades: PlanillaActividadDto[];
 }
 
 /**
@@ -68,52 +69,54 @@ export interface PlanillaDetailResponse extends PlanillaResponse {
 
 // Payload para crear una actividad dentro de un día de planilla
 export interface CreatePlanillaActividadDto {
-  jobId:         number;
+  jobId: number;
   duracionHoras: number;
-  esExtra?:      boolean;
-  class?:        string | null;
-  descripcion:   string;
+  esExtra?: boolean;
+  class?: string | null;
+  descripcion: string;
 }
 
 // Payload para crear un día de planilla *con* sus actividades
 export interface CreatePlanillaDiaDto {
-  planillaId:       number;
-  horaEntrada:      Date;
-  horaSalida:       Date;
-  jornada?:         string | null;
-  esDiaLibre?:      boolean | null;
-  comentario?:      string | null;
+  planillaId: number;
+  horaEntrada: Date;
+  horaSalida: Date;
+  jornada?: string | null;
+  esDiaLibre?: boolean | null;
+  esHoraCorrida?: boolean | null;
+  comentario?: string | null;
   diasPlanillaCol?: string | null;
-  actividades?:     CreatePlanillaActividadDto[];
+  actividades?: CreatePlanillaActividadDto[];
 }
 
 // Respuesta de un día de planilla con actividades y job
 export interface PlanillaDiaResponse {
-  id:               number;
-  planillaId:       number;
-  horaEntrada:      Date;
-  horaSalida:       Date;
-  jornada?:         string | null;
-  esDiaLibre?:      boolean | null;
-  comentario?:      string | null;
+  id: number;
+  planillaId: number;
+  horaEntrada: Date;
+  horaSalida: Date;
+  jornada?: string | null;
+  esDiaLibre?: boolean | null;
+  esHoraCorrida?: boolean | null;
+  comentario?: string | null;
   diasPlanillaCol?: string | null;
-  createdAt:        Date;
-  updatedAt?:       Date | null;
-  deletedAt?:       Date | null;
+  createdAt: Date;
+  updatedAt?: Date | null;
+  deletedAt?: Date | null;
   actividades: Array<{
-    id:            number;
+    id: number;
     duracionHoras: number;
-    esExtra:       boolean | null;
-    class:         string | null;
-    descripcion:   string;
+    esExtra: boolean | null;
+    class: string | null;
+    descripcion: string;
     job: {
-      id:          number;
-      nombre?:     string | null;
-      codigo?:     string | null;
-      descripcion?:string | null;
+      id: number;
+      nombre?: string | null;
+      codigo?: string | null;
+      descripcion?: string | null;
     };
   }>;
-};
+}
 
 // Para obtener planillas por empleado y departamento
 export interface PlanillaDetalleDto {
@@ -138,8 +141,7 @@ export interface PlanillaDetalleDto {
         id: number;
         nombre: string;
         descripcion: string;
-      }
-    }[]
+      };
+    }[];
   } | null;
 }
-

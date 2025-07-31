@@ -186,6 +186,7 @@ model RegistroDiario {
   horaSalida           DateTime  @map("hora_salida")
   jornada              String?   @db.VarChar(1)
   esDiaLibre           Boolean?  @map("es_dia_libre")
+  esHoraCorrida        Boolean?  @map("es_hora_corrida")
   comentarioEmpleado   String?   @db.VarChar(500)
   aprobacionSupervisor Boolean?  @map("aprobacion_supervisor")
   aprobacionRrhh       Boolean?  @map("aprobacion_rrhh")
