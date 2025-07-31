@@ -8,6 +8,7 @@ import empresaRoutes from "./routes/empresaRoutes";
 import registroDiarioRoutes from "./routes/RegistroDiarioRoutes";
 import empleadoRoutes from "./routes/empleadoRoutes";
 import overtimeRoutes from "./routes/overtimeRoutes";
+import feriadoRoutes from "./routes/FeriadoRoute";
 import path from "path";
 
 const app = express();
@@ -30,6 +31,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
 app.use("/api/registrodiario", registroDiarioRoutes);
 app.use("/api/empleados", empleadoRoutes);
+app.use("/api/feriados", feriadoRoutes);
 app.use("/api", overtimeRoutes);
 
 app.use(errorHandler);

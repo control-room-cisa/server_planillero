@@ -17,20 +17,16 @@ export class FeriadoService {
     return feriado;
   }
 
-  /** Crear nuevo feriado */
-  static async createFeriado(
+  static async upsertFeriado(
     data: Prisma.FeriadoCreateInput
   ): Promise<Feriado> {
-    return FeriadoRepository.create(data);
-  }
+    const existing = await FeriadoRepository.findByDate(data.fecha);
 
-  /** Actualizar feriado por ID */
-  static async updateFeriado(
-    id: number,
-    data: Prisma.FeriadoUpdateInput
-  ): Promise<Feriado> {
-    await this.getFeriadoByDate(data.fecha as string); // validar existencia
-    return FeriadoRepository.update(id, data);
+    if (existing) {
+      return FeriadoRepository.updateByDate(data);
+    }
+
+    return FeriadoRepository.create(data);
   }
 
   /** Eliminar feriado (hard delete) */

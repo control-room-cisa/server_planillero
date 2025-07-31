@@ -18,12 +18,17 @@ export class FeriadoRepository {
     return prisma.feriado.create({ data });
   }
 
-  /** Actualiza un feriado existente */
-  static async update(
-    id: number,
-    data: Prisma.FeriadoUpdateInput
-  ): Promise<Feriado> {
-    return prisma.feriado.update({ where: { id }, data });
+  static async updateByDate(data: Prisma.FeriadoUpdateInput): Promise<Feriado> {
+    const fecha = data.fecha as string;
+
+    if (!fecha) {
+      throw new Error("La fecha es requerida para actualizar el feriado");
+    }
+
+    return prisma.feriado.update({
+      where: { fecha },
+      data,
+    });
   }
 
   /** Elimina un feriado */

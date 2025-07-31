@@ -44,14 +44,18 @@ export const getFeriadoByDate: RequestHandler<
   }
 };
 
-/** POST /api/feriados */
-export const createFeriado: RequestHandler<
-  {}, // params
-  ApiResponse<Feriado>, // res
-  any, // req.body sin tipar aún
+import { CreateFeriadoDto } from "../validators/feriado.validator";
+
+/** PUT /api/feriados/:fecha (Upsert por fecha) */
+export const upsertFeriado: RequestHandler<
+  { fecha: string }, // params
+  ApiResponse<Feriado>, // response
+  any, // request body (validado luego)
   {} // query
 > = async (req, res, next) => {
-  // Validar formato del body
+  const fecha = req.params.fecha;
+
+  // Validar body usando el schema
   const parsed = createFeriadoSchema.safeParse(req.body);
   if (!parsed.success) {
     return res.status(400).json({
@@ -66,31 +70,12 @@ export const createFeriado: RequestHandler<
   }
 
   try {
-    const newFeriado = await FeriadoService.createFeriado(parsed.data);
-    return res.status(201).json({
-      success: true,
-      message: "Feriado creado correctamente",
-      data: newFeriado,
-    });
-  } catch (err) {
-    next(err);
-  }
-};
+    const feriado = await FeriadoService.upsertFeriado(parsed.data);
 
-/** PUT /api/feriados/:id */
-export const updateFeriado: RequestHandler<
-  { id: string }, // params
-  ApiResponse<Feriado>, // res body
-  Prisma.FeriadoUpdateInput, // req body
-  {} // query
-> = async (req, res, next) => {
-  try {
-    const id = Number(req.params.id);
-    const updated = await FeriadoService.updateFeriado(id, req.body);
-    return res.json({
+    return res.status(200).json({
       success: true,
-      message: `Feriado ${id} actualizado`,
-      data: updated,
+      message: `Feriado ${feriado ? "actualizado o creado" : "procesado"}`,
+      data: feriado,
     });
   } catch (err) {
     next(err);
