@@ -1,3 +1,4 @@
+// src/controllers/empleados.controller.ts
 import type { RequestHandler } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
@@ -12,40 +13,79 @@ import {
 } from "../validators/empleado.validator";
 import type { ApiResponse } from "../dtos/ApiResponse";
 
+// -----------------------------------------------------------------------------
+// Helpers
+// -----------------------------------------------------------------------------
+
+// Lee archivos provenientes de multer.fields([{name:'foto'},{name:'cv'}])
+type MulterFilesMap = { [field: string]: Express.Multer.File[] } | undefined;
+const getFiles = (req: any) => {
+  const files = req.files as MulterFilesMap;
+  return {
+    foto: files?.foto?.[0],
+    cv: files?.cv?.[0],
+  };
+};
+
+/**
+ * Opción 1 (recomendada): Body multipart/form-data con:
+ *  - empleado: (Text) JSON del DTO (sin foto ni cv)
+ *  - foto: (File) opcional
+ *  - cv: (File)   opcional
+ *
+ * Esta función extrae y parsea el JSON del campo `empleado`.
+ */
+function parseEmpleadoBody<T = any>(req: any): T {
+  // Si viene como form-data, `empleado` será un string con JSON
+  const raw = req.body?.empleado ?? req.body;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as T;
+    } catch {
+      // Lanzamos para que el controlador responda 400 acorde
+      throw new Error("JSON inválido en el campo 'empleado'.");
+    }
+  }
+  if (typeof raw === "object" && raw !== null) {
+    return raw as T;
+  }
+  throw new Error("Body inválido. Envía el JSON en el campo 'empleado'.");
+}
+
+// -----------------------------------------------------------------------------
+// CREATE (con archivos). Guardado en servidor lo maneja EmpleadoService.
+// -----------------------------------------------------------------------------
 export const createEmpleado: RequestHandler<
   {}, // params
   ApiResponse<EmployeeDto>, // res JSON
-  CreateEmpleadoDto, // req.body
+  CreateEmpleadoDto, // req.body (DTO SIN foto ni cv)
   {} // query
 > = async (req, res, next) => {
-  // 1) Validación
-  const parsed = createEmpleadoSchema.safeParse(req.body);
-  if (!parsed.success) {
-    // Mapear issues → { field, message }
-    const resp400 = {
-      success: false,
-      message: "Errores de validación",
-      data: null,
-      errors: parsed.error.issues.map((issue) => ({
-        field: issue.path.join(".") || "_",
-        message: issue.message,
-      })),
-    };
-    return res.status(400).json(resp400);
-  }
-
   try {
-    // 2) Generar código y crear
-    parsed.data.codigo = await EmpleadoService.generateCodigo();
-    const emp = await EmpleadoService.createEmpleado(parsed.data);
+    // 1) Extraer y validar JSON del campo `empleado`
+    const body = parseEmpleadoBody<CreateEmpleadoDto>(req);
+    const parsed = createEmpleadoSchema.safeParse(body);
+    if (!parsed.success) {
+      const resp400: ApiResponse<EmployeeDto> = {
+        success: false,
+        message: "Errores de validación",
+        data: null as any,
+        errors: parsed.error.issues.map((issue) => ({
+          field: issue.path.join(".") || "_",
+          message: issue.message,
+        })),
+      };
+      return res.status(400).json(resp400);
+    }
 
-    // 3) Mapear a DTO
-    const dto: EmployeeDto = {
-      id: emp.id,
-      nombre: emp.nombre,
-      apellido: emp.apellido ?? undefined,
-      codigo: emp.codigo ?? undefined,
-    };
+    // 2) Archivos (opcionales) desde form-data
+    const { foto, cv } = getFiles(req);
+
+    // 3) Delegar a Service (genera código, crea, mueve archivos y guarda filenames)
+    const dto = await EmpleadoService.createWithFiles(parsed.data, {
+      foto,
+      cv,
+    });
 
     // 4) Responder OK
     const resp201: ApiResponse<EmployeeDto> = {
@@ -54,43 +94,54 @@ export const createEmpleado: RequestHandler<
       data: dto,
     };
     return res.status(201).json(resp201);
-  } catch (err) {
+  } catch (err: any) {
+    // Si el error es por JSON inválido en `empleado`
+    if (
+      err instanceof Error &&
+      /JSON inválido|Body inválido/.test(err.message)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        data: null,
+      } as ApiResponse<EmployeeDto>);
+    }
     next(err);
   }
 };
 
-// UPDATE
+// -----------------------------------------------------------------------------
+// UPDATE (con archivos). Guardado/borrado en servidor lo maneja EmpleadoService.
+// -----------------------------------------------------------------------------
 export const updateEmpleado: RequestHandler<
   {}, // params
   ApiResponse<EmployeeDto>, // response
-  UpdateEmpleadoDto, // body
+  UpdateEmpleadoDto, // body (DTO SIN foto ni cv)
   {} // query
 > = async (req, res, next) => {
-  // 1) Validación
-  const parsed = updateEmpleadoSchema.safeParse(req.body);
-  if (!parsed.success) {
-    return res.status(400).json({
-      success: false,
-      message: "Errores de validación",
-      data: null,
-      errors: parsed.error
-        .format()
-        ._errors.map((msg) => ({ field: "_", message: msg })),
-    });
-  }
-
   try {
-    // 2) Actualizar en DB
-    const { id, ...rest } = parsed.data;
-    const emp = await EmpleadoService.updateEmpleado(id, rest);
+    // 1) Extraer y validar JSON del campo `empleado`
+    const body = parseEmpleadoBody<UpdateEmpleadoDto>(req);
+    const parsed = updateEmpleadoSchema.safeParse(body);
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Errores de validación",
+        data: null,
+        errors: parsed.error
+          .format()
+          ._errors.map((msg: string) => ({ field: "_", message: msg })),
+      } as ApiResponse<EmployeeDto>);
+    }
 
-    // 3) Mapear a DTO de salida
-    const dto: EmployeeDto = {
-      id: emp.id,
-      nombre: emp.nombre,
-      apellido: emp.apellido ?? undefined,
-      codigo: emp.codigo ?? undefined,
-    };
+    // 2) Archivos (opcionales)
+    const { foto, cv } = getFiles(req);
+
+    // 3) Delegar a Service (actualiza campos normales y reemplaza archivos si vienen)
+    const dto = await EmpleadoService.updateWithFiles(parsed.data, {
+      foto,
+      cv,
+    });
 
     // 4) Responder
     return res.status(200).json({
@@ -98,10 +149,24 @@ export const updateEmpleado: RequestHandler<
       message: "Empleado actualizado correctamente",
       data: dto,
     } as ApiResponse<EmployeeDto>);
-  } catch (err) {
+  } catch (err: any) {
+    if (
+      err instanceof Error &&
+      /JSON inválido|Body inválido/.test(err.message)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        data: null,
+      } as ApiResponse<EmployeeDto>);
+    }
     next(err);
   }
 };
+
+// -----------------------------------------------------------------------------
+// LIST BY DEPARTMENT (sin cambios; Service retorna URLs públicas construidas)
+// -----------------------------------------------------------------------------
 export const listByDepartment: RequestHandler<
   {}, // params
   ApiResponse<EmployeeDto[]>, // response
@@ -116,23 +181,26 @@ export const listByDepartment: RequestHandler<
         success: false,
         message: "Solo supervisores",
         data: [],
-      });
+      } as ApiResponse<EmployeeDto[]>);
     }
 
     const empleados = await EmpleadoService.getByDepartment(
       user.departamentoId
     );
 
-    res.json({
+    return res.json({
       success: true,
       message: "Empleados de tu departamento",
       data: empleados,
-    });
+    } as ApiResponse<EmployeeDto[]>);
   } catch (err) {
     next(err);
   }
 };
 
+// -----------------------------------------------------------------------------
+// LIST BY COMPANY (sin cambios; Service retorna URLs públicas construidas)
+// -----------------------------------------------------------------------------
 export const listByCompany: RequestHandler<
   {}, // params
   ApiResponse<EmployeeDto[]>, // response
@@ -142,16 +210,16 @@ export const listByCompany: RequestHandler<
   try {
     const user = (req as AuthRequest).user;
 
-    // Solo RRHH puede acceder a esta ruta
+    // Solo RRHH puede acceder a esta ruta (ajusta el rolId si corresponde)
     if (user.rolId !== 3) {
       return res.status(403).json({
         success: false,
         message: "Solo personal de RRHH puede acceder a esta funcionalidad",
         data: [],
-      });
+      } as ApiResponse<EmployeeDto[]>);
     }
 
-    // Si se proporciona un ID de empresa, usarlo; de lo contrario, obtener todos los empleados
+    // Si se proporciona un ID de empresa, usarlo; de lo contrario, obtener todos
     const empresaId = req.query.empresaId
       ? parseInt(req.query.empresaId, 10)
       : undefined;
@@ -161,16 +229,16 @@ export const listByCompany: RequestHandler<
         success: false,
         message: "ID de empresa inválido",
         data: [],
-      });
+      } as ApiResponse<EmployeeDto[]>);
     }
 
     const empleados = await EmpleadoService.getByCompany(empresaId);
 
-    res.json({
+    return res.json({
       success: true,
       message: "Empleados por empresa",
       data: empleados,
-    });
+    } as ApiResponse<EmployeeDto[]>);
   } catch (err) {
     next(err);
   }

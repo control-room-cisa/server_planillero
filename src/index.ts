@@ -8,9 +8,11 @@ import empresaRoutes from "./routes/empresaRoutes";
 import registroDiarioRoutes from "./routes/RegistroDiarioRoutes";
 import empleadoRoutes from "./routes/empleadoRoutes";
 import overtimeRoutes from "./routes/overtimeRoutes";
+import path from "path";
 
 const app = express();
 
+app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // Configurar CORS para permitir requests desde el frontend
 app.use(
   cors({

@@ -8,6 +8,8 @@ export interface EmployeeDto {
   codigo?: string;
   departamento?: string;
   empresaId?: number;
+  urlFotoPerfil?: string;
+  urlCv?: string;
 }
 
 /** Payload para crear un empleado */

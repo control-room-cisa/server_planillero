@@ -6,11 +6,12 @@ import {
   updateEmpleado,
 } from "../controllers/EmpleadoController";
 import { authenticateJWT } from "../middlewares/authMiddleware";
+import { uploadEmpleado } from "../middlewares/upload";
 
 const router = Router();
 router.use(authenticateJWT);
 router.get("/departamento", listByDepartment);
 router.get("/empresa", listByCompany);
-router.post("/", createEmpleado);
-router.patch("/", updateEmpleado);
+router.post("/", uploadEmpleado, createEmpleado);
+router.patch("/", uploadEmpleado, updateEmpleado);
 export default router;
