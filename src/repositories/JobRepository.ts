@@ -9,17 +9,30 @@ interface JobFilters {
 }
 
 export class JobRepository {
-  /** Devuelve todos los jobs (solo los no eliminados) */
+  /** Devuelve todos los jobs (solo los no eliminados) + todos los especial=true */
   static async findAll(filters: JobFilters = {}): Promise<Job[]> {
-    const where: any = { deletedAt: null };
-
-    if (filters.activo !== undefined) where.activo = filters.activo;
-    if (filters.empresaId !== undefined) where.empresaId = filters.empresaId;
+    // Rama base: lo que ya hacías (no eliminados + filtros)
+    const baseWhere: Prisma.JobWhereInput = { deletedAt: null };
+    if (filters.activo !== undefined) baseWhere.activo = filters.activo;
+    if (filters.empresaId !== undefined)
+      baseWhere.empresaId = filters.empresaId;
     if (filters.mostrarEmpresaId !== undefined)
-      where.mostrarEmpresaId = filters.mostrarEmpresaId;
+      baseWhere.mostrarEmpresaId = filters.mostrarEmpresaId;
+
+    // Rama adicional: incluir SIEMPRE los especial=true (no eliminados),
+    // ignorando los demás filtros (activo, empresaId, mostrarEmpresaId).
+    const includeEspecial: Prisma.JobWhereInput = {
+      especial: true,
+      deletedAt: null,
+    };
+
+    // OR entre ambas ramas: (baseWhere) OR (especial=true AND not deleted)
+    const finalWhere: Prisma.JobWhereInput = {
+      OR: [baseWhere, includeEspecial],
+    };
 
     return prisma.job.findMany({
-      where,
+      where: finalWhere,
       include: { empresa: true, empresaMostrar: true },
     });
   }
