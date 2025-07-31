@@ -251,3 +251,10 @@ model Job {
   @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa_idx")
   @@map("jobs")
 }
+
+//Feriados
+model Feriado{
+  id                Int       @id @default(autoincrement())
+  nombre            String    @db.VarChar(45)
+  fecha             String    @db.VarChar(10)@unique
+}
