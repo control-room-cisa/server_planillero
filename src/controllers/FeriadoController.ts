@@ -46,6 +46,40 @@ export const getFeriadoByDate: RequestHandler<
 
 import { CreateFeriadoDto } from "../validators/feriado.validator";
 
+/** POST /api/feriados (Crear nuevo feriado - upsert) */
+export const createFeriado: RequestHandler<
+  {}, // params
+  ApiResponse<Feriado>, // response
+  any, // request body (validado luego)
+  {} // query
+> = async (req, res, next) => {
+  // Validar body usando el schema
+  const parsed = createFeriadoSchema.safeParse(req.body);
+  if (!parsed.success) {
+    return res.status(400).json({
+      success: false,
+      message: "Errores de validación",
+      data: null,
+      errors: parsed.error.issues.map((issue) => ({
+        field: issue.path.join("."),
+        message: issue.message,
+      })),
+    } satisfies ApiResponse<Feriado>);
+  }
+
+  try {
+    const feriado = await FeriadoService.upsertFeriado(parsed.data);
+
+    return res.status(201).json({
+      success: true,
+      message: "Feriado creado exitosamente",
+      data: feriado,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 /** PUT /api/feriados/:fecha (Upsert por fecha) */
 export const upsertFeriado: RequestHandler<
   { fecha: string }, // params

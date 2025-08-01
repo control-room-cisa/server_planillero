@@ -9,6 +9,10 @@ export const createFeriadoSchema = z.object({
   fecha: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, "El formato de fecha debe ser YYYY-MM-DD"),
+  descripcion: z
+    .string()
+    .max(255, "La descripción no puede tener más de 255 caracteres")
+    .optional(),
 });
 
 export type CreateFeriadoDto = z.infer<typeof createFeriadoSchema>;

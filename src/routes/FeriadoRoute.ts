@@ -4,6 +4,7 @@ import { authenticateJWT } from "../middlewares/authMiddleware";
 import {
   listFeriados,
   getFeriadoByDate,
+  createFeriado,
   upsertFeriado,
   deleteFeriado,
 } from "../controllers/FeriadoController";
@@ -19,8 +20,11 @@ router.get("/", listFeriados);
 // Obtener feriado por fecha (YYYY-MM-DD)
 router.get("/:fecha", getFeriadoByDate);
 
-// Crear y actualizar un nuevo feriado
-router.post("/", upsertFeriado);
+// Crear un nuevo feriado (upsert)
+router.post("/", createFeriado);
+
+// Actualizar un feriado por fecha (upsert)
+router.put("/:fecha", upsertFeriado);
 
 // Eliminar (soft‐delete) un feriado
 router.delete("/:id", deleteFeriado);
