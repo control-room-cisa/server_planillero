@@ -84,6 +84,14 @@ enum TipoContrato {
   TEMPORAL         @map("Temporal")
 }
 
+/// Tipo de cuenta bancaria
+enum TipoCuenta {
+  AHORROS_MONEDA_NACIONAL     @map("Ahorros moneda nacional")
+  AHORROS_MONEDA_EXTRANJERA   @map("Ahorros moneda extranjera")
+  CHEQUES_MONEDA_NACIONAL     @map("Cheques moneda nacional")
+  CHEQUES_MONEDA_EXTRANJERA   @map("Cheques moneda extranjera")
+}
+
 /// ─── Modelo Empleado ────────────────────────────────────────────────────────
 
 model Empleado {
@@ -105,7 +113,7 @@ model Empleado {
   nombreContactoEmergencia   String?              @map("nombre_contacto_emergencia") @db.VarChar(40)
   numeroContactoEmergencia   String?              @map("numero_contacto_emergencia") @db.VarChar(20)
   banco                      String?              @db.VarChar(25)
-  tipoCuenta                 String?              @map("tipo_cuenta") @db.VarChar(20)
+  tipoCuenta                 TipoCuenta?          @map("tipo_cuenta")
   numeroCuenta               String?              @map("numero_cuenta") @db.VarChar(20)
   muerteBeneficiario         String?              @map("muerte_beneficiario") @db.VarChar(40)
   nombreMadre                String?              @map("nombre_madre") @db.VarChar(40)

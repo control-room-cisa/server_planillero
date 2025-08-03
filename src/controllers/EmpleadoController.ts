@@ -5,6 +5,7 @@ import { EmpleadoService } from "../services/EmpleadoService";
 import {
   CreateEmpleadoDto,
   EmployeeDto,
+  EmployeeDetailDto,
   UpdateEmpleadoDto,
 } from "../dtos/employee.dto";
 import {
@@ -120,17 +121,23 @@ export const updateEmpleado: RequestHandler<
   {} // query
 > = async (req, res, next) => {
   try {
+    console.log("Actualizar empleado");
+
     // 1) Extraer y validar JSON del campo `empleado`
     const body = parseEmpleadoBody<UpdateEmpleadoDto>(req);
+    console.log("Body recibido:", body);
     const parsed = updateEmpleadoSchema.safeParse(body);
+    console.log("Validación:", parsed);
+
     if (!parsed.success) {
       return res.status(400).json({
         success: false,
         message: "Errores de validación",
         data: null,
-        errors: parsed.error
-          .format()
-          ._errors.map((msg: string) => ({ field: "_", message: msg })),
+        errors: parsed.error.issues.map((issue) => ({
+          field: issue.path.join(".") || "_",
+          message: issue.message,
+        })),
       } as ApiResponse<EmployeeDto>);
     }
 
@@ -193,6 +200,40 @@ export const listByDepartment: RequestHandler<
       message: "Empleados de tu departamento",
       data: empleados,
     } as ApiResponse<EmployeeDto[]>);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET BY ID
+// -----------------------------------------------------------------------------
+export const getById: RequestHandler<
+  { id: string }, // params
+  ApiResponse<EmployeeDetailDto>, // response
+  {}, // body
+  {} // query
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    const empleado = await EmpleadoService.getById(id);
+
+    if (!empleado) {
+      return res.status(404).json({
+        success: false,
+        message: "Empleado no encontrado",
+        data: null,
+      } as ApiResponse<EmployeeDetailDto>);
+    }
+
+    // Convertir a DTO completo con todos los campos
+    const dto = EmpleadoService.toDtoDetail(empleado);
+
+    return res.json({
+      success: true,
+      message: "Empleado obtenido exitosamente",
+      data: dto,
+    } as ApiResponse<EmployeeDetailDto>);
   } catch (err) {
     next(err);
   }

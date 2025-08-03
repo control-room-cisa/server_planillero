@@ -1,20 +1,19 @@
 import fs from "fs/promises";
 import fssync from "fs";
 import path from "path";
+import {
+  APP_BASE_URL,
+  UPLOADS_PUBLIC_BASE,
+  EMP_BASE_DIR,
+  FOTO_DIR,
+  CV_DIR,
+} from "../config/uploads";
 
 export type SavedFileInfo = {
   filename: string; // solo el nombre guardado en BD
   absPath: string; // ruta absoluta en disco
   publicUrl: string; // /uploads/empleados/:id/(foto|cv)/filename
 };
-
-const UPLOADS_PUBLIC_BASE = "/uploads";
-const EMP_BASE_DIR = "empleados";
-const FOTO_DIR = "foto";
-const CV_DIR = "cv";
-
-// Si quieres devolver URL absoluta en la respuesta, configura esto (opcional)
-const APP_BASE_URL = process.env.APP_BASE_URL ?? "";
 
 function uniqueBasename(prefix: "p" | "c", originalName: string): string {
   const ext =

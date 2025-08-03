@@ -17,10 +17,10 @@ app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // Configurar CORS para permitir requests desde el frontend
 app.use(
   cors({
-    origin: ["http://localhost:5173", "http://127.0.0.1:5173"],
+    origin: true, // Permitir todos los orígenes en desarrollo
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   })
 );
 

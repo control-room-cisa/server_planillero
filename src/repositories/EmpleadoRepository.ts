@@ -1,10 +1,12 @@
 // src/repositories/EmpleadoRepository.ts
 import { prisma } from "../config/prisma";
 import type { Empleado, Prisma } from "@prisma/client";
+import { CreateEmpleadoDto } from "../dtos/employee.dto";
 
 export class EmpleadoRepository {
   /** Busca un empleado por su código (ahora marcado @unique) */
   static async findById(id: number): Promise<Empleado | null> {
+    console.log("id", id);
     return prisma.empleado.findFirst({
       where: { id },
     });
@@ -27,11 +29,15 @@ export class EmpleadoRepository {
   }
 
   /** Crea un nuevo empleado */
-  static async createEmpleado(
-    data: Prisma.EmpleadoCreateInput
-  ): Promise<Empleado> {
+  static async createEmpleado(data: CreateEmpleadoDto): Promise<Empleado> {
+    const { rolId, departamentoId, ...rest } = data;
+
     return prisma.empleado.create({
-      data,
+      data: {
+        ...rest,
+        rol: { connect: { id: rolId } },
+        departamento: { connect: { id: departamentoId } },
+      },
       include: { departamento: true },
     });
   }

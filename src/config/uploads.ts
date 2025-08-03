@@ -5,4 +5,4 @@ export const FOTO_DIR = "foto";
 export const CV_DIR = "cv";
 
 // Si quieres URL absoluta en la respuesta:
-export const APP_BASE_URL = process.env.APP_BASE_URL ?? "https://localhost"; // ej: https://api.miapp.com
+export const APP_BASE_URL = process.env.APP_BASE_URL ?? "http://localhost:3000"; // URL del backend
