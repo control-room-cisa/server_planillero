@@ -1,4 +1,4 @@
-// src/dtos/planilla.dto.ts
+
 import { Dayjs } from 'dayjs';
 
 /** Petición para calcular horas extra en un periodo */
@@ -49,7 +49,9 @@ export interface CalculationContext {
     nocturna50:    number;
     mixta75:       number;
   };
+  esHoraCorrida?: boolean; // NUEVO: indica si se debe contar almuerzo
 }
+
 
 /**
  * Un tramo de tiempo a evaluar (normalmente 1 h, pero puede ser parcial)

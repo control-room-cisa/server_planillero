@@ -43,6 +43,8 @@ export interface PlanillaActividadDto {
   class?: string | null;
   descripcion: string;
   job: JobDto;
+  horaInicio: Date;
+  horaFin: Date;
 }
 
 /**
