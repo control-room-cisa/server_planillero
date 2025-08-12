@@ -1,4 +1,3 @@
-
 import {
   CalculationContext,
   OvertimeRule,
@@ -8,17 +7,25 @@ import {
 
 /**
  * 0) Domingo100: cualquier hora, recargo 100% (domingo)
+ *    Si esHoraCorrida = false, se excluye la hora de almuerzo (12:00–13:00).
  */
 export class Domingo100Rule implements OvertimeRule {
   priority = 5;
-  matches({ inicio }: TimeSegment): boolean {
-    return inicio.day() === 0; // 0 = domingo
+  matches({ inicio }: TimeSegment, ctx: CalculationContext): boolean {
+    const h = inicio.hour();
+    const wd = inicio.day();
+
+    if (wd !== 0) return false; // solo domingo
+    // Si NO es hora corrida, excluir hora de almuerzo
+    if (!ctx.esHoraCorrida && h === 12) return false;
+
+    return true;
   }
   build(seg: TimeSegment): OvertimeSegment {
     return {
-      inicio:     seg.inicio.toDate(),
-      fin:        seg.fin.toDate(),
-      tipo:       'domingo100',
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'domingo100',
       porcentaje: 1
     };
   }
@@ -26,38 +33,54 @@ export class Domingo100Rule implements OvertimeRule {
 
 /**
  * 1) Sabado25: cualquier hora, recargo 25% (sábado)
+ *    Si esHoraCorrida = false, se excluye la hora de almuerzo (12:00–13:00).
  */
 export class Sabado25Rule implements OvertimeRule {
   priority = 10;
-  matches({ inicio }: TimeSegment): boolean {
-    return inicio.day() === 6; // 6 = sábado
+  matches({ inicio }: TimeSegment, ctx: CalculationContext): boolean {
+    const h = inicio.hour();
+    const wd = inicio.day();
+
+    if (wd !== 6) return false; // solo sábado
+    // Si NO es hora corrida, excluir hora de almuerzo
+    if (!ctx.esHoraCorrida && h === 12) return false;
+
+    return true;
   }
   build(seg: TimeSegment): OvertimeSegment {
     return {
-      inicio:     seg.inicio.toDate(),
-      fin:        seg.fin.toDate(),
-      tipo:       'sabado25',
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'sabado25',
       porcentaje: 0.25
     };
   }
 }
 
 /**
- * 2) Normal (diurna): 05:00–19:00, hasta 9h sin recargo (excluye 12:00–13:00)
+ * 2) Normal (diurna): 05:00–19:00, hasta 9h sin recargo (excluye 12:00–13:00 si no es hora corrida)
  */
 export class NormalRule implements OvertimeRule {
   priority = 20;
   matches({ inicio }: TimeSegment, ctx: CalculationContext): boolean {
-    const h   = inicio.hour();
-    const wd  = inicio.day();
-    if (wd === 0 || wd === 6) return false;  // excluye domingos y sábados
-    if (h < 5 || h >= 19) return false;       // fuera de diurna
-    if (h === 12) return false;               // almuerzo
+    const h = inicio.hour();
+    const wd = inicio.day();
+    if (wd === 0 || wd === 6) return false; // excluye domingos y sábados
+    if (h < 5 || h >= 19) return false;     // fuera de diurna
+
+    // Excluir almuerzo solo si NO es hora corrida
+    if (!ctx.esHoraCorrida && h === 12) return false;
+
     if (ctx.acumulado.horasNormal >= 9) return false; // solo 9h normales
     return true;
   }
   build(seg: TimeSegment): OvertimeSegment {
-    return { inicio: seg.inicio.toDate(), fin: seg.fin.toDate(), tipo: 'normal', porcentaje: 0 };
+    return {
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'normal',
+      porcentaje: 0
+    };
   }
 }
 
@@ -67,15 +90,20 @@ export class NormalRule implements OvertimeRule {
 export class Diurna25Rule implements OvertimeRule {
   priority = 30;
   matches({ inicio }: TimeSegment, ctx: CalculationContext): boolean {
-    const h   = inicio.hour();
-    const wd  = inicio.day();
-    if (wd === 0 || wd === 6) return false;  // excluye fin de semana
-    if (h < 5 || h >= 19) return false;       // fuera de diurna
+    const h = inicio.hour();
+    const wd = inicio.day();
+    if (wd === 0 || wd === 6) return false; // excluye fin de semana
+    if (h < 5 || h >= 19) return false;     // fuera de diurna
     if (ctx.acumulado.horasNormal < 9) return false; // solo tras 9h normales
     return true;
   }
   build(seg: TimeSegment): OvertimeSegment {
-    return { inicio: seg.inicio.toDate(), fin: seg.fin.toDate(), tipo: 'diurna25', porcentaje: 0.25 };
+    return {
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'diurna25',
+      porcentaje: 0.25
+    };
   }
 }
 
@@ -88,7 +116,12 @@ export class Mixta75Rule implements OvertimeRule {
     return ctx.acumulado.nocturna50 >= 3;
   }
   build(seg: TimeSegment): OvertimeSegment {
-    return { inicio: seg.inicio.toDate(), fin: seg.fin.toDate(), tipo: 'mixta75', porcentaje: 0.75 };
+    return {
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'mixta75',
+      porcentaje: 0.75
+    };
   }
 }
 
@@ -102,14 +135,17 @@ export class Nocturna50Rule implements OvertimeRule {
     return h >= 19 || h < 5;
   }
   build(seg: TimeSegment): OvertimeSegment {
-    return { inicio: seg.inicio.toDate(), fin: seg.fin.toDate(), tipo: 'nocturna50', porcentaje: 0.5 };
+    return {
+      inicio: seg.inicio.toDate(),
+      fin: seg.fin.toDate(),
+      tipo: 'nocturna50',
+      porcentaje: 0.5
+    };
   }
 }
 
 /**
- * Aqui se pueden agregar más reglas de recargo según sea necesario.
- * Cada nueva regla debe implementar la interfaz OvertimeRule.
- * Array de todas las reglas en orden de prioridad ascendente
+ * Lista de todas las reglas en orden de prioridad ascendente.
  */
 export const allOvertimeRules: OvertimeRule[] = [
   new Domingo100Rule(),

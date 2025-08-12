@@ -1,37 +1,45 @@
-
-import dayjs from 'dayjs';
+import dayjs from "dayjs";
 import {
   CalculationContext,
   OvertimeRule,
   OvertimeSegment,
-  TimeSegment
-} from '../dtos/OvertimeRule';
+  TimeSegment,
+} from "../dtos/OvertimeRule";
 
 export class OvertimeRulesEngine {
   constructor(private rules: OvertimeRule[]) {
     this.rules.sort((a, b) => a.priority - b.priority);
   }
 
-  public calculate(horaEntrada: Date, horaSalida: Date): OvertimeSegment[] {
+  public calculate(
+    horaEntrada: Date,
+    horaSalida: Date,
+    extra?: Partial<CalculationContext> // NUEVO: datos extra como esHoraCorrida
+  ): OvertimeSegment[] {
     const offset = horaEntrada.getTimezoneOffset();
-    const start = dayjs(horaEntrada).add(offset, 'minute');
-    const end = dayjs(horaSalida).add(offset, 'minute');
+    const start = dayjs(horaEntrada).add(offset, "minute");
+    let end = dayjs(horaSalida).add(offset, "minute");
+
+    // Si la salida es antes que la entrada, significa que terminó al día siguiente
+    if (end.isBefore(start)) {
+      end = end.add(1, "day");
+    }
 
     const ctx: CalculationContext = {
-      fecha: start.startOf('day'),
+      fecha: start.startOf("day"),
       acumulado: {
         horasNormal: 0,
         diurna25: 0,
         nocturna50: 0,
         mixta75: 0,
       },
+      ...extra, // Inyectar esHoraCorrida aquí
     };
 
-    // segmentación (idéntica)
     const segments: TimeSegment[] = [];
     let cursor = start;
     while (cursor.isBefore(end)) {
-      const next = cursor.add(1, 'hour');
+      const next = cursor.add(1, "hour");
       segments.push({
         inicio: cursor,
         fin: next.isAfter(end) ? end : next,
@@ -39,7 +47,6 @@ export class OvertimeRulesEngine {
       cursor = next;
     }
 
-    // clasificación
     const resultado: OvertimeSegment[] = [];
     for (const seg of segments) {
       for (const rule of this.rules) {
@@ -47,18 +54,17 @@ export class OvertimeRulesEngine {
           const classified = rule.build(seg, ctx);
           resultado.push(classified);
 
-          // normal, 25, 50 y 75%
           switch (classified.tipo) {
-            case 'normal':
+            case "normal":
               ctx.acumulado.horasNormal++;
               break;
-            case 'diurna25':
+            case "diurna25":
               ctx.acumulado.diurna25++;
               break;
-            case 'nocturna50':
+            case "nocturna50":
               ctx.acumulado.nocturna50++;
               break;
-            case 'mixta75':
+            case "mixta75":
               ctx.acumulado.mixta75++;
               break;
           }
