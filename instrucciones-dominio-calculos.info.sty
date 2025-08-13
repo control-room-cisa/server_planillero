@@ -1,0 +1,63 @@
+Necesito crear un dominio para la tabla RegistroDiario.
+
+El dominio consta de lo siguiente:
+se debe crear una interfaz donde se tienen dos metodos por el momento:
+- getHorarioTrabajoByDateAndEmpleado(fecha: string, empleadoId: string): Promise<HorarioTrabajo>
+
+- getConteoHorasTrabajadasByDateAndEmpleado(fechaInicio: string, fechaFin: string, empleadoId: string): Promise<ConteoHorasTrabajadas>
+
+
+HorarioTrabajo:{
+    fecha: string;
+    empleadoId: string;
+    horarioTrabajo: {
+        inicio: string;
+        fin: string;
+    };
+    incluyeAlmuerzo: boolean;
+    esDiaLibre: boolean;
+    esFestivo: boolean;
+    nombreDiaFestivo: string;
+    cantidadHorasLaborables: number;
+}
+
+ConteoHorasTrabajadas:{
+    fechaInicio: string;
+    fechaFin: string;
+    empleadoId: string;
+    cantidadHoras: {
+        normal: number;
+        p25: number;
+        p50: number;
+        p75: number;
+        p100: number;
+    };
+}
+
+
+El dominio debe tener clases H1, H2 y poder agregar mas tipos de horarios en el futuro que implemente la interfaz y que tenga los siguientes metodos:
+- getHorarioTrabajoByDateAndEmpleado(fecha: string, empleadoId: string): Promise<HorarioTrabajo>
+- getConteoHorasTrabajadasByDateAndEmpleado(fechaInicio: string, fechaFin: string, empleadoId: string): Promise<ConteoHorasTrabajadas>
+
+
+Se debe crear una clase que haga la segmentacion de la linea de tiempo del diaen intervalos, de modo que al final cuadre la suma de 24 horas.
+Se obtendrá el registro diario de ese dispatchEvent, verificar que cantidad de horas con esExtra=false sean = horaFin - horaInicio - 1(si horaCorrida=false).
+Hora corrida: es cuando el empleado trabaja sin tomar libre la hora de almuerzo.
+
+Si las horas normales cuadran, entonces se procede a segmenter los intervalos comenzando desde las 00:00 hasta las <24:00.
+Se debe segmentar tambien a las 5:00 y a las 19:00.
+
+Se retorna un array con los intervalos que son una linea de tiempo del dia, deben estar completas las 24 horas en el array.
+Especificar si es hora normal, hora extra, hora de almuerzo, hora libre. En los casos de normal y extra especificar codigo de Job de la actividad asociada.
+Horas normales no vienen con HoraInicio y HoraFin, se pueden agregar en la linea de tiempo en cualquier posicion siempre que respeten estar dentro de HoraInicio y horaFin de registro diario.
+Horas extra sí tienen HoraInicio y HoraFin, deben quedar en la posicion de la linea de tiempo que estas HoraInicio y HoraFin de cada actividad indican
+Los espacios donde no hayan actividades se rellenan con intervalos como Libre.
+
+El objeto que retorna esta clase, con los intervalos definidos se pasará a un metodo de alguna de las clases H1,H2, etc. que será donde se haga el conteo interno, pero por el momento no se implementa.
+
+
+
+
+
+
+

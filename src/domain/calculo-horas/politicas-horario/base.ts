@@ -1,9 +1,9 @@
 // src/domain/politicas-horario/base.ts
 import { IPoliticaHorario } from "../interfaces";
 import { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
-import { RegistroDiarioRepository } from "../../repositories/RegistroDiarioRepository";
-import { FeriadoRepository } from "../../repositories/FeriadoRepository";
-import { EmpleadoRepository } from "../../repositories/EmpleadoRepository";
+import { RegistroDiarioRepository } from "../../../repositories/RegistroDiarioRepository";
+import { FeriadoRepository } from "../../../repositories/FeriadoRepository";
+import { EmpleadoRepository } from "../../../repositories/EmpleadoRepository";
 
 /**
  * Clase base abstracta para todas las políticas de horario

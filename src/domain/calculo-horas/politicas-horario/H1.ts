@@ -52,6 +52,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     }
 
     return {
+      tipoHorario: "H1",
       fecha,
       empleadoId,
       horarioTrabajo,

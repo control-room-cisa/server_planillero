@@ -1,13 +1,11 @@
-// src/controllers/EmpleadoDomainController.ts
+// src/controllers/CalculoHorasTrabajoController.ts
 import type { RequestHandler } from "express";
-import { HorarioTrabajoDomain } from "../domain";
+import { HorarioTrabajoDomain } from "../domain/calculo-horas";
 import type { ApiResponse } from "../dtos/ApiResponse";
 import type {
   HorarioTrabajo,
   ConteoHorasTrabajadas,
-  LineaTiempoDia,
-} from "../domain/types";
-import { TipoHorario } from "@prisma/client";
+} from "../domain/calculo-horas/types";
 
 // -----------------------------------------------------------------------------
 // GET Horario de Trabajo

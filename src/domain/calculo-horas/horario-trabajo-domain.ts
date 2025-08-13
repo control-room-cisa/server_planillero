@@ -3,8 +3,8 @@ import { TipoHorario } from "@prisma/client";
 import { HorarioTrabajo, ConteoHorasTrabajadas, LineaTiempoDia } from "./types";
 import { FabricaPoliticas } from "./politicas-horario/fabrica-politicas";
 import { SegmentadorTiempo } from "./segmentador-tiempo";
-import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
-import { RegistroDiarioRepository } from "../repositories/RegistroDiarioRepository";
+import { EmpleadoRepository } from "../../repositories/EmpleadoRepository";
+import { RegistroDiarioRepository } from "../../repositories/RegistroDiarioRepository";
 
 /**
  * Servicio principal del dominio de horarios de trabajo

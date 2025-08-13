@@ -1,6 +1,6 @@
 // src/domain/segmentador-tiempo.ts
 import { TipoIntervalo, IntervaloTiempo, LineaTiempoDia } from "./types";
-import { RegistroDiarioDetail } from "../repositories/RegistroDiarioRepository";
+import { RegistroDiarioDetail } from "../../repositories/RegistroDiarioRepository";
 
 /**
  * Clase encargada de segmentar la línea de tiempo del día en intervalos de 24 horas

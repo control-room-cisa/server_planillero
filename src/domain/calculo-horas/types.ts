@@ -4,6 +4,7 @@
  * Representa el horario de trabajo de un empleado en una fecha específica
  */
 export interface HorarioTrabajo {
+  tipoHorario: string; // H1, H2, etc.
   fecha: string;
   empleadoId: string;
   horarioTrabajo: {
