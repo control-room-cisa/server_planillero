@@ -1,69 +1,197 @@
-// ============================================================================
-// dominio/politicas/PoliticaH1.ts
-// ============================================================================
-import { PoliticaBaseHorario } from "./base";
-import { FechaISO, JornadaUnica, OpcionesConteo } from "./types";
-import { d, TZ_DEF } from "./tiempo";
-import { FeriadoService } from "../../services/FeriadoService";
+// src/domain/politicas-horario/H1.ts
+import { PoliticaHorarioBase } from "./base";
+import { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
 
-export class PoliticaH1 extends PoliticaBaseHorario {
-  /** Jornada L–J 9h; V 8h; S sin jornada (laboral); D libre. */
-  protected async jornadaDelDia(
-    fecha: FechaISO,
-    _opciones?: OpcionesConteo
-  ): Promise<{
-    esDiaLibre: boolean;
-    esFestivo: boolean;
-    jornada?: JornadaUnica;
-  }> {
-    const wd = d(`${fecha}T00:00:00`, TZ_DEF).day(); // 0=Dom, 1=Lun ... 6=Sab
-
-    // Domingo: día libre
-    if (wd === 0) {
-      return { esDiaLibre: true, esFestivo: false };
+/**
+ * Política de horario H1
+ * Horario estándar de oficina: 8:00 - 17:00 con 1 hora de almuerzo
+ */
+export class PoliticaH1 extends PoliticaHorarioBase {
+  async getHorarioTrabajoByDateAndEmpleado(
+    fecha: string,
+    empleadoId: string
+  ): Promise<HorarioTrabajo> {
+    if (!this.validarFormatoFecha(fecha)) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
     }
 
-    // ¿Es feriado?
-    let esFestivo = false;
-    try {
-      await FeriadoService.getFeriadoByDate(fecha);
-      esFestivo = true;
-    } catch {
-      esFestivo = false;
+    const empleado = await this.getEmpleado(empleadoId);
+    if (!empleado) {
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
     }
 
-    // Lunes–Jueves: 07:00–17:00 con almuerzo 12:00–13:00 (9h netas)
-    if (wd >= 1 && wd <= 4) {
-      return {
-        esDiaLibre: false,
-        esFestivo,
-        jornada: {
-          inicio: "07:00",
-          fin: "17:00",
-          almuerzo: { inicio: "12:00", fin: "13:00" },
-        },
+    const registroDiario = await this.getRegistroDiario(empleadoId, fecha);
+    const feriadoInfo = await this.esFeriado(fecha);
+
+    // Determinar si es día libre
+    const esDiaLibre = registroDiario?.esDiaLibre || false;
+
+    // Obtener horario de trabajo (usar del registro si existe, sino usar estándar)
+    let horarioTrabajo = this.getHorarioEstandar();
+    let incluyeAlmuerzo = this.incluyeAlmuerzoDefault();
+    let cantidadHorasLaborables = this.getHorasLaborablesBase();
+
+    if (registroDiario) {
+      // Si hay registro diario, usar sus horarios
+      const horaEntrada = new Date(registroDiario.horaEntrada);
+      const horaSalida = new Date(registroDiario.horaSalida);
+
+      horarioTrabajo = {
+        inicio: this.formatearHora(horaEntrada),
+        fin: this.formatearHora(horaSalida),
       };
+
+      incluyeAlmuerzo = !registroDiario.esHoraCorrida;
+
+      // Calcular horas laborables reales
+      const duracionMs = horaSalida.getTime() - horaEntrada.getTime();
+      const duracionHoras = duracionMs / 3_600_000;
+      cantidadHorasLaborables = incluyeAlmuerzo
+        ? duracionHoras - 1
+        : duracionHoras;
     }
 
-    // Viernes: 07:00–16:00 con almuerzo 12:00–13:00 (8h netas)
-    if (wd === 5) {
-      return {
-        esDiaLibre: false,
-        esFestivo,
-        jornada: {
-          inicio: "07:00",
-          fin: "16:00",
-          almuerzo: { inicio: "12:00", fin: "13:00" },
-        },
-      };
+    return {
+      fecha,
+      empleadoId,
+      horarioTrabajo,
+      incluyeAlmuerzo,
+      esDiaLibre,
+      esFestivo: feriadoInfo.esFeriado,
+      nombreDiaFestivo: feriadoInfo.nombre,
+      cantidadHorasLaborables,
+    };
+  }
+
+  async getConteoHorasTrabajajadasByDateAndEmpleado(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<ConteoHorasTrabajadas> {
+    if (
+      !this.validarFormatoFecha(fechaInicio) ||
+      !this.validarFormatoFecha(fechaFin)
+    ) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
     }
 
-    // Sábado: día laboral sin jornada (0 horas planificadas)
-    if (wd === 6) {
-      return { esDiaLibre: false, esFestivo, jornada: undefined };
+    // Inicializar contadores
+    let conteoHoras = {
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+    };
+
+    // Obtener todas las fechas en el rango
+    const fechas = this.obtenerFechasEnRango(fechaInicio, fechaFin);
+
+    for (const fecha of fechas) {
+      const registroDiario = await this.getRegistroDiario(empleadoId, fecha);
+
+      if (!registroDiario) {
+        continue; // Sin registro, no hay horas que contar
+      }
+
+      // Procesar actividades del día
+      for (const actividad of registroDiario.actividades) {
+        const horas = actividad.duracionHoras;
+
+        if (actividad.esExtra) {
+          // Lógica para horas extra en H1
+          conteoHoras = this.procesarHorasExtra(conteoHoras, horas, fecha);
+        } else {
+          // Horas normales
+          conteoHoras.normal += horas;
+        }
+      }
     }
 
-    // Fallback (no debería llegar aquí)
-    return { esDiaLibre: false, esFestivo, jornada: undefined };
+    return {
+      fechaInicio,
+      fechaFin,
+      empleadoId,
+      cantidadHoras: conteoHoras,
+    };
+  }
+
+  protected getHorasLaborablesBase(): number {
+    return 8; // 8 horas estándar para H1
+  }
+
+  protected getHorarioEstandar(): { inicio: string; fin: string } {
+    return {
+      inicio: "08:00",
+      fin: "17:00",
+    };
+  }
+
+  protected incluyeAlmuerzoDefault(): boolean {
+    return true; // H1 incluye almuerzo por defecto
+  }
+
+  /**
+   * Procesa las horas extra aplicando los recargos según H1
+   */
+  private procesarHorasExtra(
+    conteoActual: any,
+    horas: number,
+    fecha: string
+  ): any {
+    // Lógica específica de H1 para horas extra
+    // Por ejemplo: primera hora extra 25%, segunda 50%, etc.
+
+    // Implementación básica - puede ser refinada según reglas específicas
+    if (this.esDomingo(fecha)) {
+      conteoActual.p100 += horas; // Domingo = 100% recargo
+    } else if (this.esNocturna(fecha)) {
+      conteoActual.p50 += horas; // Nocturna = 50% recargo
+    } else {
+      conteoActual.p25 += horas; // Extra normal = 25% recargo
+    }
+
+    return conteoActual;
+  }
+
+  /**
+   * Verifica si es domingo
+   */
+  private esDomingo(fecha: string): boolean {
+    const date = new Date(fecha);
+    return date.getDay() === 0;
+  }
+
+  /**
+   * Verifica si es jornada nocturna
+   */
+  private esNocturna(fecha: string): boolean {
+    // Implementar lógica de jornada nocturna
+    return false; // Por ahora falso
+  }
+
+  /**
+   * Obtiene todas las fechas en un rango
+   */
+  private obtenerFechasEnRango(
+    fechaInicio: string,
+    fechaFin: string
+  ): string[] {
+    const fechas: string[] = [];
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+
+    for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+      fechas.push(d.toISOString().split("T")[0]);
+    }
+
+    return fechas;
+  }
+
+  /**
+   * Formatea una hora a HH:mm
+   */
+  private formatearHora(fecha: Date): string {
+    return fecha.toTimeString().slice(0, 5);
   }
 }

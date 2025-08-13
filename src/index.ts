@@ -7,6 +7,7 @@ import jobRoutes from "./routes/JobRoutes";
 import empresaRoutes from "./routes/empresaRoutes";
 import registroDiarioRoutes from "./routes/RegistroDiarioRoutes";
 import empleadoRoutes from "./routes/empleadoRoutes";
+import empleadoDomainRoutes from "./routes/empleadoDomainRoutes";
 import overtimeRoutes from "./routes/overtimeRoutes";
 import feriadoRoutes from "./routes/FeriadoRoute";
 import path from "path";
@@ -31,6 +32,7 @@ app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
 app.use("/api/registrodiario", registroDiarioRoutes);
 app.use("/api/empleados", empleadoRoutes);
+app.use("/api/empleados-domain", empleadoDomainRoutes);
 app.use("/api/feriados", feriadoRoutes);
 app.use("/api", overtimeRoutes);
 

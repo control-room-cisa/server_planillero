@@ -1,109 +1,214 @@
-// ============================================================================
-// dominio/politicas-horario/H2.ts
-// ============================================================================
-import { PoliticaBaseHorario } from "./base";
-import { FechaISO, JornadaUnica, OpcionesConteo } from "./types";
-import { d, TZ_DEF } from "./tiempo";
-import { FeriadoService } from "../../services/FeriadoService";
-
-type TurnoH2 = "dia" | "noche";
+// src/domain/politicas-horario/H2.ts
+import { PoliticaHorarioBase } from "./base";
+import { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
 
 /**
- * H2:
- * - Semana de por medio: el backend SIEMPRE retorna jornada (12h) y el frontend decide si aplica.
- * - Turno de día: 12h todos los días.
- * - Turno de noche: 12h excepto martes = 6h.
- * - Porcentajes: extras SOLO 25%; feriados 100% (todo lo trabajado ese día).
+ * Política de horario H2
+ * Horario de turnos rotativos: 6:00 - 18:00 con 1 hora de almuerzo
  */
-export class PoliticaH2 extends PoliticaBaseHorario {
-  constructor(private turno: TurnoH2 = "dia") {
-    super();
-  }
-
-  /** Define la jornada (horas planificadas) del día */
-  protected async jornadaDelDia(
-    fecha: FechaISO,
-    _opciones?: OpcionesConteo
-  ): Promise<{
-    esDiaLibre: boolean;
-    esFestivo: boolean;
-    jornada?: JornadaUnica;
-  }> {
-    // Para H2 no marcamos "día libre"; devolvemos jornada todos los días.
-    const wd = d(`${fecha}T00:00:00`, TZ_DEF).day(); // 0=Dom ... 2=Mar ... 6=Sab
-
-    // ¿Feriado?
-    let esFestivo = false;
-    try {
-      await FeriadoService.getFeriadoByDate(fecha);
-      esFestivo = true;
-    } catch {
-      esFestivo = false;
+export class PoliticaH2 extends PoliticaHorarioBase {
+  async getHorarioTrabajoByDateAndEmpleado(
+    fecha: string,
+    empleadoId: string
+  ): Promise<HorarioTrabajo> {
+    if (!this.validarFormatoFecha(fecha)) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
     }
 
-    if (this.turno === "dia") {
-      // 12h fijas (ejemplo: 07:00–19:00). Sin almuerzo por defecto.
-      return {
-        esDiaLibre: false,
-        esFestivo,
-        jornada: { inicio: "07:00", fin: "19:00" },
+    const empleado = await this.getEmpleado(empleadoId);
+    if (!empleado) {
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+    }
+
+    const registroDiario = await this.getRegistroDiario(empleadoId, fecha);
+    const feriadoInfo = await this.esFeriado(fecha);
+
+    // Determinar si es día libre
+    const esDiaLibre = registroDiario?.esDiaLibre || false;
+
+    // Obtener horario de trabajo (usar del registro si existe, sino usar estándar)
+    let horarioTrabajo = this.getHorarioEstandar();
+    let incluyeAlmuerzo = this.incluyeAlmuerzoDefault();
+    let cantidadHorasLaborables = this.getHorasLaborablesBase();
+
+    if (registroDiario) {
+      // Si hay registro diario, usar sus horarios
+      const horaEntrada = new Date(registroDiario.horaEntrada);
+      const horaSalida = new Date(registroDiario.horaSalida);
+
+      horarioTrabajo = {
+        inicio: this.formatearHora(horaEntrada),
+        fin: this.formatearHora(horaSalida),
       };
+
+      incluyeAlmuerzo = !registroDiario.esHoraCorrida;
+
+      // Calcular horas laborables reales
+      const duracionMs = horaSalida.getTime() - horaEntrada.getTime();
+      const duracionHoras = duracionMs / 3_600_000;
+      cantidadHorasLaborables = incluyeAlmuerzo
+        ? duracionHoras - 1
+        : duracionHoras;
     }
-
-    // Turno de noche:
-    if (wd === 2) {
-      // Martes: 6h (ejemplo: 19:00–01:00 del siguiente día)
-      return {
-        esDiaLibre: false,
-        esFestivo,
-        jornada: { inicio: "19:00", fin: "01:00" },
-      };
-    }
-    // Resto de días: 12h (ejemplo: 19:00–07:00)
-    return {
-      esDiaLibre: false,
-      esFestivo,
-      jornada: { inicio: "19:00", fin: "07:00" },
-    };
-  }
-
-  /** Para H2 devolvemos siempre 12h (o 6h martes noche) como planificadas: el front decide si aplican. */
-  async obtenerHorario(fecha: FechaISO, opciones?: OpcionesConteo) {
-    const base = await this.jornadaDelDia(fecha, opciones);
-    const wd = d(`${fecha}T00:00:00`, this.tz).day();
-
-    let horasPlan = 12;
-    if (this.turno === "noche" && wd === 2) horasPlan = 6;
 
     return {
       fecha,
-      esDiaLibre: base.esDiaLibre, // en H2 siempre false, pero lo preservamos
-      esFestivo: base.esFestivo,
-      jornada: base.jornada, // para cruce medianoche y cómputo de normal/extras
-      cantidadHorasLaborables: horasPlan, // SIEMPRE 12 (o 6 el martes de noche) -> opcional en el front
+      empleadoId,
+      horarioTrabajo,
+      incluyeAlmuerzo,
+      esDiaLibre,
+      esFestivo: feriadoInfo.esFeriado,
+      nombreDiaFestivo: feriadoInfo.nombre,
+      cantidadHorasLaborables,
     };
   }
 
-  /** Extras SOLO 25% (colapsamos 25/50/75), feriados 100% (ya manejado por la base). */
-  async contarHoras(
+  async getConteoHorasTrabajajadasByDateAndEmpleado(
     fechaInicio: string,
     fechaFin: string,
-    opciones?: OpcionesConteo
-  ) {
-    const res = await super.contarHoras(fechaInicio, fechaFin, opciones);
+    empleadoId: string
+  ): Promise<ConteoHorasTrabajadas> {
+    if (
+      !this.validarFormatoFecha(fechaInicio) ||
+      !this.validarFormatoFecha(fechaFin)
+    ) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
+    }
 
-    // Colapsar extras (25 + 50 + 75) -> 25; 50 y 75 = 0
-    const totalExtras =
-      (res.cantidadHoras.p25 ?? 0) +
-      (res.cantidadHoras.p50 ?? 0) +
-      (res.cantidadHoras.p75 ?? 0);
-    const round = (n: number) => Math.round(n * 100) / 100;
+    // Inicializar contadores
+    let conteoHoras = {
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+    };
 
-    res.cantidadHoras.p25 = round(totalExtras);
-    res.cantidadHoras.p50 = 0;
-    res.cantidadHoras.p75 = 0;
+    // Obtener todas las fechas en el rango
+    const fechas = this.obtenerFechasEnRango(fechaInicio, fechaFin);
 
-    // Feriados ya van íntegros a p100 por la lógica de PoliticaBase (esLibreOFestivo).
-    return res;
+    for (const fecha of fechas) {
+      const registroDiario = await this.getRegistroDiario(empleadoId, fecha);
+
+      if (!registroDiario) {
+        continue; // Sin registro, no hay horas que contar
+      }
+
+      // Procesar actividades del día
+      for (const actividad of registroDiario.actividades) {
+        const horas = actividad.duracionHoras;
+
+        if (actividad.esExtra) {
+          // Lógica para horas extra en H2
+          conteoHoras = this.procesarHorasExtra(conteoHoras, horas, fecha);
+        } else {
+          // Horas normales
+          conteoHoras.normal += horas;
+        }
+      }
+    }
+
+    return {
+      fechaInicio,
+      fechaFin,
+      empleadoId,
+      cantidadHoras: conteoHoras,
+    };
+  }
+
+  protected getHorasLaborablesBase(): number {
+    return 11; // 11 horas estándar para H2 (6:00-18:00 menos 1 hora almuerzo)
+  }
+
+  protected getHorarioEstandar(): { inicio: string; fin: string } {
+    return {
+      inicio: "06:00",
+      fin: "18:00",
+    };
+  }
+
+  protected incluyeAlmuerzoDefault(): boolean {
+    return true; // H2 incluye almuerzo por defecto
+  }
+
+  /**
+   * Procesa las horas extra aplicando los recargos según H2
+   */
+  private procesarHorasExtra(
+    conteoActual: any,
+    horas: number,
+    fecha: string
+  ): any {
+    // Lógica específica de H2 para horas extra
+    // H2 tiene reglas diferentes a H1 por ser turnos largos
+
+    if (this.esDomingo(fecha)) {
+      conteoActual.p100 += horas; // Domingo/Festivo = 100% recargo
+    } else if (this.esHoraNocturna(fecha)) {
+      conteoActual.p75 += horas; // Nocturna en turno largo = 75% recargo
+    } else if (this.esSabado(fecha)) {
+      conteoActual.p50 += horas; // Sábado = 50% recargo
+    } else {
+      conteoActual.p25 += horas; // Extra normal = 25% recargo
+    }
+
+    return conteoActual;
+  }
+
+  /**
+   * Verifica si es domingo
+   */
+  private esDomingo(fecha: string): boolean {
+    const date = new Date(fecha);
+    return date.getDay() === 0;
+  }
+
+  /**
+   * Verifica si es sábado
+   */
+  private esSabado(fecha: string): boolean {
+    const date = new Date(fecha);
+    return date.getDay() === 6;
+  }
+
+  /**
+   * Verifica si es hora nocturna (después de las 18:00 o antes de las 6:00)
+   */
+  private esHoraNocturna(fecha: string): boolean {
+    // En H2, cualquier hora fuera del turno estándar se considera nocturna
+    return true; // Simplificado para este ejemplo
+  }
+
+  /**
+   * Verifica si es feriado (método auxiliar)
+   */
+  private async esFeriadoLocal(fecha: string): Promise<boolean> {
+    const feriadoInfo = await this.esFeriado(fecha);
+    return feriadoInfo.esFeriado;
+  }
+
+  /**
+   * Obtiene todas las fechas en un rango
+   */
+  private obtenerFechasEnRango(
+    fechaInicio: string,
+    fechaFin: string
+  ): string[] {
+    const fechas: string[] = [];
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+
+    for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+      fechas.push(d.toISOString().split("T")[0]);
+    }
+
+    return fechas;
+  }
+
+  /**
+   * Formatea una hora a HH:mm
+   */
+  private formatearHora(fecha: Date): string {
+    return fecha.toTimeString().slice(0, 5);
   }
 }
