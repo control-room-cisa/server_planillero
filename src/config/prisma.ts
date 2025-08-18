@@ -1,12 +1,12 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from "@prisma/client";
 
 export const prisma = new PrismaClient({
-    log: ["query", "error"],//ver consultas en consola
+  log: ["error"], //ver consultas en consola
 });
 
 // Middleware para “soft-delete”: excluir always deletedAt != null
 prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
-    const now = new Date();
+  const now = new Date();
 
   // Sólo para acciones de lectura sobre modelos que tienen deletedAt
   const readActions = ["findUnique", "findFirst", "findMany", "count"];
@@ -14,7 +14,7 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     readActions.includes(params.action) &&
     params.model &&
     // ajusta esta lista a tus modelos “soft-delete”
-    ["Empresa", "Job", "Empleado", "Departamento", /*…*/].includes(params.model)
+    ["Empresa", "Job", "Empleado", "Departamento" /*…*/].includes(params.model)
   ) {
     // Inyecta deletedAt: null en el where
     if (!params.args) {
@@ -22,7 +22,7 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     } else if (params.args.where) {
       // si ya había filtros, los preservamos
       params.args.where = {
-        AND: [params.args.where, { deletedAt: null }]
+        AND: [params.args.where, { deletedAt: null }],
       };
     } else {
       params.args.where = { deletedAt: null };
@@ -40,7 +40,7 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     }
     if (params.action === "createMany") {
       // params.args.data es un array de objetos
-      const datas = (params.args.data as any[]).map(d => ({
+      const datas = (params.args.data as any[]).map((d) => ({
         createdAt: now,
         ...d,
       }));

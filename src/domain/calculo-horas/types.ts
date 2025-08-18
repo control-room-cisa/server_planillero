@@ -31,6 +31,8 @@ export interface ConteoHorasTrabajadas {
     p50: number; // 50% de recargo
     p75: number; // 75% de recargo
     p100: number; // 100% de recargo (doble)
+    libre: number; // 0 del valor de la hora normal
+    almuerzo: number; // 0 del valor de la hora normal
   };
 }
 

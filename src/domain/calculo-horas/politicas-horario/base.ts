@@ -4,6 +4,7 @@ import { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
 import { RegistroDiarioRepository } from "../../../repositories/RegistroDiarioRepository";
 import { FeriadoRepository } from "../../../repositories/FeriadoRepository";
 import { EmpleadoRepository } from "../../../repositories/EmpleadoRepository";
+import { ResultadoSegmentacion, segmentarRegistroDiario } from "./segmentador";
 
 /**
  * Clase base abstracta para todas las políticas de horario
@@ -50,6 +51,33 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     } catch {
       return { esFeriado: false, nombre: "" };
     }
+  }
+
+  async generarSegmentosDeDiaConValidacion(
+    fecha: string,
+    empleadoId: string
+  ): Promise<ResultadoSegmentacion> {
+    if (!this.validarFormatoFecha(fecha)) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
+    }
+
+    const reg = await this.getRegistroDiario(empleadoId, fecha);
+
+    if (!reg) {
+      // Sin registro: todo LIBRE; NO aplica almuerzo.
+      const fake: any = {
+        fecha,
+        horaEntrada: new Date(`${fecha}T00:00:00`),
+        horaSalida: new Date(`${fecha}T00:00:00`),
+        esHoraCorrida: true,
+        esDiaLibre: true,
+        actividades: [],
+      };
+      return segmentarRegistroDiario(fake);
+    }
+
+    // Ideal: include { actividades: { include: { job: true }}} para poblar jobNombre/codigo
+    return segmentarRegistroDiario(reg as any);
   }
 
   /**

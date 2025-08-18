@@ -99,7 +99,7 @@ model Empleado {
   codigo                     String?              @db.VarChar(20) @unique
   nombre                     String               @db.VarChar(100)
   apellido                   String?              @db.VarChar(100)
-  nombreUsuario              String?              @db.VarChar(15)
+  nombreUsuario              String?              @db.VarChar(15)@unique
   correoElectronico          String?              @map("correo_electronico") @db.VarChar(45)
   dni                        String?              @db.VarChar(45)
   profesion                  String?              @db.VarChar(30)
@@ -274,3 +274,4 @@ model Feriado{
 
   @@map("Feriados")
 }
+

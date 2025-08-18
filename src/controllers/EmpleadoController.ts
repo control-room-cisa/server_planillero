@@ -251,8 +251,10 @@ export const listByCompany: RequestHandler<
   try {
     const user = (req as AuthRequest).user;
 
-    // Solo RRHH puede acceder a esta ruta (ajusta el rolId si corresponde)
-    if (user.rolId !== 3) {
+    // Pueden usar esta ruta: supervisores, rrhh, gerentes y contabilidad
+    const allowedRoles = [2, 3, 4, 5];
+
+    if (!allowedRoles.includes(user.rolId)) {
       return res.status(403).json({
         success: false,
         message: "Solo personal de RRHH puede acceder a esta funcionalidad",
