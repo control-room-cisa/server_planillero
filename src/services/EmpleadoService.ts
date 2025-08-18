@@ -79,8 +79,15 @@ export class EmpleadoService {
       apellido: e.apellido ?? undefined,
       codigo: e.codigo ?? undefined,
       departamento: e.departamento.nombre,
-      urlFotoPerfil: FileService.buildFotoUrl(e.id, e.urlFotoPerfil, true),
-      urlCv: FileService.buildCvUrl(e.id, e.urlCv, true),
+      empresaId: e.departamento.empresaId,
+      empresa: { nombre: e.departamento.empresa.nombre },
+      urlFotoPerfil: FileService.buildFotoUrl(
+        e.id,
+        e.urlFotoPerfil ?? undefined,
+        true
+      ),
+      urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
+      activo: e.activo,
     }));
   }
 
@@ -100,8 +107,14 @@ export class EmpleadoService {
       codigo: e.codigo ?? undefined,
       departamento: e.departamento.nombre,
       empresaId: e.departamento.empresaId,
-      urlFotoPerfil: FileService.buildFotoUrl(e.id, e.urlFotoPerfil, true),
-      urlCv: FileService.buildCvUrl(e.id, e.urlCv, true),
+      empresa: { nombre: e.departamento.empresa.nombre },
+      urlFotoPerfil: FileService.buildFotoUrl(
+        e.id,
+        e.urlFotoPerfil ?? undefined,
+        true
+      ),
+      urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
+      activo: e.activo,
     }));
   }
 

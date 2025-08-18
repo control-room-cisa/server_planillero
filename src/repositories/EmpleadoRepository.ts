@@ -65,63 +65,39 @@ export class EmpleadoRepository {
     });
   }
 
-  static async findByDepartment(departamentoId: number): Promise<any[]> {
+  static async findByDepartment(departamentoId: number): Promise<Empleado[]> {
     return prisma.empleado.findMany({
-      where: {
-        departamentoId,
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        nombre: true,
-        apellido: true,
-        codigo: true,
+      where: { departamentoId, deletedAt: null },
+      include: {
         departamento: {
-          select: {
-            nombre: true,
+          include: {
+            empresa: { select: { nombre: true } },
           },
         },
       },
     });
   }
 
-  static async findByCompany(empresaId: number): Promise<any[]> {
+  static async findByCompany(empresaId: number): Promise<Empleado[]> {
     return prisma.empleado.findMany({
-      where: {
-        deletedAt: null,
+      where: { deletedAt: null, departamento: { empresaId } },
+      include: {
         departamento: {
-          empresaId: empresaId,
-        },
-      },
-      select: {
-        id: true,
-        nombre: true,
-        apellido: true,
-        codigo: true,
-        departamento: {
-          select: {
-            nombre: true,
-            empresaId: true,
+          include: {
+            empresa: { select: { nombre: true } },
           },
         },
       },
     });
   }
 
-  static async findAllWithDepartment(): Promise<any[]> {
+  static async findAllWithDepartment(): Promise<Empleado[]> {
     return prisma.empleado.findMany({
-      where: {
-        deletedAt: null,
-      },
-      select: {
-        id: true,
-        nombre: true,
-        apellido: true,
-        codigo: true,
+      where: { deletedAt: null },
+      include: {
         departamento: {
-          select: {
-            nombre: true,
-            empresaId: true,
+          include: {
+            empresa: { select: { nombre: true } },
           },
         },
       },

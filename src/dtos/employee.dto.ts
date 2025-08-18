@@ -13,6 +13,9 @@ export interface EmployeeDto {
   codigo?: string;
   departamento?: string;
   empresaId?: number;
+  empresa?: { nombre: string };
+  activo?: boolean;
+  cargo?: string;
   urlFotoPerfil?: string;
   urlCv?: string;
 }
