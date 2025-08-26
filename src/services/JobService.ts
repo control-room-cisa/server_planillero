@@ -1,6 +1,7 @@
-// src/services/job.service.ts
+// src/services/JobService.ts
 import type { Job, Prisma } from "@prisma/client";
 import { JobRepository } from "../repositories/JobRepository";
+import type { CreateJobDto, UpdateJobDto } from "../validators/job.validator";
 
 export class JobService {
   /**
@@ -22,33 +23,66 @@ export class JobService {
    */
   static async getJobById(id: number): Promise<Job> {
     const job = await JobRepository.findById(id);
-    if (!job) {
-      throw new Error(`Job con id ${id} no encontrado`);
-    }
+    if (!job) throw new Error(`Job con id ${id} no encontrado`);
     return job;
   }
 
-  /**
-   * Crear un nuevo job; por defecto lo marca como activo si no se indica
-   */
-  static async createJob(data: Prisma.JobCreateInput): Promise<Job> {
-    const payload: Prisma.JobCreateInput = {
-      ...data,
-      activo: data.activo ?? true,
+  private static toPrismaCreate(data: CreateJobDto): Prisma.JobCreateInput {
+    const {
+      empresaId,
+      mostrarEmpresaId,
+      activo,
+      especial,
+      codigo,
+      nombre,
+      descripcion,
+    } = data;
+
+    return {
+      codigo,
+      nombre,
+      descripcion,
+      activo: activo ?? true,
+      especial: especial ?? false,
+      empresa: { connect: { id: empresaId } },              
+      empresaMostrar: { connect: { id: mostrarEmpresaId } },
     };
+  }
+
+  private static toPrismaUpdate(data: UpdateJobDto): Prisma.JobUpdateInput {
+    const {
+      empresaId,
+      mostrarEmpresaId,
+      activo,
+      especial,
+      codigo,
+      nombre,
+      descripcion,
+    } = data;
+
+    return {
+      ...(codigo !== undefined ? { codigo } : {}),
+      ...(nombre !== undefined ? { nombre } : {}),
+      ...(descripcion !== undefined ? { descripcion } : {}),
+      ...(activo !== undefined ? { activo } : {}),
+      ...(especial !== undefined ? { especial } : {}),
+      ...(empresaId !== undefined ? { empresa: { connect: { id: empresaId } } } : {}),
+      ...(mostrarEmpresaId !== undefined
+        ? { empresaMostrar: { connect: { id: mostrarEmpresaId } } }
+        : {}),
+      updatedAt: new Date(),
+    };
+  }
+
+  static async createJob(data: CreateJobDto): Promise<Job> {
+    const payload = this.toPrismaCreate(data);
     return JobRepository.create(payload);
   }
 
-  /**
-   * Actualizar un job existente; lanza error si no existe
-   */
-  static async updateJob(
-    id: number,
-    data: Prisma.JobUpdateInput
-  ): Promise<Job> {
-    // Validar existencia
+  static async updateJob(id: number, data: UpdateJobDto): Promise<Job> {
     await this.getJobById(id);
-    return JobRepository.update(id, data);
+    const payload = this.toPrismaUpdate(data);
+    return JobRepository.update(id, payload);
   }
 
   /**

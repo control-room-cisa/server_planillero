@@ -3,6 +3,8 @@ import { RequestHandler } from "express";
 import { JobService } from "../services/JobService";
 import { ApiResponse } from "../dtos/ApiResponse";
 import type { Job, Prisma } from "@prisma/client";
+import { createJobSchema, updateJobSchema } from "../validators/job.validator";
+import { z } from "zod";
 
 export const listJobs: RequestHandler<
   {}, // params
@@ -64,14 +66,13 @@ export const getJob: RequestHandler<
 };
 
 /** POST /api/jobs */
-export const createJob: RequestHandler<
-  {}, // params
-  ApiResponse<Job>, // res body
-  Prisma.JobCreateInput, // req body
-  {} // query
-> = async (req, res, next) => {
+export const createJob: RequestHandler<{}, ApiResponse<Job>> = async (
+  req,
+  res,
+  next
+) => {
   try {
-    const payload = req.body;
+    const payload = createJobSchema.parse(req.body);
     const newJob = await JobService.createJob(payload);
     return res.status(201).json({
       success: true,
@@ -79,20 +80,23 @@ export const createJob: RequestHandler<
       data: newJob,
     });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Error de validación", data: null });
+    }
     next(err);
   }
 };
 
 /** PUT /api/jobs/:id */
 export const updateJob: RequestHandler<
-  { id: string }, // params
-  ApiResponse<Job>, // res body
-  Prisma.JobUpdateInput, // req body
-  {} // query
+  { id: string },
+  ApiResponse<Job>
 > = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const payload = req.body;
+    const payload = updateJobSchema.parse(req.body);
     const updated = await JobService.updateJob(id, payload);
     return res.json({
       success: true,
@@ -100,6 +104,11 @@ export const updateJob: RequestHandler<
       data: updated,
     });
   } catch (err) {
+    if (err instanceof z.ZodError) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Error de validación", data: null });
+    }
     next(err);
   }
 };

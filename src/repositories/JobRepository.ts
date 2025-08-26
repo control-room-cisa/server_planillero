@@ -34,6 +34,13 @@ export class JobRepository {
     return prisma.job.findMany({
       where: finalWhere,
       include: { empresa: true, empresaMostrar: true },
+      orderBy: [
+        { empresaId: "asc" },
+        // si tus códigos son numéricos como string (e.g. "400.01"), ordena por codigo;
+        // si no, usa id:
+        { codigo: "asc" },
+        { id: "asc" },
+      ],
     });
   }
 

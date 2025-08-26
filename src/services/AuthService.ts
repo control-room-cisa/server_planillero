@@ -95,6 +95,7 @@ export class AuthService {
         correoElectronico: empleado.correoElectronico,
         departamentoId: empleado.departamentoId,
         rolId: empleado.rolId,
+        tipoHorario: empleado.tipoHorario,
       },
     };
   }
