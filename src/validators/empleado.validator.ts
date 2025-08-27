@@ -39,8 +39,12 @@ const empleadoFields = {
     z.date().optional()
   ),
   contrasena: z.string().min(6).optional(),
-  urlFotoPerfil: z.string().url().optional(),
-  urlCv: z.string().url().optional(),
+  urlFotoPerfil: z
+    .union([z.string().url(), z.string().length(0), z.null(), z.undefined()])
+    .optional(),
+  urlCv: z
+    .union([z.string().url(), z.string().length(0), z.null(), z.undefined()])
+    .optional(),
   rolId: z.number().int().positive(),
   departamentoId: z.number().int().positive(),
 };
@@ -82,8 +86,12 @@ export const updateEmpleadoSchema = z.object({
       z.date().optional()
     )
     .optional(),
-  urlFotoPerfil: z.string().url().optional(),
-  urlCv: z.string().url().optional(),
+  urlFotoPerfil: z
+    .union([z.string().url(), z.string().length(0), z.null(), z.undefined()])
+    .optional(),
+  urlCv: z
+    .union([z.string().url(), z.string().length(0), z.null(), z.undefined()])
+    .optional(),
   rolId: z.number().int().positive().optional(),
   departamentoId: z.number().int().positive().optional(),
 });
