@@ -62,21 +62,30 @@ function computeHoursWithLunchDiscount(
   let msDescuentoTotal = 0;
 
   // normalizar a medianoche UTC de los días de inicio y fin
-  const startDay = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate()));
-  const endDay = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()));
+  const startDay = new Date(
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
+  );
+  const endDay = new Date(
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
+  );
 
   for (
     let d = new Date(startDay.getTime());
     d.getTime() <= endDay.getTime();
     d = new Date(d.getTime() + 24 * 60 * 60 * 1000)
   ) {
-    const lunchStart = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0));
-    const lunchEnd   = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 13, 0, 0, 0));
+    const lunchStart = new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0)
+    );
+    const lunchEnd = new Date(
+      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 13, 0, 0, 0)
+    );
 
     // solape del [start, end] con [lunchStart, lunchEnd]
     const overlapMs = Math.max(
       0,
-      Math.min(end.getTime(), lunchEnd.getTime()) - Math.max(start.getTime(), lunchStart.getTime())
+      Math.min(end.getTime(), lunchEnd.getTime()) -
+        Math.max(start.getTime(), lunchStart.getTime())
     );
 
     msDescuentoTotal += overlapMs;
@@ -111,11 +120,15 @@ export class RegistroDiarioRepository {
     const actPayload =
       actividades?.map((a) => {
         const start = a.horaInicio ? new Date(a.horaInicio) : null;
-        const end   = a.horaFin ? new Date(a.horaFin) : null;
+        const end = a.horaFin ? new Date(a.horaFin) : null;
 
         let duracionRecalc = a.duracionHoras ?? 0;
         if (start && end) {
-          const horas = computeHoursWithLunchDiscount(start, end, restOfDia.esHoraCorrida);
+          const horas = computeHoursWithLunchDiscount(
+            start,
+            end,
+            restOfDia.esHoraCorrida
+          );
           // Tu columna es Int → redondeamos al entero más cercano
           duracionRecalc = Math.max(0, Math.round(horas));
         }
@@ -257,5 +270,111 @@ export class RegistroDiarioRepository {
         updatedAt: new Date(),
       },
     });
+  }
+
+  /**
+   * Permite a un supervisor actualizar el job de una actividad específica
+   * de otro empleado. Solo disponible para supervisores (rolId = 2).
+   */
+  static async updateJobBySupervisor(
+    supervisorId: number,
+    empleadoId: number,
+    dto: { actividadId: number; nuevoJobId: number }
+  ): Promise<RegistroDiarioDetail> {
+    // Verificar que el supervisor tenga rolId = 2
+    const supervisor = await prisma.empleado.findFirst({
+      where: {
+        id: supervisorId,
+      },
+      select: { rolId: true },
+    });
+
+    if (!supervisor || supervisor.rolId !== 2) {
+      throw new Error(
+        "Solo los supervisores pueden actualizar jobs de otros empleados"
+      );
+    }
+
+    // Verificar que la actividad pertenezca al empleado especificado
+    const actividad = await prisma.actividad.findFirst({
+      where: {
+        id: dto.actividadId,
+        registroDiario: {
+          empleadoId: empleadoId,
+        },
+      },
+      include: {
+        registroDiario: {
+          include: {
+            empleado: {
+              select: {
+                id: true,
+                nombre: true,
+                apellido: true,
+                codigo: true,
+              },
+            },
+            actividades: {
+              include: {
+                job: {
+                  select: {
+                    id: true,
+                    codigo: true,
+                    nombre: true,
+                    descripcion: true,
+                    empresa: {
+                      select: {
+                        id: true,
+                        nombre: true,
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!actividad) {
+      throw new Error(
+        "Actividad no encontrada o no pertenece al empleado especificado"
+      );
+    }
+
+    // Verificar que el nuevo job existe
+    const nuevoJob = await prisma.job.findFirst({
+      where: {
+        id: dto.nuevoJobId,
+        deletedAt: null,
+      },
+      select: { id: true, activo: true },
+    });
+
+    if (!nuevoJob || !nuevoJob.activo) {
+      throw new Error("Job no encontrado o no está activo");
+    }
+
+    // Actualizar el job de la actividad
+    await prisma.actividad.update({
+      where: { id: dto.actividadId },
+      data: {
+        jobId: dto.nuevoJobId,
+        updatedAt: new Date(),
+      },
+    });
+
+    // Retornar el registro diario actualizado usando el método existente
+    const registroActualizado = await this.findByEmpleadoAndDateWithActivities(
+      empleadoId,
+      actividad.registroDiario.fecha
+    );
+
+    if (!registroActualizado) {
+      throw new Error("Error al recuperar el registro actualizado");
+    }
+
+    return registroActualizado;
   }
 }

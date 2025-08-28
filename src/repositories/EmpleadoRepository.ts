@@ -6,7 +6,6 @@ import { CreateEmpleadoDto } from "../dtos/employee.dto";
 export class EmpleadoRepository {
   /** Busca un empleado por su código (ahora marcado @unique) */
   static async findById(id: number): Promise<Empleado | null> {
-    console.log("id", id);
     return prisma.empleado.findFirst({
       where: { id },
     });

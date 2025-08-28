@@ -52,4 +52,20 @@ export class RegistroDiarioService {
   static aprobarRrhh(registroDiarioId: number, dto: RrhhApprovalDto) {
     return RegistroDiarioRepository.updateRrhhApproval(registroDiarioId, dto);
   }
+
+  /**
+   * Permite a un supervisor actualizar el job de una actividad específica
+   * de otro empleado. Solo disponible para supervisores (rolId = 2).
+   */
+  static async updateJobBySupervisor(
+    supervisorId: number,
+    empleadoId: number,
+    dto: { actividadId: number; nuevoJobId: number }
+  ) {
+    return RegistroDiarioRepository.updateJobBySupervisor(
+      supervisorId,
+      empleadoId,
+      dto
+    );
+  }
 }
