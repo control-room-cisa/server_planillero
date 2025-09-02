@@ -163,6 +163,12 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       extraC2Min: 0,
       extraC3Min: 0,
       extraC4Min: 0,
+      // normales por jobs especiales
+      incapacidadMin: 0,
+      vacacionesMin: 0,
+      permisoConSueldoMin: 0,
+      permisoSinSueldoMin: 0,
+      compensatorioMin: 0,
     };
 
     // Recorrer días
@@ -194,9 +200,17 @@ export class PoliticaH1 extends PoliticaHorarioBase {
             b.almuerzoMin += dur;
             break;
 
-          case "NORMAL":
-            b.normalMin += dur;
+          case "NORMAL": {
+            // Clasificar NORMAL según código de job especial (si existe en el segmento)
+            const code = seg.jobCodigo?.toUpperCase?.();
+            if (code === "E01") b.incapacidadMin += dur;
+            else if (code === "E02") b.vacacionesMin += dur;
+            else if (code === "E03") b.permisoConSueldoMin += dur;
+            else if (code === "E04") b.permisoSinSueldoMin += dur;
+            else if (code === "E05") b.compensatorioMin += dur;
+            else b.normalMin += dur;
             break;
+          }
 
           case "EXTRA": {
             const slots = dur / 15; // segmentos vienen ya cortados (05/19)
@@ -244,6 +258,11 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         p100: PoliticaH1.minutosAhoras(b.extraC4Min),
         libre: PoliticaH1.minutosAhoras(b.libreMin),
         almuerzo: PoliticaH1.minutosAhoras(b.almuerzoMin),
+        incapacidad: PoliticaH1.minutosAhoras(b.incapacidadMin),
+        vacaciones: PoliticaH1.minutosAhoras(b.vacacionesMin),
+        permisoConSueldo: PoliticaH1.minutosAhoras(b.permisoConSueldoMin),
+        permisoSinSueldo: PoliticaH1.minutosAhoras(b.permisoSinSueldoMin),
+        compensatorio: PoliticaH1.minutosAhoras(b.compensatorioMin),
       },
     };
 
@@ -393,6 +412,12 @@ type Buckets = {
   extraC2Min: number; // p50
   extraC3Min: number; // p75
   extraC4Min: number; // p100
+  // normales por jobs especiales (minutos)
+  incapacidadMin: number; // E01
+  vacacionesMin: number; // E02
+  permisoConSueldoMin: number; // E03
+  permisoSinSueldoMin: number; // E04
+  compensatorioMin: number; // E05
 };
 
 const DUMMY_BUCKETS: Buckets = {
@@ -403,4 +428,9 @@ const DUMMY_BUCKETS: Buckets = {
   extraC2Min: 0,
   extraC3Min: 0,
   extraC4Min: 0,
+  incapacidadMin: 0,
+  vacacionesMin: 0,
+  permisoConSueldoMin: 0,
+  permisoSinSueldoMin: 0,
+  compensatorioMin: 0,
 };

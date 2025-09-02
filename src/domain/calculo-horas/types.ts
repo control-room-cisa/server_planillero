@@ -33,6 +33,12 @@ export interface ConteoHorasTrabajadas {
     p100: number; // 100% de recargo (doble)
     libre: number; // 0 del valor de la hora normal
     almuerzo: number; // 0 del valor de la hora normal
+    // Variantes por jobs especiales en horas NORMALES
+    incapacidad?: number; // E01
+    vacaciones?: number; // E02
+    permisoConSueldo?: number; // E03
+    permisoSinSueldo?: number; // E04
+    compensatorio?: number; // E05
   };
 }
 

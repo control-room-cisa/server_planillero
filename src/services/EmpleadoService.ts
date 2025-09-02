@@ -73,14 +73,16 @@ export class EmpleadoService {
 
   static async getByDepartment(departamentoId: number): Promise<EmployeeDto[]> {
     const rows = await EmpleadoRepository.findByDepartment(departamentoId);
-    return rows.map((e) => ({
+    return rows.map((e: any) => ({
       id: e.id,
       nombre: e.nombre,
       apellido: e.apellido ?? undefined,
       codigo: e.codigo ?? undefined,
-      departamento: e.departamento.nombre,
-      empresaId: e.departamento.empresaId,
-      empresa: { nombre: e.departamento.empresa.nombre },
+      departamento: e.departamento?.nombre,
+      empresaId: e.departamento?.empresaId,
+      empresa: e.departamento?.empresa?.nombre
+        ? { nombre: e.departamento.empresa.nombre }
+        : undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined,
@@ -100,14 +102,16 @@ export class EmpleadoService {
       ? await EmpleadoRepository.findByCompany(empresaId)
       : await EmpleadoRepository.findAllWithDepartment();
 
-    return rows.map((e) => ({
+    return rows.map((e: any) => ({
       id: e.id,
       nombre: e.nombre,
       apellido: e.apellido ?? undefined,
       codigo: e.codigo ?? undefined,
-      departamento: e.departamento.nombre,
-      empresaId: e.departamento.empresaId,
-      empresa: { nombre: e.departamento.empresa.nombre },
+      departamento: e.departamento?.nombre,
+      empresaId: e.departamento?.empresaId,
+      empresa: e.departamento?.empresa?.nombre
+        ? { nombre: e.departamento.empresa.nombre }
+        : undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined,

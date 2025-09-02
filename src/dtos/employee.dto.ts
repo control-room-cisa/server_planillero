@@ -87,8 +87,8 @@ export interface CreateEmpleadoDto {
   direccion?: string;
   fechaInicioIngreso?: Date;
   contrasena?: string;
-  urlFotoPerfil?: string;
-  urlCv?: string;
+  urlFotoPerfil?: string | null;
+  urlCv?: string | null;
   rolId: number;
   departamentoId: number;
 }
@@ -122,8 +122,8 @@ export interface UpdateEmpleadoDto {
   telefono?: string;
   direccion?: string;
   fechaInicioIngreso?: Date;
-  urlFotoPerfil?: string;
-  urlCv?: string;
+  urlFotoPerfil?: string | null;
+  urlCv?: string | null;
   rolId?: number;
   departamentoId?: number;
 }
