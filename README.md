@@ -109,3 +109,56 @@ JWT_SECRET="una_clave_secreta_para_jwt"
 4.  (Opcional) Inserta datos semilla críticos:
 
         npx prisma db seed
+
+---
+
+## Pruebas (Vitest)
+
+- Requisitos: Node.js y dependencias instaladas (`npm install`).
+- El proyecto trae unit tests (sin BD) e integraciones/E2E (con BD MySQL opcional).
+
+### Configuración de base de datos de pruebas (.env.test)
+
+Crear un archivo `.env.test` en la raíz con, por ejemplo:
+
+```
+DATABASE_URL="mysql://root@localhost:3306/planillero-test"
+
+```
+
+Crear la base de datos para pruebas (nota: el guion requiere backticks en MySQL):
+
+```sql
+CREATE DATABASE `planillero-test` CHARACTER SET utf8mb4;
+```
+
+
+### Ejecutar pruebas con base de datos (integración/E2E)
+
+1) Asegura que `.env.test` apunte a tu BD de pruebas y que la BD exista.
+
+2) Ejecuta con BD habilitada:
+
+- El setup global carga `.env.test` y ejecuta `npx prisma generate`.
+- Por defecto hace `npx prisma db push --force-reset` (borra datos). Si no quieres resetear:
+
+```
+TEST_DB_RESET=0 RUN_DB_TESTS=1 npx vitest run
+```
+
+- Semilla opcional: activa con `RUN_DB_SEED=1`.
+
+### Modo watch y cobertura
+
+- Watch:
+
+```
+npm run test:watch
+```
+
+- Cobertura:
+
+```
+npm run test:cov
+npm run coverage:open
+```
