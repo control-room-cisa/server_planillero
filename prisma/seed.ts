@@ -153,12 +153,12 @@ async function main() {
     },
     {
       codigo: "E03",
-      nombre: "Permiso con goce",
+      nombre: "Permiso con remunerado",
       descripcion: "Permiso con goce de sueldo",
     },
     {
       codigo: "E04",
-      nombre: "Permiso sin goce",
+      nombre: "Permiso no remunerado",
       descripcion: "Permiso sin goce de sueldo",
     },
   ] as const;
