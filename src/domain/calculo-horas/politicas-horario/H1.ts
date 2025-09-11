@@ -171,6 +171,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       compensatorioMin: 0,
     };
 
+    // Acumuladores adicionales por jobs especiales provenientes de actividades SIN hora (normales)
+    let addIncapacidadMin = 0;
+    let addVacacionesMin = 0;
+    let addPermisoCSMin = 0;
+    let addPermisoSSMin = 0;
+    let addCompensatorioMin = 0;
+
     // Recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
@@ -186,6 +193,17 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       const esFestivo = feriadoInfo.esFeriado;
       const esDomOFest = esDomingo || esFestivo;
 
+      // Contadores por día (para logging)
+      let normalMinDia = 0;
+      let almuerzoMinDia = 0;
+      let libreMinDia = 0;
+      let extraMinDia = 0;
+      let incapDiaSeg = 0,
+        vacDiaSeg = 0,
+        permCSDiaSeg = 0,
+        permSSDiaSeg = 0,
+        compDiaSeg = 0;
+
       for (const seg of segmentos) {
         const dur = PoliticaH1.segDurMin(seg);
         if (dur <= 0) continue;
@@ -193,22 +211,36 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         switch (seg.tipo) {
           case "LIBRE":
             b.libreMin += dur;
+            libreMinDia += dur;
             racha = PoliticaH1.nuevaRacha(); // reset
             break;
 
           case "ALMUERZO":
             b.almuerzoMin += dur;
+            almuerzoMinDia += dur;
             break;
 
           case "NORMAL": {
-            // Clasificar NORMAL según código de job especial (si existe en el segmento)
             const code = seg.jobCodigo?.toUpperCase?.();
-            if (code === "E01") b.incapacidadMin += dur;
-            else if (code === "E02") b.vacacionesMin += dur;
-            else if (code === "E03") b.permisoConSueldoMin += dur;
-            else if (code === "E04") b.permisoSinSueldoMin += dur;
-            else if (code === "E05") b.compensatorioMin += dur;
-            else b.normalMin += dur;
+            if (code === "E01") {
+              b.incapacidadMin += dur;
+              incapDiaSeg += dur;
+            } else if (code === "E02") {
+              b.vacacionesMin += dur;
+              vacDiaSeg += dur;
+            } else if (code === "E03") {
+              b.permisoConSueldoMin += dur;
+              permCSDiaSeg += dur;
+            } else if (code === "E04") {
+              b.permisoSinSueldoMin += dur;
+              permSSDiaSeg += dur;
+            } else if (code === "E05") {
+              b.compensatorioMin += dur;
+              compDiaSeg += dur;
+            } else {
+              b.normalMin += dur;
+              normalMinDia += dur;
+            }
             break;
           }
 
@@ -218,10 +250,74 @@ export class PoliticaH1 extends PoliticaHorarioBase {
             for (let i = 0; i < slots; i++) {
               PoliticaH1.aplicarExtraSlot(esDomOFest, esDiurna, racha, b);
             }
+            extraMinDia += dur;
             break;
           }
         }
       }
+
+      // Sumar horas de actividades normales (sin horaInicio/horaFin) por job especial
+      let addIncapDia = 0,
+        addVacDia = 0,
+        addPermCSDia = 0,
+        addPermSSDia = 0,
+        addCompDia = 0;
+      try {
+        const reg = await this.getRegistroDiario(empleadoId, f);
+        if (reg?.actividades?.length) {
+          for (const act of reg.actividades as any[]) {
+            if (act?.esExtra) continue; // solo normales
+            const horas = Number(act?.duracionHoras ?? 0);
+            if (!isFinite(horas) || horas <= 0) continue;
+            const codigo = act?.job?.codigo?.toUpperCase?.();
+            if (!codigo) continue;
+            const min = Math.round(horas * 60);
+            if (codigo === "E01") {
+              addIncapacidadMin += min;
+              addIncapDia += min;
+            } else if (codigo === "E02") {
+              addVacacionesMin += min;
+              addVacDia += min;
+            } else if (codigo === "E03") {
+              addPermisoCSMin += min;
+              addPermCSDia += min;
+            } else if (codigo === "E04") {
+              addPermisoSSMin += min;
+              addPermSSDia += min;
+            } else if (codigo === "E05") {
+              addCompensatorioMin += min;
+              addCompDia += min;
+            }
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
+      const especialesSegDia =
+        incapDiaSeg + vacDiaSeg + permCSDiaSeg + permSSDiaSeg + compDiaSeg;
+      const especialesAddDia =
+        addIncapDia + addVacDia + addPermCSDia + addPermSSDia + addCompDia;
+      const normalDiaAjustado = Math.max(
+        0,
+        normalMinDia - especialesSegDia - especialesAddDia
+      );
+      // Logs por día (HH)
+      console.log(
+        `[H1][${f}] normal=${(normalDiaAjustado / 60).toFixed(2)}h, ` +
+          `almuerzo=${(almuerzoMinDia / 60).toFixed(2)}h, extra=${(
+            extraMinDia / 60
+          ).toFixed(2)}h, libre=${(libreMinDia / 60).toFixed(2)}h | ` +
+          `E01(incap)=${((incapDiaSeg + addIncapDia) / 60).toFixed(
+            2
+          )}h, E02(vac)=${((vacDiaSeg + addVacDia) / 60).toFixed(
+            2
+          )}h, E03(permCS)=${((permCSDiaSeg + addPermCSDia) / 60).toFixed(
+            2
+          )}h, E04(permSS)=${((permSSDiaSeg + addPermSSDia) / 60).toFixed(
+            2
+          )}h, E05(comp)=${((compDiaSeg + addCompDia) / 60).toFixed(2)}h`
+      );
 
       f = PoliticaH1.addDays(f, 1);
     }
@@ -246,24 +342,81 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     }
 
     // Mapear a tu interfaz (horas)
+    const totalEspecialesAddMin =
+      addIncapacidadMin +
+      addVacacionesMin +
+      addPermisoCSMin +
+      addPermisoSSMin +
+      addCompensatorioMin;
+
     const result: ConteoHorasTrabajadas = {
       fechaInicio,
       fechaFin,
       empleadoId,
       cantidadHoras: {
-        normal: PoliticaH1.minutosAhoras(b.normalMin),
+        normal: PoliticaH1.minutosAhoras(
+          Math.max(0, b.normalMin - totalEspecialesAddMin)
+        ),
         p25: PoliticaH1.minutosAhoras(b.extraC1Min),
         p50: PoliticaH1.minutosAhoras(b.extraC2Min),
         p75: PoliticaH1.minutosAhoras(b.extraC3Min),
         p100: PoliticaH1.minutosAhoras(b.extraC4Min),
         libre: PoliticaH1.minutosAhoras(b.libreMin),
         almuerzo: PoliticaH1.minutosAhoras(b.almuerzoMin),
-        incapacidad: PoliticaH1.minutosAhoras(b.incapacidadMin),
-        vacaciones: PoliticaH1.minutosAhoras(b.vacacionesMin),
-        permisoConSueldo: PoliticaH1.minutosAhoras(b.permisoConSueldoMin),
-        permisoSinSueldo: PoliticaH1.minutosAhoras(b.permisoSinSueldoMin),
-        compensatorio: PoliticaH1.minutosAhoras(b.compensatorioMin),
+        incapacidad: PoliticaH1.minutosAhoras(
+          b.incapacidadMin + addIncapacidadMin
+        ),
+        vacaciones: PoliticaH1.minutosAhoras(
+          b.vacacionesMin + addVacacionesMin
+        ),
+        permisoConSueldo: PoliticaH1.minutosAhoras(
+          b.permisoConSueldoMin + addPermisoCSMin
+        ),
+        permisoSinSueldo: PoliticaH1.minutosAhoras(
+          b.permisoSinSueldoMin + addPermisoSSMin
+        ),
+        compensatorio: PoliticaH1.minutosAhoras(
+          b.compensatorioMin + addCompensatorioMin
+        ),
       },
+    };
+
+    // ---------------- Conteo en días (base 15) ----------------
+    const totalPeriodo = 15;
+    // Horas por jobs especiales ya están en buckets en minutos:
+    const horasIncapacidad = PoliticaH1.minutosAhoras(b.incapacidadMin);
+    const horasVacaciones = PoliticaH1.minutosAhoras(b.vacacionesMin);
+    const horasPermisoCS = PoliticaH1.minutosAhoras(b.permisoConSueldoMin);
+    const horasPermisoSS = PoliticaH1.minutosAhoras(b.permisoSinSueldoMin);
+
+    // Incapacidad: separar primeros 3 días continuos vs. excedente → aproximación: tope de 24h para 3 días
+    // Si se quiere precisión por continuidad real, se debería computar por día; como aproximación horaria:
+    const horasTope3Dias = 3 * 8; // 24 horas
+    const horasIncapacidadIHSS = Math.max(0, horasIncapacidad - horasTope3Dias);
+    const horasIncapacidadBase = Math.min(horasIncapacidad, horasTope3Dias);
+
+    const diasVacaciones = horasVacaciones / 8;
+    const diasPermisoCS = horasPermisoCS / 8;
+    const diasPermisoSS = horasPermisoSS / 8;
+    const diasIncapacidad = horasIncapacidadBase / 8;
+    const diasIncapacidadIHSS = horasIncapacidadIHSS / 8;
+
+    const diasNoLaboradosPorEspeciales =
+      diasVacaciones +
+      diasPermisoCS +
+      diasPermisoSS +
+      diasIncapacidad +
+      diasIncapacidadIHSS;
+    const diasLaborados = totalPeriodo - diasNoLaboradosPorEspeciales;
+
+    result.conteoDias = {
+      totalPeriodo,
+      diasLaborados,
+      vacaciones: diasVacaciones,
+      permisoConSueldo: diasPermisoCS,
+      permisoSinSueldo: diasPermisoSS,
+      incapacidad: diasIncapacidad,
+      incapacidadIHSS: diasIncapacidadIHSS,
     };
 
     return result;

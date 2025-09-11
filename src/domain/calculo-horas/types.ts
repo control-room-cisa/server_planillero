@@ -40,6 +40,19 @@ export interface ConteoHorasTrabajadas {
     permisoSinSueldo?: number; // E04
     compensatorio?: number; // E05
   };
+  /**
+   * Conteo agregado en días para el período. Base 15 días por período.
+   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo + incapacidad + incapacidadIHSS
+   */
+  conteoDias?: {
+    totalPeriodo: number; // siempre 15
+    diasLaborados: number; // 15 - (otras categorías)
+    vacaciones: number; // E02 horas / 8
+    permisoConSueldo: number; // E03 horas / 8
+    permisoSinSueldo: number; // E04 horas / 8
+    incapacidad: number; // primeros 3 días continuos (horas/8 por día dentro del tope)
+    incapacidadIHSS: number; // excedente de los 3 días continuos
+  };
 }
 
 /**
