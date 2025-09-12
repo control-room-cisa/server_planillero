@@ -45,8 +45,6 @@ import type { Segmento15 } from "./segmentador";
  * Las horas extras o dominicales se aplican siempre 2 veces el valor de la hora normal sin importar si es diurna o nocturna.
  * Se debe mantener el acumulado de un dia para otro, es decir que si se comienza a las 00:00, se debe verificar el dia anterior y aplicar el acumulado con las reglas que correspondan a ese dia hasta encontrar como cierra a las 24:00 y retornar ese acumulado.
  * El acumulado se debe revisar de manera recursiva hasta que se encuentra una hora libre que corte el acumulado.
-
-
 */
 
 export class PoliticaH1 extends PoliticaHorarioBase {
@@ -86,6 +84,8 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       vistoDiurna: false,
       vistoNocturna: false,
       piso: 0,
+      domOFestActivo: false, // arrastre de C4 a través de medianoche
+      bloquearMixta: false, // deshabilitar p75 en días no laborables
     };
   }
   private static copiarRacha(r: ExtraStreak): ExtraStreak {
@@ -102,12 +102,11 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     r: ExtraStreak,
     b: Buckets
   ) {
-    // C4: 2.00× (dominical/festiva) SI “arrastra” la categoría
-    if (esDomOFest) {
+    // C4: 2.00× (dominical/festiva) con arrastre entre días mientras no haya LIBRE
+    const arrastraC4 = esDomOFest || r.domOFestActivo;
+    if (arrastraC4) {
       b.extraC4Min += 15; // p100
-      // La racha también avanza y **fija/eleva el piso** según franja:
-      const base = esDiurna ? 1.25 : 1.5;
-      if (r.piso < base) r.piso = base;
+      r.domOFestActivo = true; // persiste hasta que la racha termine (LIBRE)
       r.minutosExtraAcum += 15;
       if (esDiurna) r.vistoDiurna = true;
       else r.vistoNocturna = true;
@@ -118,7 +117,8 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     const base = esDiurna ? 1.25 : 1.5;
     if (r.piso < base) r.piso = base;
 
-    const mixtaActiva = PoliticaH1.rachaEsMixta(r);
+    // Mixta sólo si está habilitada para el día
+    const mixtaActiva = !r.bloquearMixta && PoliticaH1.rachaEsMixta(r);
     const mult = mixtaActiva ? Math.max(1.75, r.piso) : r.piso;
 
     if (mult >= 1.75) b.extraC3Min += 15; // p75
@@ -131,7 +131,6 @@ export class PoliticaH1 extends PoliticaHorarioBase {
   }
 
   private static minutosAhoras(min: number): number {
-    // retornamos con 2 decimales (múltiplos de 0.25h)
     return Math.round((min / 60) * 100) / 100;
   }
 
@@ -186,12 +185,27 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         empleadoId
       );
 
-      // info del día para C4
+      // info del día
       const feriadoInfo = await this.esFeriado(f);
       const dow = new Date(`${f}T00:00:00`).getDay(); // 0=Dom
       const esDomingo = dow === 0;
       const esFestivo = feriadoInfo.esFeriado;
+
+      // Día libre de contrato (ej. sábado)
+      const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
+        f,
+        empleadoId
+      );
+      const esDiaLibreContrato =
+        hTrabajo.esDiaLibre ||
+        hTrabajo.cantidadHorasLaborables === 0 ||
+        hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
+
+      // p100 sólo por domingo/feriado (no por día libre)
       const esDomOFest = esDomingo || esFestivo;
+
+      // En días no laborables bloquear p75 (mixta)
+      racha.bloquearMixta = esDomingo || esFestivo || esDiaLibreContrato;
 
       // Contadores por día (para logging)
       let normalMinDia = 0;
@@ -212,12 +226,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           case "LIBRE":
             b.libreMin += dur;
             libreMinDia += dur;
-            racha = PoliticaH1.nuevaRacha(); // reset
+            racha = PoliticaH1.nuevaRacha(); // reset total (incluye domOFestActivo/bloquearMixta)
             break;
 
           case "ALMUERZO":
             b.almuerzoMin += dur;
             almuerzoMinDia += dur;
+            // La racha se mantiene
             break;
 
           case "NORMAL": {
@@ -241,6 +256,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
               b.normalMin += dur;
               normalMinDia += dur;
             }
+            // La racha se mantiene
             break;
           }
 
@@ -302,7 +318,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         0,
         normalMinDia - especialesSegDia - especialesAddDia
       );
-      // Logs por día (HH)
+
       console.log(
         `[H1][${f}] normal=${(normalDiaAjustado / 60).toFixed(2)}h, ` +
           `almuerzo=${(almuerzoMinDia / 60).toFixed(2)}h, extra=${(
@@ -341,7 +357,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       );
     }
 
-    // Mapear a tu interfaz (horas)
+    // Mapear a interfaz (horas)
     const totalEspecialesAddMin =
       addIncapacidadMin +
       addVacacionesMin +
@@ -383,14 +399,11 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
     // ---------------- Conteo en días (base 15) ----------------
     const totalPeriodo = 15;
-    // Horas por jobs especiales ya están en buckets en minutos:
     const horasIncapacidad = PoliticaH1.minutosAhoras(b.incapacidadMin);
     const horasVacaciones = PoliticaH1.minutosAhoras(b.vacacionesMin);
     const horasPermisoCS = PoliticaH1.minutosAhoras(b.permisoConSueldoMin);
     const horasPermisoSS = PoliticaH1.minutosAhoras(b.permisoSinSueldoMin);
 
-    // Incapacidad: separar primeros 3 días continuos vs. excedente → aproximación: tope de 24h para 3 días
-    // Si se quiere precisión por continuidad real, se debería computar por día; como aproximación horaria:
     const horasTope3Dias = 3 * 8; // 24 horas
     const horasIncapacidadIHSS = Math.max(0, horasIncapacidad - horasTope3Dias);
     const horasIncapacidadBase = Math.min(horasIncapacidad, horasTope3Dias);
@@ -448,6 +461,14 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         const dow = new Date(`${f}T00:00:00`).getDay();
         const esDomOFest = dow === 0 || feriadoInfo.esFeriado;
 
+        // bloquear mixta en no laborables durante la siembra
+        const ht = await this.getHorarioTrabajoByDateAndEmpleado(f, empleadoId);
+        const esDiaLibreContrato =
+          ht.esDiaLibre ||
+          ht.cantidadHorasLaborables === 0 ||
+          ht.horarioTrabajo.inicio === ht.horarioTrabajo.fin;
+        r.bloquearMixta = esDiaLibreContrato || esDomOFest;
+
         for (const seg of segmentos) {
           const dur = PoliticaH1.segDurMin(seg);
           if (dur <= 0) continue;
@@ -463,7 +484,6 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           const slots = dur / 15;
           const esDiurna = PoliticaH1.isDiurna(seg);
           for (let i = 0; i < slots; i++) {
-            // usar buckets dummy: solo queremos avanzar racha
             PoliticaH1.aplicarExtraSlot(esDomOFest, esDiurna, r, DUMMY_BUCKETS);
           }
         }
@@ -515,10 +535,11 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     } else {
       switch (dia) {
         case 0:
-          esDiaLibre = true;
-          break; // Domingo
+          esDiaLibre = true; // Domingo
+          break;
         case 6:
-          break; // Sábado (0h)
+          esDiaLibre = true; // Sábado (0h)
+          break;
         case 5:
           inicio = "07:00";
           fin = "16:00";
@@ -555,6 +576,8 @@ type ExtraStreak = {
   vistoDiurna: boolean;
   vistoNocturna: boolean;
   piso: number; // 0 | 1.25 | 1.5 (no decrece)
+  domOFestActivo: boolean; // arrastre de p100 entre días
+  bloquearMixta: boolean; // deshabilita p75 en no laborables
 };
 
 type Buckets = {
