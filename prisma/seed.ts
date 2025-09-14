@@ -166,6 +166,16 @@ async function main() {
       nombre: "Falta",
       descripcion: "Inasistencia",
     },
+    // {
+    //   codigo: "E06",
+    //   nombre: "Compensatorio de Trabajo",
+    //   descripcion: "Compensatorio",
+    // },
+    // {
+    //   codigo: "E07",
+    //   nombre: "Reposicion de Compensatorio",
+    //   descripcion: "Compensatorio",
+    // },
   ] as const;
 
   for (const jobDef of jobsToSeed) {

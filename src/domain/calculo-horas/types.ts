@@ -35,10 +35,13 @@ export interface ConteoHorasTrabajadas {
     almuerzo: number; // 0 del valor de la hora normal
     // Variantes por jobs especiales en horas NORMALES
     incapacidad?: number; // E01
+    incapacidadIHSS?: number; // E01
     vacaciones?: number; // E02
     permisoConSueldo?: number; // E03
     permisoSinSueldo?: number; // E04
-    compensatorio?: number; // E05
+    inasistencias?: number; // E05
+    llegadasTarde?: number; // E05
+    compensatorio?: number; // E06 y E07
   };
   /**
    * Conteo agregado en días para el período. Base 15 días por período.
@@ -50,8 +53,7 @@ export interface ConteoHorasTrabajadas {
     vacaciones: number; // E02 horas / 8
     permisoConSueldo: number; // E03 horas / 8
     permisoSinSueldo: number; // E04 horas / 8
-    incapacidad: number; // primeros 3 días continuos (horas/8 por día dentro del tope)
-    incapacidadIHSS: number; // excedente de los 3 días continuos
+    inasistencias: number; // E05 horas / 8
   };
 }
 

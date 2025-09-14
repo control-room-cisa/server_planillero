@@ -441,7 +441,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
         {
           descripcion: "Extra 03-07",
           esExtra: true,
-          horaInicio: makeDateUTC(fecha, "09:00"),
+          horaInicio: makeDateUTC(fecha, "08:45"),
           horaFin: makeDateUTC(fecha, "13:00"),
           job: { codigo: "100" },
         },
@@ -465,7 +465,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       normal: 9,
       p25: 0,
       p50: 3,
-      p75: 4,
+      p75: 4.25,
       p100: 0,
     });
   });

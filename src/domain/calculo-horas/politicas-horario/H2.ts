@@ -308,24 +308,18 @@ export class PoliticaH2 extends PoliticaHorarioBase {
 
     // ---------------- Conteo en días (base 15) ----------------
     const totalPeriodo = 15;
-    const horasVacaciones = 0; // H2: especiales no clasificados aquí (segmentador no mapea a buckets por job en H2)
+    const horasVacaciones = 0;
     const horasPermisoCS = 0;
     const horasPermisoSS = 0;
-    const horasIncapacidad = 0;
-    const horasIncapacidadIHSS = 0;
+    const horasInasistencias = 0;
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
-    const diasIncapacidad = horasIncapacidad / 8;
-    const diasIncapacidadIHSS = horasIncapacidadIHSS / 8;
+    const diasInasistencias = horasInasistencias / 8;
 
     const diasNoLaborados =
-      diasVacaciones +
-      diasPermisoCS +
-      diasPermisoSS +
-      diasIncapacidad +
-      diasIncapacidadIHSS;
+      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
     const diasLaborados = totalPeriodo - diasNoLaborados;
 
     conteo.conteoDias = {
@@ -334,8 +328,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       vacaciones: diasVacaciones,
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
-      incapacidad: diasIncapacidad,
-      incapacidadIHSS: diasIncapacidadIHSS,
+      inasistencias: diasInasistencias,
     };
 
     return Object.assign(conteo, { tiposDias });

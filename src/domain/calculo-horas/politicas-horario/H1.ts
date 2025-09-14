@@ -207,6 +207,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       vacacionesMin: 0,
       permisoConSueldoMin: 0,
       permisoSinSueldoMin: 0,
+      inasistenciasMin: 0,
       compensatorioMin: 0,
     };
 
@@ -215,6 +216,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     let addVacacionesMin = 0;
     let addPermisoCSMin = 0;
     let addPermisoSSMin = 0;
+    let addInasistenciasMin = 0;
     let addCompensatorioMin = 0;
 
     // Recorrer días
@@ -308,7 +310,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         vacDiaSeg = 0,
         permCSDiaSeg = 0,
         permSSDiaSeg = 0,
-        compDiaSeg = 0;
+        inasistDiaSeg = 0;
 
       for (const seg of segmentos) {
         const dur = PoliticaH1.segDurMin(seg);
@@ -342,8 +344,11 @@ export class PoliticaH1 extends PoliticaHorarioBase {
               b.permisoSinSueldoMin += dur;
               permSSDiaSeg += dur;
             } else if (code === "E05") {
+              b.inasistenciasMin += dur;
+              inasistDiaSeg += dur;
+            } else if (code === "E06" || code === "E07") {
               b.compensatorioMin += dur;
-              compDiaSeg += dur;
+              // no cuenta para conteoDias
             } else {
               b.normalMin += dur;
               normalMinDia += dur;
@@ -369,7 +374,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         addVacDia = 0,
         addPermCSDia = 0,
         addPermSSDia = 0,
-        addCompDia = 0;
+        addInasistDia = 0;
       try {
         const reg = await this.getRegistroDiario(empleadoId, f);
         if (reg?.actividades?.length) {
@@ -393,8 +398,10 @@ export class PoliticaH1 extends PoliticaHorarioBase {
               addPermisoSSMin += min;
               addPermSSDia += min;
             } else if (codigo === "E05") {
+              addInasistenciasMin += min;
+              addInasistDia += min;
+            } else if (codigo === "E06" || codigo === "E07") {
               addCompensatorioMin += min;
-              addCompDia += min;
             }
           }
         }
@@ -403,9 +410,9 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       }
 
       const especialesSegDia =
-        incapDiaSeg + vacDiaSeg + permCSDiaSeg + permSSDiaSeg + compDiaSeg;
+        incapDiaSeg + vacDiaSeg + permCSDiaSeg + permSSDiaSeg + inasistDiaSeg;
       const especialesAddDia =
-        addIncapDia + addVacDia + addPermCSDia + addPermSSDia + addCompDia;
+        addIncapDia + addVacDia + addPermCSDia + addPermSSDia + addInasistDia;
       const normalDiaAjustado = Math.max(
         0,
         normalMinDia - especialesSegDia - especialesAddDia
@@ -424,7 +431,9 @@ export class PoliticaH1 extends PoliticaHorarioBase {
             2
           )}h, E04(permSS)=${((permSSDiaSeg + addPermSSDia) / 60).toFixed(
             2
-          )}h, E05(comp)=${((compDiaSeg + addCompDia) / 60).toFixed(2)}h`
+          )}h, E05(inasist)=${((inasistDiaSeg + addInasistDia) / 60).toFixed(
+            2
+          )}h`
       );
 
       f = PoliticaH1.addDays(f, 1);
@@ -483,6 +492,9 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         permisoSinSueldo: PoliticaH1.minutosAhoras(
           b.permisoSinSueldoMin + addPermisoSSMin
         ),
+        inasistencias: PoliticaH1.minutosAhoras(
+          b.inasistenciasMin + addInasistenciasMin
+        ),
         compensatorio: PoliticaH1.minutosAhoras(
           b.compensatorioMin + addCompensatorioMin
         ),
@@ -491,27 +503,26 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
     // ---------------- Conteo en días (base 15) ----------------
     const totalPeriodo = 15;
-    const horasIncapacidad = PoliticaH1.minutosAhoras(b.incapacidadMin);
-    const horasVacaciones = PoliticaH1.minutosAhoras(b.vacacionesMin);
-    const horasPermisoCS = PoliticaH1.minutosAhoras(b.permisoConSueldoMin);
-    const horasPermisoSS = PoliticaH1.minutosAhoras(b.permisoSinSueldoMin);
-
-    const horasTope3Dias = 3 * 8; // 24 horas
-    const horasIncapacidadIHSS = Math.max(0, horasIncapacidad - horasTope3Dias);
-    const horasIncapacidadBase = Math.min(horasIncapacidad, horasTope3Dias);
+    const horasVacaciones = PoliticaH1.minutosAhoras(
+      b.vacacionesMin + addVacacionesMin
+    );
+    const horasPermisoCS = PoliticaH1.minutosAhoras(
+      b.permisoConSueldoMin + addPermisoCSMin
+    );
+    const horasPermisoSS = PoliticaH1.minutosAhoras(
+      b.permisoSinSueldoMin + addPermisoSSMin
+    );
+    const horasInasistencias = PoliticaH1.minutosAhoras(
+      b.inasistenciasMin + addInasistenciasMin
+    );
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
-    const diasIncapacidad = horasIncapacidadBase / 8;
-    const diasIncapacidadIHSS = horasIncapacidadIHSS / 8;
+    const diasInasistencias = horasInasistencias / 8;
 
     const diasNoLaboradosPorEspeciales =
-      diasVacaciones +
-      diasPermisoCS +
-      diasPermisoSS +
-      diasIncapacidad +
-      diasIncapacidadIHSS;
+      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
     const diasLaborados = totalPeriodo - diasNoLaboradosPorEspeciales;
 
     result.conteoDias = {
@@ -520,8 +531,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       vacaciones: diasVacaciones,
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
-      incapacidad: diasIncapacidad,
-      incapacidadIHSS: diasIncapacidadIHSS,
+      inasistencias: diasInasistencias,
     };
 
     return result;
@@ -685,6 +695,7 @@ type Buckets = {
   vacacionesMin: number; // E02
   permisoConSueldoMin: number; // E03
   permisoSinSueldoMin: number; // E04
+  inasistenciasMin: number; // E05
   compensatorioMin: number; // E05
 };
 
@@ -700,5 +711,6 @@ const DUMMY_BUCKETS: Buckets = {
   vacacionesMin: 0,
   permisoConSueldoMin: 0,
   permisoSinSueldoMin: 0,
+  inasistenciasMin: 0,
   compensatorioMin: 0,
 };
