@@ -29,16 +29,78 @@ class H1Test extends PoliticaH1 {
 function makeDateUTC(fecha: string, hhmm: string) {
   const [h, m] = hhmm.split(":").map(Number);
   const d = new Date(`${fecha}T00:00:00.000Z`);
-  d.setUTCHours(h, m, 0, 0);
+  d.setUTCHours(h, m ?? 0, 0, 0);
   return d;
 }
 
-describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
-  it.skip("11/09/2025: pendiente de revisión", async () => {});
+type Horas = {
+  almuerzo: number;
+  normal: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p100: number;
+};
+type HorasExt = Horas & { libre?: number };
 
-  // 12/09: almuerzo=1, normal=9, p25=0, p50=3, p75=6, p100=0
-  it("12/09/2025: extras 03-07 y 17-22 (mixta tras 3h)", async () => {
-    const fecha = "2025-09-12";
+const RED = (s: string) => `\x1b[31m${s}\x1b[0m`;
+
+function sumHoras(h: Horas) {
+  return h.almuerzo + h.normal + h.p25 + h.p50 + h.p75 + h.p100;
+}
+
+function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
+  // Cálculos de libre (si la app no lo entrega, lo derivamos)
+  const expLibre = 24 - sumHoras(exp);
+  const gotTotal = sumHoras(got);
+  const gotLibre = got.libre ?? 24 - gotTotal;
+
+  const rows = [
+    { métrica: "almuerzo", esperado: exp.almuerzo, obtenido: got.almuerzo },
+    { métrica: "normal", esperado: exp.normal, obtenido: got.normal },
+    { métrica: "extra25", esperado: exp.p25, obtenido: got.p25 },
+    { métrica: "extra50", esperado: exp.p50, obtenido: got.p50 },
+    { métrica: "extra75", esperado: exp.p75, obtenido: got.p75 },
+    { métrica: "extra100", esperado: exp.p100, obtenido: got.p100 },
+    { métrica: "libre", esperado: expLibre, obtenido: gotLibre },
+    {
+      métrica: "TOTAL",
+      esperado: 24,
+      obtenido: gotTotal + gotLibre,
+    },
+  ].map((r) => {
+    const okBool = r.esperado === r.obtenido;
+    return {
+      ...r,
+      ok: okBool,
+      status: okBool ? "✅" : "❌",
+      diff: (r.obtenido as number) - (r.esperado as number),
+    };
+  });
+
+  // eslint-disable-next-line no-console
+  console.log(`\n▶️ ${fecha} — Esperado vs Obtenido`);
+  // eslint-disable-next-line no-console
+  console.table(rows);
+
+  // Asserts por campo
+  expect(got.almuerzo).toBe(exp.almuerzo);
+  expect(got.normal).toBe(exp.normal);
+  expect(got.p25).toBe(exp.p25);
+  expect(got.p50).toBe(exp.p50);
+  expect(got.p75).toBe(exp.p75);
+  expect(got.p100).toBe(exp.p100);
+
+  // Assert de libre y de identidad TOTAL+libre = 24
+  expect(gotLibre).toBe(expLibre);
+  expect(gotTotal + gotLibre).toBe(24);
+}
+
+describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
+  // -------------------- 11/09/2025 --------------------
+  // Esperado: 1,9,2,3,2,0
+  it("11/09/2025: normal 7–17 + extra 17–24 ⇒ 1/9/2/3/2/0", async () => {
+    const fecha = "2025-09-11";
     const p = new H1Test();
 
     p.seedRegistro(fecha, {
@@ -49,36 +111,90 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       esDiaLibre: false,
       actividades: [
         {
-          descripcion: "N1",
-          job: { codigo: "100" },
+          descripcion: "Act1",
           esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 4,
+        },
+        {
+          descripcion: "Act2",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 2,
+        },
+        {
+          descripcion: "Act3",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 3,
+        },
+        {
+          descripcion: "Extra 17-24",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "23:00"),
+          horaFin: makeDateUTC("2025-09-12", "06:00"),
+          job: { codigo: "100" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 9,
+      p25: 2,
+      p50: 1,
+      p75: 4,
+      p100: 0,
+    });
+  });
+
+  // -------------------- 12/09/2025 --------------------
+  // Esperado: 1,8,0,3,7,0
+  it("12/09/2025: extras 03–07 y 16–22 ⇒ 1/8/0/3/7/0", async () => {
+    const fecha = "2025-09-12";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "22:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Act1",
+          esExtra: false,
+          job: { codigo: "100" },
           duracionHoras: 1,
         },
         {
-          descripcion: "N2",
-          job: { codigo: "100" },
+          descripcion: "Act2",
           esExtra: false,
+          job: { codigo: "100" },
           duracionHoras: 5,
         },
         {
-          descripcion: "N3",
-          job: { codigo: "100" },
+          descripcion: "Act3",
           esExtra: false,
-          duracionHoras: 3,
+          job: { codigo: "100" },
+          duracionHoras: 2,
         },
-        // 03–07 local
         {
-          esExtra: true,
           descripcion: "Extra 03-07",
+          esExtra: true,
           horaInicio: makeDateUTC(fecha, "09:00"),
           horaFin: makeDateUTC(fecha, "13:00"),
           job: { codigo: "100" },
         },
-        // 17–22 local
         {
+          descripcion: "Extra 16-22",
           esExtra: true,
-          descripcion: "Extra 17-22",
-          horaInicio: makeDateUTC(fecha, "23:00"),
+          horaInicio: makeDateUTC(fecha, "22:00"),
           horaFin: makeDateUTC("2025-09-13", "04:00"),
           job: { codigo: "100" },
         },
@@ -90,43 +206,41 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       fecha,
       "1"
     );
-    expect(res.cantidadHoras.almuerzo).toBe(1);
-    expect(res.cantidadHoras.normal).toBe(9);
-    expect(res.cantidadHoras.p25).toBe(0);
-    expect(res.cantidadHoras.p50).toBe(3);
-    expect(res.cantidadHoras.p75).toBe(6);
-    expect(res.cantidadHoras.p100).toBe(0);
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 8,
+      p25: 0,
+      p50: 3,
+      p75: 7,
+      p100: 0,
+    });
   });
 
-  // 13/09: Sábado. Se inicia nocturna (01–04) 50%; hay interrupción a las 12:00 (LIBRE),
-  // se reinicia racha a 25% y se acumula hasta quedar: p25=3h, p50=3h, p75=5h (total 11h extra).
-  it("13/09/2025: sábado con interrupción a las 12:00 ⇒ 25=3h, 50=3h, 75=4h", async () => {
+  // -------------------- 13/09/2025 (sábado) --------------------
+  // Esperado: 1,0,0,3,8,0
+  it("13/09/2025: sábado extras 04–12 y 13–16 ⇒ 1/0/0/3/8/0", async () => {
     const fecha = "2025-09-13";
     const p = new H1Test();
 
     p.seedRegistro(fecha, {
       fecha,
-      // sin ventana normal (0h)
       horaEntrada: makeDateUTC(fecha, "13:00"),
       horaSalida: makeDateUTC(fecha, "13:00"),
       esHoraCorrida: false,
-      esDiaLibre: true,
+      esDiaLibre: false,
       actividades: [
-        // Bloque 1: 01–04 local → 3h nocturna (p50)
         {
+          descripcion: "Extra 04-12",
           esExtra: true,
-          descripcion: "01-04",
-          horaInicio: makeDateUTC(fecha, "07:00"),
-          horaFin: makeDateUTC(fecha, "10:00"),
+          horaInicio: makeDateUTC(fecha, "10:00"),
+          horaFin: makeDateUTC(fecha, "18:00"),
           job: { codigo: "100" },
         },
-        // Interrupción a las 12:00 (LIBRE de 12:00 en adelante si no hay extra)
-        // Bloque 2: 12–20 local → 8h diurna, reinicia racha: 3h p25 + 5h p75
         {
+          descripcion: "Extra 13-16",
           esExtra: true,
-          descripcion: "12-20",
-          horaInicio: makeDateUTC(fecha, "18:00"),
-          horaFin: makeDateUTC(fecha, "26:00"),
+          horaInicio: makeDateUTC(fecha, "19:00"),
+          horaFin: makeDateUTC(fecha, "22:00"),
           job: { codigo: "100" },
         },
       ],
@@ -137,17 +251,51 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       fecha,
       "1"
     );
-    expect(res.cantidadHoras.normal).toBe(0);
-    expect(res.cantidadHoras.almuerzo).toBe(0);
-    expect(res.cantidadHoras.p25).toBe(3);
-    expect(res.cantidadHoras.p50).toBe(3);
-    expect(res.cantidadHoras.p75).toBe(4);
-    expect(res.cantidadHoras.p100).toBe(0);
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 0,
+      p25: 0,
+      p50: 3,
+      p75: 8,
+      p100: 0,
+    });
   });
 
-  // 14/09: feriado/dominical, extra 16–24 → p100=8
-  it("14/09/2025: feriado, extra 16-24 ⇒ p100=8", async () => {
+  // -------------------- 14/09/2025 (domingo/feriado) --------------------
+  // Esperado: 0,0,0,0,0,0
+  it("14/09/2025: domingo/libre sin actividades ⇒ 0/0/0/0/0/0", async () => {
     const fecha = "2025-09-14";
+    const p = new H1Test();
+
+    p.seedFeriado(fecha, true);
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "13:00"),
+      esHoraCorrida: false,
+      esDiaLibre: true,
+      actividades: [],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+    });
+  });
+
+  // -------------------- 15/09/2025 (lunes feriado) --------------------
+  // Esperado: 0,0,0,0,0,8 (no almuerzo porque actividades solo después de 13:00)
+  it("15/09/2025: feriado con extra 16–24 ⇒ 0/0/0/0/0/8", async () => {
+    const fecha = "2025-09-15";
     const p = new H1Test();
 
     p.seedFeriado(fecha, true);
@@ -159,10 +307,10 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       esDiaLibre: true,
       actividades: [
         {
+          descripcion: "Extra 16-24",
           esExtra: true,
-          descripcion: "16-24",
           horaInicio: makeDateUTC(fecha, "22:00"),
-          horaFin: makeDateUTC("2025-09-15", "06:00"),
+          horaFin: makeDateUTC("2025-09-16", "06:00"),
           job: { codigo: "100" },
         },
       ],
@@ -173,39 +321,22 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       fecha,
       "1"
     );
-    expect(res.cantidadHoras.almuerzo).toBe(0);
-    expect(res.cantidadHoras.normal).toBe(0);
-    expect(res.cantidadHoras.p25).toBe(0);
-    expect(res.cantidadHoras.p50).toBe(0);
-    expect(res.cantidadHoras.p75).toBe(0);
-    expect(res.cantidadHoras.p100).toBe(8);
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 8,
+    });
   });
 
-  // 15/09: arrastre dominical hasta 07:00 ⇒ p100=7, más 9h normal y 1h almuerzo
-  it("15/09/2025: continuación de domingo 14 ⇒ p100=7", async () => {
-    const fecha = "2025-09-15";
+  // -------------------- 16/09/2025 --------------------
+  // Esperado: 1,9,0,0,7,0
+  it("16/09/2025: normal 9h + extra 00–07 ⇒ 1/9/0/0/7/0", async () => {
+    const fecha = "2025-09-16";
     const p = new H1Test();
 
-    // Sembrar domingo 14: 16–24
-    p.seedFeriado("2025-09-14", true);
-    p.seedRegistro("2025-09-14", {
-      fecha: "2025-09-14",
-      horaEntrada: makeDateUTC("2025-09-14", "13:00"),
-      horaSalida: makeDateUTC("2025-09-14", "13:00"),
-      esHoraCorrida: false,
-      esDiaLibre: true,
-      actividades: [
-        {
-          esExtra: true,
-          descripcion: "16-24",
-          horaInicio: makeDateUTC("2025-09-14", "22:00"),
-          horaFin: makeDateUTC("2025-09-15", "06:00"),
-          job: { codigo: "100" },
-        },
-      ],
-    });
-
-    // Lunes 15: 00–07 extra continua + 9h normal (07–17) con 1h almuerzo
     p.seedRegistro(fecha, {
       fecha,
       horaEntrada: makeDateUTC(fecha, "13:00"),
@@ -214,17 +345,17 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       esDiaLibre: false,
       actividades: [
         {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 00-07",
           esExtra: true,
-          descripcion: "00-07",
           horaInicio: makeDateUTC(fecha, "06:00"),
           horaFin: makeDateUTC(fecha, "13:00"),
           job: { codigo: "100" },
-        },
-        {
-          esExtra: false,
-          descripcion: "Normal 9h",
-          job: { codigo: "100" },
-          duracionHoras: 9,
         },
       ],
     });
@@ -234,11 +365,108 @@ describe("PoliticaH1 - Casos 11–15/09/2025 (actualizados)", () => {
       fecha,
       "1"
     );
-    expect(res.cantidadHoras.almuerzo).toBe(1);
-    expect(res.cantidadHoras.normal).toBe(9);
-    expect(res.cantidadHoras.p25).toBe(0);
-    expect(res.cantidadHoras.p50).toBe(0);
-    expect(res.cantidadHoras.p75).toBe(0);
-    expect(res.cantidadHoras.p100).toBe(7);
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 9,
+      p25: 0,
+      p50: 0,
+      p75: 7,
+      p100: 0,
+    });
+  });
+
+  // -------------------- 17/09/2025 --------------------
+  // Esperado: 1,9,0,3,2,0
+  it("17/09/2025: normal 9h + extra 02–07 ⇒ 1/9/0/3/2/0", async () => {
+    const fecha = "2025-09-17";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "23:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 02-07",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "08:00"),
+          horaFin: makeDateUTC(fecha, "13:00"),
+          job: { codigo: "100" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 9,
+      p25: 0,
+      p50: 3,
+      p75: 2,
+      p100: 0,
+    });
+  });
+
+  // -------------------- 18/09/2025 --------------------
+  // Esperado: 0,9,0,3,4,0
+  it("18/09/2025: hora corrida 07–16 + extras 03–07 y 16–19 ⇒ 0/9/0/3/4/0", async () => {
+    const fecha = "2025-09-18";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "22:00"),
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 03-07",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "09:00"),
+          horaFin: makeDateUTC(fecha, "13:00"),
+          job: { codigo: "100" },
+        },
+        {
+          descripcion: "Extra 16-19",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "22:00"),
+          horaFin: makeDateUTC("2025-09-19", "01:00"),
+          job: { codigo: "100" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 9,
+      p25: 0,
+      p50: 3,
+      p75: 4,
+      p100: 0,
+    });
   });
 });
