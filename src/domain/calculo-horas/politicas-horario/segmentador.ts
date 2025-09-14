@@ -261,37 +261,63 @@ export function segmentarRegistroDiario(
     for (let i = i0; i < i1; i++) slots[i].tipo = "NORMAL";
   }
 
-  // 3) ALMUERZO (12:00–13:00) — debe caer COMPLETO dentro de RANGO NORMAL y no ser hora corrida
+  // 3) ALMUERZO (12:00–13:00)
+  //    Regla: si no es hora corrida y:
+  //    - hay RANGO NORMAL que cubre 12–13; o
+  //    - hay actividades con horas laborables antes, durante o después de 12–13
+  //    se pinta almuerzo a las 12:00–13:00 con precedencia sobre NORMAL y EXTRA.
   const R_ALMUERZO: Rango = [hhmmToMin("12:00"), hhmmToMin("13:00")];
-  const almuerzoDentro = rangoDentroDeAlguno(R_ALMUERZO, rangosNormal);
-  const aplicaAlmuerzo = !registro.esHoraCorrida && almuerzoDentro;
+  const actividades = registro.actividades ?? [];
 
-  if (!aplicaAlmuerzo && !registro.esHoraCorrida) {
-    if (!almuerzoDentro && rangosNormal.length > 0) {
-      errores.push({
-        code: "ALMUERZO_NO_APLICA_POR_RANGO",
-        message:
-          "El rango Entrada–Salida no cubre 12:00–13:00; no se debe contar almuerzo.",
-        detalle: {
-          rangosNormal: rangosNormal.map((r) => [
-            minToHHMM(r[0]),
-            minToHHMM(r[1]),
-          ]),
-        },
-        severity: "ERROR",
-      });
+  const almuerzoDentroNormal = rangoDentroDeAlguno(R_ALMUERZO, rangosNormal);
+
+  let hayActividadesAlrededorAlmuerzo = false;
+  for (const act of actividades) {
+    if (!act.horaInicio || !act.horaFin) continue;
+    const start = minutesOfDayInTZ(act.horaInicio, tz);
+    const end = minutesOfDayInTZ(act.horaFin, tz);
+    const rangosAct = splitIfWrap(start, end).flatMap(clampToDay);
+    for (const r of rangosAct) {
+      // Solo aplicar almuerzo si la actividad cruza el período de almuerzo
+      const duranteAlmuerzo = r[1] > R_ALMUERZO[0] && r[0] < R_ALMUERZO[1]; // se cruza con 12:00-13:00
+
+      if (duranteAlmuerzo) {
+        hayActividadesAlrededorAlmuerzo = true;
+        break;
+      }
+
+      // Verificar si hay trabajo antes Y después del almuerzo
+      const antesAlmuerzo = r[1] <= R_ALMUERZO[0]; // termina antes de las 12:00
+      if (antesAlmuerzo) {
+        // Buscar si hay alguna actividad después del almuerzo
+        for (const act2 of actividades) {
+          if (!act2.horaInicio || !act2.horaFin) continue;
+          const start2 = minutesOfDayInTZ(act2.horaInicio, tz);
+          const end2 = minutesOfDayInTZ(act2.horaFin, tz);
+          const rangosAct2 = splitIfWrap(start2, end2).flatMap(clampToDay);
+          if (rangosAct2.some((r2) => r2[0] >= R_ALMUERZO[1])) {
+            hayActividadesAlrededorAlmuerzo = true;
+            break;
+          }
+        }
+        if (hayActividadesAlrededorAlmuerzo) break;
+      }
     }
+    if (hayActividadesAlrededorAlmuerzo) break;
   }
+
+  const aplicaAlmuerzo =
+    !registro.esHoraCorrida &&
+    (almuerzoDentroNormal || hayActividadesAlrededorAlmuerzo);
 
   if (aplicaAlmuerzo) {
     const [i0, i1] = indicesPorRango(R_ALMUERZO);
     for (let i = i0; i < i1; i++) {
-      if (slots[i].tipo === "NORMAL") slots[i] = { tipo: "ALMUERZO" };
+      slots[i] = { tipo: "ALMUERZO" };
     }
   }
 
   // 4) ACTIVIDADES → pintan EXTRA (fuera de normal o esExtra=true) o NORMAL (dentro de normal)
-  const actividades = registro.actividades ?? [];
   const rangosExtraPintados: Rango[] = []; // para validar EXTRA dentro de NORMAL
 
   for (const act of actividades) {
@@ -311,14 +337,48 @@ export function segmentarRegistroDiario(
         const seraExtra = !!act.esExtra || !enNormal;
 
         if (seraExtra) {
-          // EXTRA sobrepone todo, incluso almuerzo (y se valida después)
-          slots[i] = {
-            tipo: "EXTRA",
-            jobId: act.job?.id ?? act.jobId ?? undefined,
-            jobCodigo: act.job?.codigo ?? null,
-            jobNombre: act.job?.nombre ?? null,
-            descripcion: act.descripcion ?? null,
-          };
+          // EXTRA activities take precedence over ALMUERZO only when they explicitly
+          // cover the lunch period (have horaInicio/horaFin that span 12:00-13:00)
+          const tieneHorasExplicitas = !!act.horaInicio && !!act.horaFin;
+          const centroEnAlmuerzo =
+            centro >= R_ALMUERZO[0] && centro < R_ALMUERZO[1];
+
+          if (aplicaAlmuerzo && centroEnAlmuerzo && !tieneHorasExplicitas) {
+            // Solo aplicar almuerzo si la actividad EXTRA no tiene horas explícitas
+            slots[i] = { tipo: "ALMUERZO" };
+          } else if (
+            aplicaAlmuerzo &&
+            centroEnAlmuerzo &&
+            tieneHorasExplicitas
+          ) {
+            // Si tiene horas explícitas, verificar si realmente cubre el período de almuerzo
+            const actStart = minutesOfDayInTZ(act.horaInicio, tz);
+            const actEnd = minutesOfDayInTZ(act.horaFin, tz);
+            const cubreAlmuerzo =
+              actStart < R_ALMUERZO[1] && actEnd > R_ALMUERZO[0];
+
+            if (cubreAlmuerzo) {
+              // La actividad explícitamente cubre el almuerzo, EXTRA toma precedencia
+              slots[i] = {
+                tipo: "EXTRA",
+                jobId: act.job?.id ?? act.jobId ?? undefined,
+                jobCodigo: act.job?.codigo ?? null,
+                jobNombre: act.job?.nombre ?? null,
+                descripcion: act.descripcion ?? null,
+              };
+            } else {
+              // La actividad no cubre el almuerzo, aplicar almuerzo
+              slots[i] = { tipo: "ALMUERZO" };
+            }
+          } else {
+            slots[i] = {
+              tipo: "EXTRA",
+              jobId: act.job?.id ?? act.jobId ?? undefined,
+              jobCodigo: act.job?.codigo ?? null,
+              jobNombre: act.job?.nombre ?? null,
+              descripcion: act.descripcion ?? null,
+            };
+          }
         } else {
           // NORMAL con job/descr., pero no sobreescribe ALMUERZO
           if (slots[i].tipo !== "ALMUERZO") {
@@ -395,22 +455,7 @@ export function segmentarRegistroDiario(
     });
   }
 
-  // b) ALMUERZO fuera de RANGO NORMAL ⇒ ERROR (si fue aplicado)
-  if (aplicaAlmuerzo && !rangoDentroDeAlguno(R_ALMUERZO, rangosNormal)) {
-    errores.push({
-      code: "ALMUERZO_FUERA_DE_NORMAL",
-      message:
-        "El almuerzo (12:00–13:00) no cae completamente dentro del rango NORMAL.",
-      detalle: {
-        almuerzo: ["12:00", "13:00"],
-        rangosNormal: rangosNormal.map((r) => [
-          minToHHMM(r[0]),
-          minToHHMM(r[1]),
-        ]),
-      },
-      severity: "ERROR",
-    });
-  }
+  // b) (Regla de almuerzo fuera de NORMAL eliminada; almuerzo puede existir aun si la jornada no cubre 12 por completo)
 
   // c) NORMAL fuera de RANGO NORMAL ⇒ ERROR
   const rangosNormalSegmentos = conCortes
@@ -438,21 +483,28 @@ export function segmentarRegistroDiario(
     });
   }
 
-  // d) Invariante de cuadre: minutos(RANGO NORMAL) == minutos(NORMAL) + minutos(ALMUERZO)
+  // d) Invariante de cuadre: minutos(RANGO NORMAL) == minutos(NORMAL) + minutos(ALMUERZO dentro de NORMAL)
   const minutosRangoNormal = sumMinutes(rangosNormal);
   const minutosNormal = conCortes
     .filter((s) => s.tipo === "NORMAL")
     .reduce((acc, s) => acc + (hhmmToMin(s.fin) - hhmmToMin(s.inicio)), 0);
-  const minutosAlmuerzo = conCortes
+  const minutosAlmuerzoTotal = conCortes
     .filter((s) => s.tipo === "ALMUERZO")
     .reduce((acc, s) => acc + (hhmmToMin(s.fin) - hhmmToMin(s.inicio)), 0);
+  const minutosAlmuerzoDentroNormal = sumMinutes(
+    intersecciones([R_ALMUERZO], rangosNormal)
+  );
 
-  if (minutosRangoNormal !== minutosNormal + minutosAlmuerzo) {
+  if (minutosRangoNormal !== minutosNormal + minutosAlmuerzoDentroNormal) {
     errores.push({
       code: "SUMA_NORMAL_MAS_ALMUERZO_NO_COINCIDE",
       message:
-        "La suma de minutos de NORMAL + ALMUERZO no coincide con el rango NORMAL declarado (Entrada–Salida).",
-      detalle: { minutosRangoNormal, minutosNormal, minutosAlmuerzo },
+        "La suma de minutos de NORMAL + ALMUERZO(en normal) no coincide con el rango NORMAL declarado (Entrada–Salida).",
+      detalle: {
+        minutosRangoNormal,
+        minutosNormal,
+        minutosAlmuerzoDentroNormal,
+      },
       severity: "ERROR",
     });
   }
@@ -472,7 +524,7 @@ export function segmentarRegistroDiario(
     totales: {
       minutosRangoNormal,
       minutosNormal,
-      minutosAlmuerzo,
+      minutosAlmuerzo: minutosAlmuerzoTotal,
       minutosExtra,
       minutosLibre,
     },

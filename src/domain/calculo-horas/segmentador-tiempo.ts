@@ -116,6 +116,42 @@ export class SegmentadorTiempo {
     esHoraCorrida: boolean,
     actividades: any[]
   ): { tipo: TipoIntervalo; jobId?: number; descripcion?: string } {
+    // Forzar ALMUERZO a las 12 si no es hora corrida y:
+    // - hay jornada que cubre 12-13; o
+    // - hay actividades antes, durante o después de 12-13
+    const hayJornada = horaEntrada !== horaSalida;
+    let hayActividadesAlrededorAlmuerzo = false;
+
+    if (!hayJornada && actividades.length > 0) {
+      // Si no hay jornada, verificar si hay actividades alrededor del almuerzo
+      for (const act of actividades) {
+        if (!act.horaInicio || !act.horaFin) continue;
+        const actInicio = this.dateToTimeString(act.horaInicio);
+        const actFin = this.dateToTimeString(act.horaFin);
+
+        // Verificar si la actividad está antes, durante o después del almuerzo (12:00-13:00)
+        if (
+          (actInicio < "13:00" && actFin > "12:00") || // Durante
+          actFin <= "12:00" || // Antes
+          actInicio >= "13:00"
+        ) {
+          // Después
+          hayActividadesAlrededorAlmuerzo = true;
+          break;
+        }
+      }
+    }
+
+    const hayHorasLaborables = hayJornada || hayActividadesAlrededorAlmuerzo;
+
+    if (
+      !esHoraCorrida &&
+      hayHorasLaborables &&
+      this.esHoraAlmuerzo(inicio, fin)
+    ) {
+      return { tipo: TipoIntervalo.ALMUERZO, descripcion: "Hora de almuerzo" };
+    }
+
     // Verificar si está dentro del horario laboral
     const dentroHorario = this.estaEnRango(
       inicio,
@@ -131,10 +167,7 @@ export class SegmentadorTiempo {
       };
     }
 
-    // Verificar si es hora de almuerzo (12:00-13:00) y no es hora corrida
-    if (!esHoraCorrida && this.esHoraAlmuerzo(inicio, fin)) {
-      return { tipo: TipoIntervalo.ALMUERZO, descripcion: "Hora de almuerzo" };
-    }
+    // Nota: La regla de almuerzo ya fue aplicada arriba con precedencia
 
     // Buscar actividades extras que coincidan exactamente con este intervalo
     const actividadExtra = actividades.find(
