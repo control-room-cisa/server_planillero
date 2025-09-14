@@ -102,6 +102,14 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     r: ExtraStreak,
     b: Buckets
   ) {
+    if (process.env.DEBUG_H1) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[H1][EXTRA pre] min=${r.minutosExtraAcum} diurna=${esDiurna} ` +
+          `vDiur=${r.vistoDiurna} vNoc=${r.vistoNocturna} piso=${r.piso} ` +
+          `domOFest=${r.domOFestActivo} bloqueaMixta=${r.bloquearMixta}`
+      );
+    }
     // C4: 2.00× (dominical/festiva) con arrastre entre días mientras no haya LIBRE
     const arrastraC4 = esDomOFest || r.domOFestActivo;
     if (arrastraC4) {
@@ -110,6 +118,10 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       r.minutosExtraAcum += 15;
       if (esDiurna) r.vistoDiurna = true;
       else r.vistoNocturna = true;
+      if (process.env.DEBUG_H1) {
+        // eslint-disable-next-line no-console
+        console.log(`[H1][EXTRA C4] +15 → min=${r.minutosExtraAcum}`);
+      }
       return;
     }
 
@@ -118,16 +130,44 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     if (r.piso < base) r.piso = base;
 
     // Mixta sólo si está habilitada para el día
-    const mixtaActiva = !r.bloquearMixta && PoliticaH1.rachaEsMixta(r);
+    const cruzaBandaYCompletaUmbral =
+      r.minutosExtraAcum >= 180 &&
+      ((r.vistoNocturna && esDiurna && !r.vistoDiurna) ||
+        (r.vistoDiurna && !esDiurna && !r.vistoNocturna));
+    const mixtaActiva =
+      !r.bloquearMixta &&
+      (PoliticaH1.rachaEsMixta(r) || cruzaBandaYCompletaUmbral);
     const mult = mixtaActiva ? Math.max(1.75, r.piso) : r.piso;
 
-    if (mult >= 1.75) b.extraC3Min += 15; // p75
-    else if (mult >= 1.5) b.extraC2Min += 15; // p50
-    else b.extraC1Min += 15; // p25
+    if (mult >= 1.75) {
+      b.extraC3Min += 15; // p75
+      if (process.env.DEBUG_H1) {
+        // eslint-disable-next-line no-console
+        console.log(`[H1][EXTRA p75] mult=${mult}`);
+      }
+    } else if (mult >= 1.5) {
+      b.extraC2Min += 15; // p50
+      if (process.env.DEBUG_H1) {
+        // eslint-disable-next-line no-console
+        console.log(`[H1][EXTRA p50] mult=${mult}`);
+      }
+    } else {
+      b.extraC1Min += 15; // p25
+      if (process.env.DEBUG_H1) {
+        // eslint-disable-next-line no-console
+        console.log(`[H1][EXTRA p25] mult=${mult}`);
+      }
+    }
 
     r.minutosExtraAcum += 15;
     if (esDiurna) r.vistoDiurna = true;
     else r.vistoNocturna = true;
+    if (process.env.DEBUG_H1) {
+      // eslint-disable-next-line no-console
+      console.log(
+        `[H1][EXTRA post] min=${r.minutosExtraAcum} vDiur=${r.vistoDiurna} vNoc=${r.vistoNocturna} piso=${r.piso}`
+      );
+    }
   }
 
   private static minutosAhoras(min: number): number {
@@ -180,11 +220,63 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // Recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
+      // Fallback: si al iniciar el día no hay mixta pero el día anterior tuvo >=3h EXTRA
+      // y ambas franjas (diurna y nocturna), heredar esa condición para que 00:00 comience en mixta.
+      if (!PoliticaH1.rachaEsMixta(racha)) {
+        try {
+          const prev = PoliticaH1.addDays(f, -1);
+          const { segmentos: segPrev } =
+            await this.generarSegmentosDeDiaConValidacion(prev, empleadoId);
+          let extraMinPrev = 0;
+          let vDiurPrev = false;
+          let vNocPrev = false;
+          for (const s of segPrev) {
+            if (s.tipo !== "EXTRA") continue;
+            const dur = PoliticaH1.segDurMin(s);
+            extraMinPrev += dur;
+            const esDiurSeg = PoliticaH1.isDiurna(s);
+            if (esDiurSeg) vDiurPrev = true;
+            else vNocPrev = true;
+          }
+          if (extraMinPrev >= 180 && vDiurPrev && vNocPrev) {
+            racha.minutosExtraAcum = extraMinPrev;
+            racha.vistoDiurna = true;
+            racha.vistoNocturna = true;
+          }
+        } catch {
+          /* ignore */
+        }
+      }
       const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
         f,
         empleadoId
       );
 
+      // Priming de racha para evitar desfase en cruce nocturna→diurna al inicio del día
+      if (racha.minutosExtraAcum === 0) {
+        let acumulLeadingExtra = 0;
+        let vioNocturna = false;
+        let vioDiurna = false;
+        let cubreDesdeMedianoche = false;
+        for (const seg of segmentos) {
+          if (seg.tipo !== "EXTRA") break;
+          if (seg.inicio === "00:00") cubreDesdeMedianoche = true;
+          const dur = PoliticaH1.segDurMin(seg);
+          acumulLeadingExtra += dur;
+          if (PoliticaH1.isDiurna(seg)) vioDiurna = true;
+          else vioNocturna = true;
+        }
+        if (
+          cubreDesdeMedianoche &&
+          acumulLeadingExtra >= 180 &&
+          vioNocturna &&
+          vioDiurna
+        ) {
+          racha.minutosExtraAcum = 180;
+          racha.vistoDiurna = true;
+          racha.vistoNocturna = true;
+        }
+      }
       // info del día
       const feriadoInfo = await this.esFeriado(f);
       const dow = new Date(`${f}T00:00:00`).getDay(); // 0=Dom
