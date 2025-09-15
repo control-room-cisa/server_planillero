@@ -377,4 +377,65 @@ export class RegistroDiarioRepository {
 
     return registroActualizado;
   }
+
+  /**
+   * Verifica el estado de aprobación de registros diarios en un rango de fechas
+   * y retorna las fechas que no están aprobadas y las fechas sin registro
+   */
+  static async validateApprovalStatusInRange(
+    empleadoId: number,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<{
+    fechasNoAprobadas: string[];
+    fechasSinRegistro: string[];
+  }> {
+    // Generar todas las fechas en el rango
+    const fechasEnRango: string[] = [];
+    const inicio = new Date(fechaInicio);
+    const fin = new Date(fechaFin);
+    
+    for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+      fechasEnRango.push(d.toISOString().split('T')[0]);
+    }
+
+    // Obtener todos los registros en el rango
+    const registros = await prisma.registroDiario.findMany({
+      where: {
+        empleadoId,
+        deletedAt: null,
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin,
+        },
+      },
+      select: {
+        fecha: true,
+        aprobacionSupervisor: true,
+      },
+    });
+
+    // Crear un map de fechas con registros
+    const registrosPorFecha = new Map<string, boolean>();
+    registros.forEach(registro => {
+      registrosPorFecha.set(registro.fecha, registro.aprobacionSupervisor || false);
+    });
+
+    // Clasificar fechas
+    const fechasNoAprobadas: string[] = [];
+    const fechasSinRegistro: string[] = [];
+
+    fechasEnRango.forEach(fecha => {
+      if (!registrosPorFecha.has(fecha)) {
+        fechasSinRegistro.push(fecha);
+      } else if (!registrosPorFecha.get(fecha)) {
+        fechasNoAprobadas.push(fecha);
+      }
+    });
+
+    return {
+      fechasNoAprobadas,
+      fechasSinRegistro,
+    };
+  }
 }

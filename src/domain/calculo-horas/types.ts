@@ -19,6 +19,14 @@ export interface HorarioTrabajo {
 }
 
 /**
+ * Errores de validación para el conteo de horas
+ */
+export interface ConteoHorasValidationError {
+  fechasNoAprobadas: string[]; // Fechas que no han sido aprobadas por supervisor
+  fechasSinRegistro: string[]; // Fechas que no tienen registro diario creado
+}
+
+/**
  * Conteo de horas trabajadas por un empleado en un período
  */
 export interface ConteoHorasTrabajadas {
@@ -55,6 +63,10 @@ export interface ConteoHorasTrabajadas {
     permisoSinSueldo: number; // E04 horas / 8
     inasistencias: number; // E05 horas / 8
   };
+  /**
+   * Errores de validación encontrados durante el cálculo
+   */
+  validationErrors?: ConteoHorasValidationError;
 }
 
 /**
