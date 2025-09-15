@@ -57,18 +57,22 @@ export class HorarioTrabajoDomain {
     }
 
     // Validar estado de aprobación de registros en el período
-    const validationStatus = await RegistroDiarioRepository.validateApprovalStatusInRange(
-      parseInt(empleadoId),
-      fechaInicio,
-      fechaFin
-    );
+    const validationStatus =
+      await RegistroDiarioRepository.validateApprovalStatusInRange(
+        parseInt(empleadoId),
+        fechaInicio,
+        fechaFin
+      );
 
     // Si hay fechas no aprobadas o sin registro, lanzar error con detalles
-    if (validationStatus.fechasNoAprobadas.length > 0 || validationStatus.fechasSinRegistro.length > 0) {
+    if (
+      validationStatus.fechasNoAprobadas.length > 0 ||
+      validationStatus.fechasSinRegistro.length > 0
+    ) {
       const errorMessage = this.buildValidationErrorMessage(validationStatus);
       const error = new Error(errorMessage) as any;
       error.validationErrors = validationStatus;
-      error.type = 'VALIDATION_ERROR';
+      error.type = "VALIDATION_ERROR";
       throw error;
     }
 
@@ -99,20 +103,24 @@ export class HorarioTrabajoDomain {
     fechasSinRegistro: string[];
   }): string {
     const messages: string[] = [];
-    
+
     if (validationStatus.fechasNoAprobadas.length > 0) {
       messages.push(
-        `Fechas no aprobadas por supervisor: ${validationStatus.fechasNoAprobadas.join(', ')}`
+        `Fechas no aprobadas por supervisor: ${validationStatus.fechasNoAprobadas.join(
+          ", "
+        )}`
       );
     }
-    
+
     if (validationStatus.fechasSinRegistro.length > 0) {
       messages.push(
-        `Fechas sin registro diario: ${validationStatus.fechasSinRegistro.join(', ')}`
+        `Fechas sin registro diario: ${validationStatus.fechasSinRegistro.join(
+          ", "
+        )}`
       );
     }
-    
-    return `No se puede procesar la nómina. ${messages.join('. ')}.`;
+
+    return `No se puede procesar la nómina. ${messages.join(". ")}.`;
   }
 
   /**
