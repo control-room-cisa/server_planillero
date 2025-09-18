@@ -10,9 +10,14 @@ import empleadoRoutes from "./routes/empleadoRoutes";
 import calculoHorasTrabajoRoutes from "./routes/calculoHorasTrabajoRoutes";
 import overtimeRoutes from "./routes/overtimeRoutes";
 import feriadoRoutes from "./routes/FeriadoRoute";
+
 import path from "path";
+import { config } from "dotenv";
 
 const app = express();
+
+const ROOT = path.resolve(__dirname, "..");
+config({ path: path.join(ROOT, ".env") });
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
 // Configurar CORS para permitir requests desde el frontend
