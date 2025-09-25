@@ -122,6 +122,7 @@ export interface UpdateEmpleadoDto {
   telefono?: string;
   direccion?: string;
   fechaInicioIngreso?: Date;
+  contrasena?: string;
   urlFotoPerfil?: string | null;
   urlCv?: string | null;
   rolId?: number;

@@ -1,4 +1,5 @@
 import { Prisma, Empleado } from "@prisma/client";
+import bcrypt from "bcrypt";
 import {
   CreateEmpleadoDto,
   UpdateEmpleadoDto,
@@ -7,6 +8,8 @@ import {
 } from "../dtos/employee.dto";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { FileService } from "./FileService";
+
+const SALT_ROUNDS = 10;
 
 export class EmpleadoService {
   static toDtoBase(emp: Empleado): EmployeeDto {
@@ -71,6 +74,10 @@ export class EmpleadoService {
     return `EMP${(num + 1).toString().padStart(3, "0")}`;
   }
 
+  static async hashPassword(password: string): Promise<string> {
+    return bcrypt.hash(password, SALT_ROUNDS);
+  }
+
   static async getByDepartment(departamentoId: number): Promise<EmployeeDto[]> {
     const rows = await EmpleadoRepository.findByDepartment(departamentoId);
     return rows.map((e: any) => ({
@@ -123,6 +130,10 @@ export class EmpleadoService {
   }
 
   static async createEmpleado(dto: CreateEmpleadoDto) {
+    // Hashear contraseña si está presente
+    if (dto.contrasena) {
+      dto.contrasena = await this.hashPassword(dto.contrasena);
+    }
     return EmpleadoRepository.createEmpleado(dto);
   }
 
@@ -130,6 +141,10 @@ export class EmpleadoService {
     id: number,
     data: Prisma.EmpleadoUpdateInput
   ): Promise<Empleado> {
+    // Hashear contraseña si está presente
+    if (data.contrasena && typeof data.contrasena === "string") {
+      data.contrasena = await this.hashPassword(data.contrasena);
+    }
     return EmpleadoRepository.updateEmpleado(id, data);
   }
 
@@ -138,6 +153,12 @@ export class EmpleadoService {
     files: { foto?: Express.Multer.File; cv?: Express.Multer.File }
   ): Promise<EmployeeDto> {
     body.codigo = await this.generateCodigo();
+
+    // Hashear contraseña si está presente
+    if (body.contrasena) {
+      body.contrasena = await this.hashPassword(body.contrasena);
+    }
+
     const empleado = await EmpleadoRepository.createEmpleado(body);
 
     let fotoFilename: string | undefined;
@@ -193,6 +214,11 @@ export class EmpleadoService {
       await FileService.deleteTemp(files.foto?.path);
       await FileService.deleteTemp(files.cv?.path);
       throw new Error("Empleado no encontrado");
+    }
+
+    // Hashear contraseña si está presente
+    if (rest.contrasena) {
+      rest.contrasena = await this.hashPassword(rest.contrasena);
     }
 
     let emp = await EmpleadoRepository.updateEmpleado(

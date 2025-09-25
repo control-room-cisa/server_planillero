@@ -86,6 +86,7 @@ export const updateEmpleadoSchema = z.object({
       z.date().optional()
     )
     .optional(),
+  contrasena: z.string().min(6).optional(),
   urlFotoPerfil: z
     .union([z.string().url(), z.string().length(0), z.null(), z.undefined()])
     .optional(),
