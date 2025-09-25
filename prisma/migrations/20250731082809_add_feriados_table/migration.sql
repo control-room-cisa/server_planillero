@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE `feriado` ADD COLUMN `created_at` DATETIME(3) NULL DEFAULT CURRENT_TIMESTAMP(3),
+    ADD COLUMN `deleted_at` DATETIME(3) NULL,
+    ADD COLUMN `updated_at` DATETIME(3) NULL;
