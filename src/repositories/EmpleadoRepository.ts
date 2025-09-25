@@ -27,6 +27,35 @@ export class EmpleadoRepository {
     });
   }
 
+  /** Busca un empleado por DNI (identidad) */
+  static async findByDni(dni: string): Promise<Empleado | null> {
+    return prisma.empleado.findFirst({
+      where: { dni },
+    });
+  }
+
+  /** Busca un empleado por nombre de usuario */
+  static async findByUsername(nombreUsuario: string): Promise<Empleado | null> {
+    return prisma.empleado.findFirst({
+      where: { nombreUsuario },
+    });
+  }
+
+  /** Busca un empleado por correo electrónico, DNI o nombre de usuario */
+  static async findByEmailDniOrUsername(
+    identifier: string
+  ): Promise<Empleado | null> {
+    return prisma.empleado.findFirst({
+      where: {
+        OR: [
+          { correoElectronico: identifier },
+          { dni: identifier },
+          { nombreUsuario: identifier },
+        ],
+      },
+    });
+  }
+
   /** Crea un nuevo empleado */
   static async createEmpleado(data: CreateEmpleadoDto): Promise<Empleado> {
     const { rolId, departamentoId, ...rest } = data;

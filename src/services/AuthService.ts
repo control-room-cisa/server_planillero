@@ -51,9 +51,11 @@ export class AuthService {
     return { empleado, token };
   }
 
-  static async login(correoElectronico: string, contrasena: string) {
-    // Buscar empleado por correo
-    const empleado = await EmpleadoRepository.findByEmail(correoElectronico);
+  static async login(identifier: string, contrasena: string) {
+    // Buscar empleado por correo electrónico, DNI o nombre de usuario
+    const empleado = await EmpleadoRepository.findByEmailDniOrUsername(
+      identifier
+    );
     if (!empleado) {
       throw new Error("Usuario no encontrado");
     }
