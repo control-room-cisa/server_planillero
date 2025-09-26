@@ -18,6 +18,7 @@ export class EmpleadoService {
       nombre: emp.nombre,
       apellido: emp.apellido ?? undefined,
       codigo: emp.codigo ?? undefined,
+      cargo: emp.cargo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
         emp.urlFotoPerfil ?? undefined,
@@ -90,6 +91,7 @@ export class EmpleadoService {
       empresa: e.departamento?.empresa?.nombre
         ? { nombre: e.departamento.empresa.nombre }
         : undefined,
+      cargo: e.cargo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined,
@@ -119,6 +121,7 @@ export class EmpleadoService {
       empresa: e.departamento?.empresa?.nombre
         ? { nombre: e.departamento.empresa.nombre }
         : undefined,
+      cargo: e.cargo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined,
