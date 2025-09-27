@@ -8,7 +8,6 @@ import empresaRoutes from "./routes/empresaRoutes";
 import registroDiarioRoutes from "./routes/RegistroDiarioRoutes";
 import empleadoRoutes from "./routes/empleadoRoutes";
 import calculoHorasTrabajoRoutes from "./routes/calculoHorasTrabajoRoutes";
-import overtimeRoutes from "./routes/overtimeRoutes";
 import feriadoRoutes from "./routes/FeriadoRoute";
 
 import path from "path";
@@ -39,7 +38,6 @@ app.use("/api/registrodiario", registroDiarioRoutes);
 app.use("/api/empleados", empleadoRoutes);
 app.use("/api/calculo-horas", calculoHorasTrabajoRoutes);
 app.use("/api/feriados", feriadoRoutes);
-app.use("/api", overtimeRoutes);
 
 app.use(errorHandler);
 
