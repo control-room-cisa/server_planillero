@@ -52,6 +52,29 @@ export class JobRepository {
     });
   }
 
+  /** Devuelve un job por su código */
+  static async findByCodigo(codigo: string): Promise<Job | null> {
+    return prisma.job.findFirst({
+      where: { codigo, deletedAt: null },
+      include: { empresa: true, empresaMostrar: true },
+    });
+  }
+
+  /** Devuelve un job por su código y empresaMostrar */
+  static async findByCodigoAndEmpresaMostrar(
+    codigo: string,
+    mostrarEmpresaId: number
+  ): Promise<Job | null> {
+    return prisma.job.findFirst({
+      where: {
+        codigo,
+        mostrarEmpresaId,
+        deletedAt: null,
+      },
+      include: { empresa: true, empresaMostrar: true },
+    });
+  }
+
   /** Crea un nuevo job */
   static async create(data: Prisma.JobCreateInput): Promise<Job> {
     return prisma.job.create({ data });

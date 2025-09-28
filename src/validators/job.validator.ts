@@ -1,18 +1,22 @@
 // src/validators/job.validator.ts
 import { z } from "zod";
 
-// Solo números, opcionalmente . + 1-2 decimales (ej: 103, 101.2, 101.23)
-const jobCodeRegex = /^\d+(\.\d{1,2})?$/;
+// Estructura jerárquica: NNNN.NNNN.NNNN (máximo 4 dígitos por número, máximo 2 puntos)
+const jobCodeRegex = /^(\d{1,4})(\.\d{1,4})?(\.\d{1,4})?$/;
 
 export const createJobSchema = z.object({
   codigo: z
     .string()
     .min(1, "El código es requerido")
-    .max(10, "Máximo 10 caracteres")
+    .max(20, "Máximo 20 caracteres")
     .regex(
       jobCodeRegex,
-      "El código debe ser numérico entero o con hasta 2 decimales (ej: 103 o 101.23)"
-    ),
+      "El código debe seguir el formato: NNNN.NNNN.NNNN (máximo 4 dígitos por número, máximo 2 puntos)"
+    )
+    .refine((codigo) => {
+      const partes = codigo.split(".");
+      return partes.length <= 3;
+    }, "El código no puede tener más de 3 niveles"),
   nombre: z
     .string()
     .min(1, "El nombre es requerido")
