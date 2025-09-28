@@ -14,9 +14,20 @@ export interface EmpresaConDepartamentosDto {
   id: number;
   codigo?: string | null;
   nombre?: string | null;
-  visible?: boolean | null;
+  esConsorcio?: boolean | null;
   createdAt: Date | null;
   updatedAt?: Date | null;
   deletedAt?: Date | null;
   departamentos: DepartamentoDto[];
+}
+
+export interface CreateEmpresaDto {
+  nombre: string;
+  codigo: string;
+  esConsorcio?: boolean;
+}
+
+export interface UpdateEmpresaDto {
+  nombre?: string;
+  codigo?: string;
 }
