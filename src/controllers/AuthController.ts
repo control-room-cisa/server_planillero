@@ -42,9 +42,26 @@ export class AuthController {
     next: NextFunction
   ) {
     try {
-      const { usuario, correoElectronico, contrasena } = req.body;
-      // Usar usuario si está presente, sino usar correoElectronico
-      const identifier = usuario || correoElectronico;
+      const { usuario, correoElectronico, dni, contrasena } = req.body;
+      // Aceptar cualquiera de los tres: usuario, correoElectronico o dni
+      const identifier = usuario || correoElectronico || dni;
+
+      if (!identifier) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe proporcionar un usuario, correo electrónico o DNI",
+          data: null,
+        });
+      }
+
+      if (!contrasena) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe proporcionar una contraseña",
+          data: null,
+        });
+      }
+
       const result = await AuthService.login(identifier, contrasena);
       res.json({
         success: true,

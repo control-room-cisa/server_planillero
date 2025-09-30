@@ -155,6 +155,34 @@ export class EmpleadoService {
     body: CreateEmpleadoDto,
     files: { foto?: Express.Multer.File; cv?: Express.Multer.File }
   ): Promise<EmployeeDto> {
+    // Validar que el nombre de usuario no exista
+    if (body.nombreUsuario) {
+      const existingByUsername = await EmpleadoRepository.findByUsername(
+        body.nombreUsuario
+      );
+      if (existingByUsername) {
+        throw new Error("El nombre de usuario ya está en uso");
+      }
+    }
+
+    // Validar que el correo no exista (si se proporciona)
+    if (body.correoElectronico) {
+      const existingByEmail = await EmpleadoRepository.findByEmail(
+        body.correoElectronico
+      );
+      if (existingByEmail) {
+        throw new Error("El correo electrónico ya está en uso");
+      }
+    }
+
+    // Validar que el DNI no exista (si se proporciona)
+    if (body.dni) {
+      const existingByDni = await EmpleadoRepository.findByDni(body.dni);
+      if (existingByDni) {
+        throw new Error("El DNI ya está registrado");
+      }
+    }
+
     body.codigo = await this.generateCodigo();
 
     // Hashear contraseña si está presente
@@ -217,6 +245,37 @@ export class EmpleadoService {
       await FileService.deleteTemp(files.foto?.path);
       await FileService.deleteTemp(files.cv?.path);
       throw new Error("Empleado no encontrado");
+    }
+
+    // Validar que el nombre de usuario no exista (si se está actualizando y es diferente)
+    if (rest.nombreUsuario && rest.nombreUsuario !== empPrev.nombreUsuario) {
+      const existingByUsername = await EmpleadoRepository.findByUsername(
+        rest.nombreUsuario
+      );
+      if (existingByUsername && existingByUsername.id !== id) {
+        throw new Error("El nombre de usuario ya está en uso");
+      }
+    }
+
+    // Validar que el correo no exista (si se está actualizando y es diferente)
+    if (
+      rest.correoElectronico &&
+      rest.correoElectronico !== empPrev.correoElectronico
+    ) {
+      const existingByEmail = await EmpleadoRepository.findByEmail(
+        rest.correoElectronico
+      );
+      if (existingByEmail && existingByEmail.id !== id) {
+        throw new Error("El correo electrónico ya está en uso");
+      }
+    }
+
+    // Validar que el DNI no exista (si se está actualizando y es diferente)
+    if (rest.dni && rest.dni !== empPrev.dni) {
+      const existingByDni = await EmpleadoRepository.findByDni(rest.dni);
+      if (existingByDni && existingByDni.id !== id) {
+        throw new Error("El DNI ya está registrado");
+      }
     }
 
     // Hashear contraseña si está presente

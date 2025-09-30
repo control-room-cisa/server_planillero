@@ -64,7 +64,7 @@ export interface CreateEmpleadoDto {
   nombre: string;
   apellido?: string;
   nombreUsuario?: string;
-  correoElectronico: string;
+  correoElectronico?: string;
   dni?: string;
   profesion?: string;
   tipoHorario?: TipoHorario;

@@ -71,17 +71,14 @@ export class AuthService {
       throw new Error("Contraseña incorrecta");
     }
 
-    // Validar que tenga correo configurado
-    if (!empleado.correoElectronico) {
-      throw new Error("El usuario no tiene correo configurado");
-    }
-
     // Generar el token JWT
+    // Nota: email es opcional ahora, se usa nombreUsuario o dni como identificador alternativo
     const token = jwt.sign(
       {
         id: empleado.id,
-        email: empleado.correoElectronico,
-        name: empleado.nombre + empleado.apellido,
+        email:
+          empleado.correoElectronico || empleado.nombreUsuario || empleado.dni,
+        name: empleado.nombre + (empleado.apellido || ""),
       },
       JWT_SECRET,
       { expiresIn: "1d" }
