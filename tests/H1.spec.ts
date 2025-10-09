@@ -472,7 +472,6 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       fecha,
       "1"
     );
-    await p.getProrrateoHorasPorJobByDateAndEmpleado(fecha, fecha, "1");
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
       normal: 9,

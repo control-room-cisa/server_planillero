@@ -488,20 +488,17 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         p50: [], // H2 no usa p50
         p75: [], // H2 no usa p75
         p100: [], // H2 no usa p100
+        vacacionesHoras: conteoHoras.cantidadHoras.vacaciones || 0,
+        permisoConSueldoHoras: conteoHoras.cantidadHoras.permisoConSueldo || 0,
+        permisoSinSueldoHoras: conteoHoras.cantidadHoras.permisoSinSueldo || 0,
+        inasistenciasHoras: conteoHoras.cantidadHoras.inasistencias || 0,
+        totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
         deduccionesISR: 0,
         deduccionesRAP: 0,
         deduccionesComida: 0,
         deduccionesIHSS: 0,
         Prestamo: 0,
         Total: 0,
-      },
-      conteoDias: conteoHoras.conteoDias || {
-        totalPeriodo: 15,
-        diasLaborados: 15,
-        vacaciones: 0,
-        permisoConSueldo: 0,
-        permisoSinSueldo: 0,
-        inasistencias: 0,
       },
       validationErrors: {
         fechasNoAprobadas: [],
