@@ -5,6 +5,7 @@ import type { ApiResponse } from "../dtos/ApiResponse";
 import type {
   HorarioTrabajo,
   ConteoHorasTrabajadas,
+  ConteoHorasProrrateo,
 } from "../domain/calculo-horas/types";
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -178,6 +179,78 @@ export const getConteoHoras: RequestHandler<
     const errors = normalizeThrownToErrors(err);
     const { status: st, body } = buildErr<ConteoHorasTrabajadas>(
       err?.message || "Error obteniendo conteo de horas",
+      errors,
+      status
+    );
+    return res.status(st).json(body);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET /api/horario-trabajo/:empleadoId/prorrateo?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
+// -----------------------------------------------------------------------------
+export const getProrrateo: RequestHandler<
+  { empleadoId: string }, // params
+  ApiResponse<ConteoHorasProrrateo>, // response
+  {}, // body
+  { fechaInicio?: string; fechaFin?: string } // query
+> = async (req, res) => {
+  const { empleadoId } = req.params;
+  const { fechaInicio, fechaFin } = req.query;
+
+  // Validaciones 400
+  const errors400: string[] = [];
+  if (!empleadoId) errors400.push("empleadoId es requerido.");
+  if (!fechaInicio) errors400.push("fechaInicio es requerida.");
+  if (!fechaFin) errors400.push("fechaFin es requerida.");
+  if (fechaInicio && !FECHA_RE.test(fechaInicio))
+    errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
+  if (fechaFin && !FECHA_RE.test(fechaFin))
+    errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
+  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+    errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
+  }
+
+  if (errors400.length) {
+    const { status, body } = buildErr<ConteoHorasProrrateo>(
+      "Parámetros inválidos",
+      errors400,
+      400
+    );
+    return res.status(status).json(body);
+  }
+
+  try {
+    const data =
+      await HorarioTrabajoDomain.getProrrateoHorasPorJobByDateAndEmpleado(
+        String(fechaInicio),
+        String(fechaFin),
+        empleadoId
+      );
+    return res.json(
+      buildOk<ConteoHorasProrrateo>(
+        "Prorrateo de horas por job obtenido exitosamente",
+        data
+      )
+    );
+  } catch (err: any) {
+    const lower = (err?.message ?? "").toLowerCase();
+    const status =
+      lower.includes("no encontrado") || lower.includes("not found")
+        ? 404
+        : lower.includes("inválid") ||
+          lower.includes("invalid") ||
+          lower.includes("formato")
+        ? 400
+        : lower.includes("validaciones fallidas") ||
+          lower.includes("validación") ||
+          lower.includes("cuadre")
+        ? 422
+        : 500;
+
+    const errors = normalizeThrownToErrors(err);
+    const { status: st, body } = buildErr<ConteoHorasProrrateo>(
+      err?.message || "Error obteniendo prorrateo de horas",
       errors,
       status
     );

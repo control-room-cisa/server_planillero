@@ -1,6 +1,10 @@
 // src/domain/politicas-horario/base.ts
 import { IPoliticaHorario } from "../interfaces";
-import { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
+import {
+  HorarioTrabajo,
+  ConteoHorasTrabajadas,
+  ConteoHorasProrrateo,
+} from "../types";
 import { RegistroDiarioRepository } from "../../../repositories/RegistroDiarioRepository";
 import { FeriadoRepository } from "../../../repositories/FeriadoRepository";
 import { EmpleadoRepository } from "../../../repositories/EmpleadoRepository";
@@ -20,6 +24,12 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     fechaFin: string,
     empleadoId: string
   ): Promise<ConteoHorasTrabajadas>;
+
+  abstract getProrrateoHorasPorJobByDateAndEmpleado(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<ConteoHorasProrrateo>;
 
   /**
    * Implementación base del método requerido por la interfaz

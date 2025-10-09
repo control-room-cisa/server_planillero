@@ -1,6 +1,13 @@
 // src/domain/politicas-horario/H2.ts
 import { PoliticaHorarioBase } from "./base";
-import type { HorarioTrabajo, ConteoHorasTrabajadas } from "../types";
+import type {
+  HorarioTrabajo,
+  ConteoHorasTrabajadas,
+  ConteoHorasProrrateo,
+  HorasPorJob,
+} from "../types";
+import { JobRepository } from "../../../repositories/JobRepository";
+import { SegmentadorTiempo } from "../segmentador-tiempo";
 
 /**
  * Política H2 — Turnos rotativos de 12h, sin almuerzo.
@@ -343,5 +350,165 @@ export class PoliticaH2 extends PoliticaHorarioBase {
   }
   protected incluyeAlmuerzoDefault(): boolean {
     return false;
+  }
+
+  /**
+   * Obtiene el prorrateo de horas por job para un empleado en un período
+   */
+  async getProrrateoHorasPorJobByDateAndEmpleado(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<ConteoHorasProrrateo> {
+    if (
+      !this.validarFormatoFecha(fechaInicio) ||
+      !this.validarFormatoFecha(fechaFin)
+    ) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
+    }
+    if (fechaFin < fechaInicio)
+      throw new Error("El rango de fechas es inválido (fin < inicio).");
+
+    // Obtener conteo de horas trabajadas
+    const conteoHoras = await this.getConteoHorasTrabajadasByDateAndEmpleado(
+      fechaInicio,
+      fechaFin,
+      empleadoId
+    );
+
+    // Mapas para acumular horas por job y categoría
+    const horasPorJobNormal = new Map<
+      number,
+      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+    >();
+    const horasPorJobP25 = new Map<
+      number,
+      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+    >();
+
+    // Recorrer cada día del período y obtener los segmentos
+    let currentDate = fechaInicio;
+    while (currentDate <= fechaFin) {
+      try {
+        // Obtener registro diario con actividades
+        const registroDiario = await this.getRegistroDiario(
+          empleadoId,
+          currentDate
+        );
+
+        if (!registroDiario) {
+          currentDate = PoliticaH2.addDays(currentDate, 1);
+          continue;
+        }
+
+        // Segmentar el día usando el registro diario
+        const lineaTiempo = SegmentadorTiempo.segmentarDia(registroDiario);
+
+        // Procesar cada intervalo del día
+        for (const intervalo of lineaTiempo.intervalos) {
+          // Solo procesar intervalos que tienen jobId (NORMAL y EXTRA)
+          if (!intervalo.jobId) continue;
+
+          // Calcular duración del intervalo en horas
+          const [horaInicio, minInicio] = intervalo.horaInicio
+            .split(":")
+            .map(Number);
+          const [horaFin, minFin] = intervalo.horaFin.split(":").map(Number);
+          const minutosInicio = horaInicio * 60 + minInicio;
+          const minutosFin = horaFin * 60 + minFin;
+          const duracionHoras = (minutosFin - minutosInicio) / 60;
+
+          // Obtener información del job
+          const job = await JobRepository.findById(intervalo.jobId);
+          if (!job) continue;
+
+          const jobInfo = {
+            jobId: job.id,
+            codigoJob: job.codigo || "",
+            nombreJob: job.nombre || "",
+            horas: 0,
+          };
+
+          // Clasificar el intervalo según el tipo
+          // H2 solo usa normal y p25 (extras al 25%)
+          if (intervalo.tipo === "NORMAL") {
+            const existing = horasPorJobNormal.get(job.id);
+            if (existing) {
+              existing.horas += duracionHoras;
+            } else {
+              horasPorJobNormal.set(job.id, {
+                ...jobInfo,
+                horas: duracionHoras,
+              });
+            }
+          } else if (intervalo.tipo === "EXTRA") {
+            // En H2, todas las extras son p25
+            const existing = horasPorJobP25.get(job.id);
+            if (existing) {
+              existing.horas += duracionHoras;
+            } else {
+              horasPorJobP25.set(job.id, {
+                ...jobInfo,
+                horas: duracionHoras,
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error(`Error procesando día ${currentDate}:`, error);
+      }
+
+      // Avanzar al siguiente día
+      currentDate = PoliticaH2.addDays(currentDate, 1);
+    }
+
+    // Convertir mapas a arrays
+    const convertMapToArray = (
+      map: Map<
+        number,
+        { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      >
+    ): HorasPorJob[] => {
+      return Array.from(map.values()).map((item) => ({
+        jobId: item.jobId,
+        codigoJob: item.codigoJob,
+        nombreJob: item.nombreJob,
+        cantidadHoras: Math.round(item.horas * 100) / 100,
+      }));
+    };
+
+    // Construir resultado
+    const resultado: ConteoHorasProrrateo = {
+      fechaInicio,
+      fechaFin,
+      empleadoId,
+      cantidadHoras: {
+        normal: convertMapToArray(horasPorJobNormal),
+        p25: convertMapToArray(horasPorJobP25),
+        p50: [], // H2 no usa p50
+        p75: [], // H2 no usa p75
+        p100: [], // H2 no usa p100
+        deduccionesISR: 0,
+        deduccionesRAP: 0,
+        deduccionesComida: 0,
+        deduccionesIHSS: 0,
+        Prestamo: 0,
+        Total: 0,
+      },
+      conteoDias: conteoHoras.conteoDias || {
+        totalPeriodo: 15,
+        diasLaborados: 15,
+        vacaciones: 0,
+        permisoConSueldo: 0,
+        permisoSinSueldo: 0,
+        inasistencias: 0,
+      },
+      validationErrors: {
+        fechasNoAprobadas: [],
+        fechasSinRegistro: [],
+      },
+    };
+
+    return resultado;
   }
 }

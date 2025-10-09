@@ -3,6 +3,7 @@ import { Router } from "express";
 import {
   getHorarioTrabajo,
   getConteoHoras,
+  getProrrateo,
 } from "../controllers/CalculoHorasTrabajoController";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 
@@ -26,5 +27,14 @@ router.get("/:empleadoId/horario/:fecha", getHorarioTrabajo);
  * @access Private
  */
 router.get("/:empleadoId/conteo-horas", getConteoHoras);
+
+/**
+ * @route GET /api/calculo-horas/:empleadoId/prorrateo
+ * @desc Obtiene el prorrateo de horas por job de un empleado en un período
+ * @query fechaInicio - Fecha de inicio (YYYY-MM-DD)
+ * @query fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @access Private
+ */
+router.get("/:empleadoId/prorrateo", getProrrateo);
 
 export default router;

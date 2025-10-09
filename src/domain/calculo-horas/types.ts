@@ -51,6 +51,7 @@ export interface ConteoHorasTrabajadas {
     llegadasTarde?: number; // E05
     compensatorio?: number; // E06 y E07
   };
+
   /**
    * Conteo agregado en días para el período. Base 15 días por período.
    * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo + incapacidad + incapacidadIHSS
@@ -67,6 +68,49 @@ export interface ConteoHorasTrabajadas {
    * Errores de validación encontrados durante el cálculo
    */
   validationErrors?: ConteoHorasValidationError;
+}
+
+/**
+ * Conteo de horas trabajadas por un empleado en un período
+ */
+export interface ConteoHorasProrrateo {
+  fechaInicio: string;
+  fechaFin: string;
+  empleadoId: string;
+
+  cantidadHoras: {
+    normal: HorasPorJob[];
+    p25: HorasPorJob[]; // 25% de recargo
+    p50: HorasPorJob[]; // 50% de recargo
+    p75: HorasPorJob[]; // 75% de recargo
+    p100: HorasPorJob[]; // 100% de recargo (doble)
+
+    vacacionesHoras: number; // E02 horas / 8
+    permisoConSueldoHoras: number; // E03 horas / 8
+    permisoSinSueldoHoras: number; // E04 horas / 8
+    inasistenciasHoras: number; // E05 horas / 8
+
+    totalHorasLaborables: number;
+
+    deduccionesISR: number;
+    deduccionesRAP: number;
+    deduccionesComida: number;
+    deduccionesIHSS: number;
+    Prestamo: number;
+    Total: number;
+  };
+
+  /**
+   * Errores de validación encontrados durante el cálculo
+   */
+  validationErrors?: ConteoHorasValidationError;
+}
+
+export interface HorasPorJob {
+  jobId: number;
+  codigoJob: string;
+  nombreJob: string;
+  cantidadHoras: number;
 }
 
 /**

@@ -1,10 +1,17 @@
 // src/domain/horario-trabajo-domain.ts
 import { TipoHorario } from "@prisma/client";
-import { HorarioTrabajo, ConteoHorasTrabajadas, LineaTiempoDia } from "./types";
+import {
+  HorarioTrabajo,
+  ConteoHorasTrabajadas,
+  LineaTiempoDia,
+  ConteoHorasProrrateo,
+  HorasPorJob,
+} from "./types";
 import { FabricaPoliticas } from "./politicas-horario/fabrica-politicas";
 import { SegmentadorTiempo } from "./segmentador-tiempo";
 import { EmpleadoRepository } from "../../repositories/EmpleadoRepository";
 import { RegistroDiarioRepository } from "../../repositories/RegistroDiarioRepository";
+import { JobRepository } from "../../repositories/JobRepository";
 
 /**
  * Servicio principal del dominio de horarios de trabajo
@@ -166,5 +173,65 @@ export class HorarioTrabajoDomain {
    */
   static getTiposHorarioPendientes(): TipoHorario[] {
     return FabricaPoliticas.getTiposPendientes();
+  }
+
+  /**
+   * Obtiene el prorrateo de horas trabajadas por job para un empleado en un período
+   * Clasifica las horas por job y categoría (normal, p25, p50, p75, p100)
+   */
+  static async getProrrateoHorasPorJobByDateAndEmpleado(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<ConteoHorasProrrateo> {
+    // Obtener empleado y su tipo de horario
+    const empleado = await EmpleadoRepository.findById(parseInt(empleadoId));
+    if (!empleado) {
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+    }
+
+    if (!empleado.tipoHorario) {
+      throw new Error(
+        `Empleado ${empleadoId} no tiene tipo de horario asignado`
+      );
+    }
+
+    // Validar estado de aprobación de registros en el período
+    const validationStatus =
+      await RegistroDiarioRepository.validateApprovalStatusInRange(
+        parseInt(empleadoId),
+        fechaInicio,
+        fechaFin
+      );
+
+    // Si hay fechas no aprobadas o sin registro, lanzar error con detalles
+    if (
+      validationStatus.fechasNoAprobadas.length > 0 ||
+      validationStatus.fechasSinRegistro.length > 0
+    ) {
+      const errorMessage = this.buildValidationErrorMessage(validationStatus);
+      const error = new Error(errorMessage) as any;
+      error.validationErrors = validationStatus;
+      error.type = "VALIDATION_ERROR";
+      throw error;
+    }
+
+    // Crear política de horario correspondiente
+    const politica = FabricaPoliticas.crearPolitica(empleado.tipoHorario);
+
+    // Obtener prorrateo usando la política específica
+    const resultado = await politica.getProrrateoHorasPorJobByDateAndEmpleado(
+      fechaInicio,
+      fechaFin,
+      empleadoId
+    );
+
+    // Agregar información de validación al resultado
+    resultado.validationErrors = {
+      fechasNoAprobadas: [],
+      fechasSinRegistro: [],
+    };
+
+    return resultado;
   }
 }

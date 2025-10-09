@@ -113,19 +113,19 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
         {
           descripcion: "Act1",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "101" },
           duracionHoras: 4,
         },
         {
           descripcion: "Act2",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "105" },
           duracionHoras: 2,
         },
         {
           descripcion: "Act3",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "108" },
           duracionHoras: 3,
         },
         {
@@ -169,19 +169,19 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
         {
           descripcion: "Act1",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "101" },
           duracionHoras: 1,
         },
         {
           descripcion: "Act2",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "106" },
           duracionHoras: 5,
         },
         {
           descripcion: "Act3",
           esExtra: false,
-          job: { codigo: "100" },
+          job: { codigo: "107" },
           duracionHoras: 2,
         },
         {
@@ -189,14 +189,14 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
           esExtra: true,
           horaInicio: makeDateUTC(fecha, "09:00"),
           horaFin: makeDateUTC(fecha, "13:00"),
-          job: { codigo: "100" },
+          job: { codigo: "101" },
         },
         {
           descripcion: "Extra 16-22",
           esExtra: true,
           horaInicio: makeDateUTC(fecha, "22:00"),
           horaFin: makeDateUTC("2025-09-13", "04:00"),
-          job: { codigo: "100" },
+          job: { codigo: "108" },
         },
       ],
     });
@@ -347,8 +347,20 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
         {
           descripcion: "Normal 9h",
           esExtra: false,
-          job: { codigo: "100" },
-          duracionHoras: 9,
+          job: { codigo: "101" },
+          duracionHoras: 4,
+        },
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "102" },
+          duracionHoras: 3,
+        },
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "103" },
+          duracionHoras: 2,
         },
         {
           descripcion: "Extra 00-07",
@@ -399,7 +411,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
           esExtra: true,
           horaInicio: makeDateUTC(fecha, "08:00"),
           horaFin: makeDateUTC(fecha, "13:00"),
-          job: { codigo: "100" },
+          job: { codigo: "105" },
         },
       ],
     });
@@ -443,14 +455,14 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
           esExtra: true,
           horaInicio: makeDateUTC(fecha, "08:45"),
           horaFin: makeDateUTC(fecha, "13:00"),
-          job: { codigo: "100" },
+          job: { codigo: "101" },
         },
         {
           descripcion: "Extra 16-19",
           esExtra: true,
           horaInicio: makeDateUTC(fecha, "22:00"),
           horaFin: makeDateUTC("2025-09-19", "01:00"),
-          job: { codigo: "100" },
+          job: { codigo: "101" },
         },
       ],
     });
@@ -460,6 +472,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       fecha,
       "1"
     );
+    await p.getProrrateoHorasPorJobByDateAndEmpleado(fecha, fecha, "1");
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
       normal: 9,
