@@ -18,6 +18,14 @@ export interface EmployeeDto {
   cargo?: string;
   urlFotoPerfil?: string;
   urlCv?: string;
+  /**
+   * Resumen de registros diarios de los últimos 20 días para validaciones rápidas en frontend
+   */
+  registrosUltimos20Dias?: Array<{
+    fecha: string; // YYYY-MM-DD
+    aprobacionSupervisor?: boolean | null;
+    aprobacionRrhh?: boolean | null;
+  }>;
 }
 
 /** Lo que devuelve el controlador al cliente (versión completa para detalles) */

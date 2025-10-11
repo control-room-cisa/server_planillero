@@ -231,6 +231,36 @@ export class RegistroDiarioRepository {
     });
   }
 
+  /**
+   * Devuelve aprobación de los últimos N días para un empleado
+   */
+  static async findApprovalStatusInLastDays(empleadoId: number, days: number) {
+    // Calcular rango YYYY-MM-DD de hoy hacia atrás 'days' días
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const start = new Date(today);
+    start.setDate(today.getDate() - (days - 1));
+
+    const startY = start.getFullYear();
+    const startM = String(start.getMonth() + 1).padStart(2, "0");
+    const startD = String(start.getDate()).padStart(2, "0");
+    const startStr = `${startY}-${startM}-${startD}`;
+
+    return prisma.registroDiario.findMany({
+      where: {
+        empleadoId,
+        fecha: { gte: startStr },
+        deletedAt: null,
+      },
+      select: {
+        fecha: true,
+        aprobacionSupervisor: true,
+        aprobacionRrhh: true,
+      },
+      orderBy: { fecha: "asc" },
+    });
+  }
+
   static async updateSupervisorApproval(
     id: number,
     data: {
@@ -394,9 +424,9 @@ export class RegistroDiarioRepository {
     const fechasEnRango: string[] = [];
     const inicio = new Date(fechaInicio);
     const fin = new Date(fechaFin);
-    
+
     for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
-      fechasEnRango.push(d.toISOString().split('T')[0]);
+      fechasEnRango.push(d.toISOString().split("T")[0]);
     }
 
     // Obtener todos los registros en el rango
@@ -417,15 +447,18 @@ export class RegistroDiarioRepository {
 
     // Crear un map de fechas con registros
     const registrosPorFecha = new Map<string, boolean>();
-    registros.forEach(registro => {
-      registrosPorFecha.set(registro.fecha, registro.aprobacionSupervisor || false);
+    registros.forEach((registro) => {
+      registrosPorFecha.set(
+        registro.fecha,
+        registro.aprobacionSupervisor || false
+      );
     });
 
     // Clasificar fechas
     const fechasNoAprobadas: string[] = [];
     const fechasSinRegistro: string[] = [];
 
-    fechasEnRango.forEach(fecha => {
+    fechasEnRango.forEach((fecha) => {
       if (!registrosPorFecha.has(fecha)) {
         fechasSinRegistro.push(fecha);
       } else if (!registrosPorFecha.get(fecha)) {

@@ -7,6 +7,7 @@ import {
   EmployeeDetailDto,
 } from "../dtos/employee.dto";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
+import { RegistroDiarioRepository } from "../repositories/RegistroDiarioRepository";
 import { FileService } from "./FileService";
 
 const SALT_ROUNDS = 10;
@@ -81,25 +82,38 @@ export class EmpleadoService {
 
   static async getByDepartment(departamentoId: number): Promise<EmployeeDto[]> {
     const rows = await EmpleadoRepository.findByDepartment(departamentoId);
-    return rows.map((e: any) => ({
-      id: e.id,
-      nombre: e.nombre,
-      apellido: e.apellido ?? undefined,
-      codigo: e.codigo ?? undefined,
-      departamento: e.departamento?.nombre,
-      empresaId: e.departamento?.empresaId,
-      empresa: e.departamento?.empresa?.nombre
-        ? { nombre: e.departamento.empresa.nombre }
-        : undefined,
-      cargo: e.cargo ?? undefined,
-      urlFotoPerfil: FileService.buildFotoUrl(
-        e.id,
-        e.urlFotoPerfil ?? undefined,
-        true
-      ),
-      urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
-      activo: e.activo,
-    }));
+    // Cargar en paralelo el estado de los últimos 20 días para todos los empleados
+    const enriched = await Promise.all(
+      rows.map(async (e: any) => {
+        const approvals =
+          await RegistroDiarioRepository.findApprovalStatusInLastDays(e.id, 20);
+        return {
+          id: e.id,
+          nombre: e.nombre,
+          apellido: e.apellido ?? undefined,
+          codigo: e.codigo ?? undefined,
+          departamento: e.departamento?.nombre,
+          empresaId: e.departamento?.empresaId,
+          empresa: e.departamento?.empresa?.nombre
+            ? { nombre: e.departamento.empresa.nombre }
+            : undefined,
+          cargo: e.cargo ?? undefined,
+          urlFotoPerfil: FileService.buildFotoUrl(
+            e.id,
+            e.urlFotoPerfil ?? undefined,
+            true
+          ),
+          urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
+          activo: e.activo,
+          registrosUltimos20Dias: approvals.map((a) => ({
+            fecha: a.fecha,
+            aprobacionSupervisor: a.aprobacionSupervisor ?? null,
+            aprobacionRrhh: a.aprobacionRrhh ?? null,
+          })),
+        } as EmployeeDto;
+      })
+    );
+    return enriched;
   }
 
   static async getById(id: number) {
