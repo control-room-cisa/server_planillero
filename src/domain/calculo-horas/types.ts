@@ -111,6 +111,8 @@ export interface HorasPorJob {
   codigoJob: string;
   nombreJob: string;
   cantidadHoras: number;
+  /** Comentarios de actividades asociadas a este job en el rango */
+  comentarios?: string[];
 }
 
 /**

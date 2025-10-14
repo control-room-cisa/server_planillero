@@ -704,23 +704,53 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // Mapas para acumular horas por job y categoría
     const horasPorJobNormal = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
     const horasPorJobP25 = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
     const horasPorJobP50 = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
     const horasPorJobP75 = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
     const horasPorJobP100 = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
 
     // Recorrer cada día del período y procesar actividades directamente
@@ -766,20 +796,31 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           { diurna: number; nocturna: number; total: number }
         > = new Map();
 
+        // Map auxiliar para resolver nombre real por código cuando esté disponible
+        const codigoANombre: Map<string, string> = new Map();
+
         const baseKey = 0; // tests esperan jobId 0
-        const upsertNormal = (codigo: string, horas: number) => {
+        const upsertNormal = (
+          codigo: string,
+          nombre: string,
+          horas: number
+        ) => {
           if (horas <= 0) return;
           const jobInfo = {
             jobId: baseKey,
             codigoJob: codigo,
-            nombreJob: String(codigo),
+            nombreJob: nombre,
             horas,
+            comentarios: [],
           };
           // buscamos una entrada existente exactamente del mismo código
           let foundKey: number | null = null;
           for (const [k, v] of horasPorJobNormal) {
             if (v.codigoJob === codigo) {
               v.horas += horas;
+              // Actualizar nombre si estaba como placeholder
+              if (!v.nombreJob || v.nombreJob === String(codigo))
+                v.nombreJob = nombre;
               foundKey = k;
               break;
             }
@@ -812,10 +853,41 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           const codigo =
             act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
           if (!codigo) continue;
+          const nombreReal = act?.job?.nombre ?? String(codigo);
+          if (!codigoANombre.has(codigo)) codigoANombre.set(codigo, nombreReal);
 
           if (!act?.esExtra) {
             const horas = Number(act?.duracionHoras ?? 0);
-            if (horas > 0) upsertNormal(codigo, horas);
+            if (horas > 0) upsertNormal(codigo, nombreReal, horas);
+            const desc =
+              act?.descripcion ||
+              act?.comentario ||
+              (registroDiario as any)?.comentarioEmpleado ||
+              null;
+            if (desc) {
+              // push comment into matching normal map entry (or create it)
+              let existingKey: number | null = null;
+              for (const [k, v] of horasPorJobNormal) {
+                if (v.codigoJob === codigo) {
+                  existingKey = k;
+                  break;
+                }
+              }
+              if (existingKey == null) {
+                const key = `${baseKey}:${codigo}` as unknown as number;
+                horasPorJobNormal.set(key, {
+                  jobId: baseKey,
+                  codigoJob: codigo,
+                  nombreJob: nombreReal,
+                  horas: 0,
+                  comentarios: [],
+                });
+                existingKey = key;
+              }
+              const target = horasPorJobNormal.get(existingKey)!;
+              if (!target.comentarios.includes(desc))
+                target.comentarios.push(desc);
+            }
             continue;
           }
 
@@ -847,6 +919,49 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           const totalMin = eMin - sMin;
           const nocturnaMin = Math.max(0, totalMin - diurnaMin);
           addExtra(codigo, diurnaMin / 60, nocturnaMin / 60);
+          const desc =
+            act?.descripcion ||
+            act?.comentario ||
+            (registroDiario as any)?.comentarioEmpleado ||
+            null;
+          if (desc) {
+            const ensureCommentEntry = (
+              map: Map<
+                number,
+                {
+                  jobId: number;
+                  codigoJob: string;
+                  nombreJob: string;
+                  horas: number;
+                  comentarios: string[];
+                }
+              >,
+              codigo: string
+            ) => {
+              for (const [k, v] of map) if (v.codigoJob === codigo) return k;
+              const key = `${baseKey}:${codigo}` as unknown as number;
+              map.set(key, {
+                jobId: baseKey,
+                codigoJob: codigo,
+                nombreJob: String(codigo),
+                horas: 0,
+                comentarios: [],
+              });
+              return key;
+            };
+            const k25 = ensureCommentEntry(horasPorJobP25 as any, codigo);
+            const t25 = (horasPorJobP25 as any).get(k25)!;
+            if (!t25.comentarios.includes(desc)) t25.comentarios.push(desc);
+            const k50 = ensureCommentEntry(horasPorJobP50 as any, codigo);
+            const t50 = (horasPorJobP50 as any).get(k50)!;
+            if (!t50.comentarios.includes(desc)) t50.comentarios.push(desc);
+            const k75 = ensureCommentEntry(horasPorJobP75 as any, codigo);
+            const t75 = (horasPorJobP75 as any).get(k75)!;
+            if (!t75.comentarios.includes(desc)) t75.comentarios.push(desc);
+            const k100 = ensureCommentEntry(horasPorJobP100 as any, codigo);
+            const t100 = (horasPorJobP100 as any).get(k100)!;
+            if (!t100.comentarios.includes(desc)) t100.comentarios.push(desc);
+          }
         }
 
         // 2) Distribución por bandas usando conocimiento de bandas del día
@@ -879,6 +994,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
               codigoJob: string;
               nombreJob: string;
               horas: number;
+              comentarios: string[];
             }
           >,
           codigo: string
@@ -889,8 +1005,9 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           map.set(key, {
             jobId: baseKey,
             codigoJob: codigo,
-            nombreJob: String(codigo),
+            nombreJob: codigoANombre.get(codigo) ?? String(codigo),
             horas: 0,
+            comentarios: [],
           });
           return key;
         };
@@ -971,7 +1088,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     const convertMapToArray = (
       map: Map<
         number,
-        { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+        {
+          jobId: number;
+          codigoJob: string;
+          nombreJob: string;
+          horas: number;
+          comentarios: string[];
+        }
       >
     ): HorasPorJob[] => {
       return Array.from(map.values()).map((item) => ({
@@ -979,6 +1102,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         codigoJob: item.codigoJob,
         nombreJob: item.nombreJob,
         cantidadHoras: Math.round(item.horas * 100) / 100,
+        comentarios: item.comentarios,
       }));
     };
 

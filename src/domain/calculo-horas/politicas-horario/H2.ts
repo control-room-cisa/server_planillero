@@ -379,11 +379,23 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     // Mapas para acumular horas por job y categoría
     const horasPorJobNormal = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
     const horasPorJobP25 = new Map<
       number,
-      { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
     >();
 
     // Recorrer cada día del período y obtener los segmentos
@@ -427,6 +439,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
             codigoJob: job.codigo || "",
             nombreJob: job.nombre || "",
             horas: 0,
+            comentarios: [],
           };
 
           // Clasificar el intervalo según el tipo
@@ -441,6 +454,16 @@ export class PoliticaH2 extends PoliticaHorarioBase {
                 horas: duracionHoras,
               });
             }
+            const desc =
+              (registroDiario as any)?.comentarioEmpleado ||
+              (intervalo as any)?.descripcion ||
+              (intervalo as any)?.comment ||
+              null;
+            if (desc) {
+              const target = horasPorJobNormal.get(job.id)!;
+              if (!target.comentarios.includes(desc))
+                target.comentarios.push(desc);
+            }
           } else if (intervalo.tipo === "EXTRA") {
             // En H2, todas las extras son p25
             const existing = horasPorJobP25.get(job.id);
@@ -451,6 +474,16 @@ export class PoliticaH2 extends PoliticaHorarioBase {
                 ...jobInfo,
                 horas: duracionHoras,
               });
+            }
+            const desc =
+              (registroDiario as any)?.comentarioEmpleado ||
+              (intervalo as any)?.descripcion ||
+              (intervalo as any)?.comment ||
+              null;
+            if (desc) {
+              const target = horasPorJobP25.get(job.id)!;
+              if (!target.comentarios.includes(desc))
+                target.comentarios.push(desc);
             }
           }
         }
@@ -466,7 +499,13 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const convertMapToArray = (
       map: Map<
         number,
-        { jobId: number; codigoJob: string; nombreJob: string; horas: number }
+        {
+          jobId: number;
+          codigoJob: string;
+          nombreJob: string;
+          horas: number;
+          comentarios: string[];
+        }
       >
     ): HorasPorJob[] => {
       return Array.from(map.values()).map((item) => ({
@@ -474,6 +513,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         codigoJob: item.codigoJob,
         nombreJob: item.nombreJob,
         cantidadHoras: Math.round(item.horas * 100) / 100,
+        comentarios: item.comentarios,
       }));
     };
 
