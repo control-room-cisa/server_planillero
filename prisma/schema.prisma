@@ -59,13 +59,13 @@ model Departamento {
 
 /// Turnos disponibles
 enum TipoHorario {
-  H1 @map("Lunes a Viernes")
-  H2 @map("Martes a Sábado")
-  H3 @map("Miércoles a Domingo")
-  H4 @map("Turnos 7x7")
-  H5 @map("")
-  H6 @map("H6")
-  H7 @map("H7")
+  H1 //@map("Lunes a Viernes")
+  H2 //@map("Martes a Sábado")
+  H3 //@map("Miércoles a Domingo")
+  H4 //@map("Turnos 7x7")
+  H5 //@map("")
+  H6 //@map("H6")
+  H7 //@map("H7")
 }
 
 /// Estado civil del empleado
