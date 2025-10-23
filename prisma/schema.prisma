@@ -220,7 +220,7 @@ model Actividad {
   id               Int       @id @default(autoincrement()) @map("id")
   registroDiarioId Int       @map("registro_diario_id")
   jobId            Int       @map("job_id")
-  duracionHoras    Int       @map("duracion_horas")
+  duracionHoras    Float     @map("duracion_horas")
   horaInicio       DateTime? @map("hora_inicio")
   horaFin          DateTime? @map("hora_fin")
   esCorrida        Boolean?  @map("es_corrida")

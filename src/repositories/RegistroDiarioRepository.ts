@@ -124,13 +124,22 @@ export class RegistroDiarioRepository {
 
         let duracionRecalc = a.duracionHoras ?? 0;
         if (start && end) {
-          const horas = computeHoursWithLunchDiscount(
-            start,
-            end,
-            restOfDia.esHoraCorrida
-          );
-          // Tu columna es Int → redondeamos al entero más cercano
-          duracionRecalc = Math.max(0, Math.round(horas));
+          // Para horas extra, NO descontar almuerzo bajo ninguna circunstancia
+          if (a.esExtra) {
+            const msBase = end.getTime() - start.getTime();
+            const horas = Math.max(0, msBase / 3_600_000);
+            // Redondear a 2 decimales para mantener precisión
+            duracionRecalc = Math.round(horas * 100) / 100;
+          } else {
+            // Para horas normales, aplicar descuento de almuerzo según esHoraCorrida
+            const horas = computeHoursWithLunchDiscount(
+              start,
+              end,
+              restOfDia.esHoraCorrida
+            );
+            // Redondear a 2 decimales para mantener precisión
+            duracionRecalc = Math.round(horas * 100) / 100;
+          }
         }
 
         return {
