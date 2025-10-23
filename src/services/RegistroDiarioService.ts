@@ -8,6 +8,8 @@ import {
   UpsertRegistroDiarioParams,
   RegistroDiarioDetail,
 } from "../repositories/RegistroDiarioRepository";
+import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
+import { FeriadoRepository } from "../repositories/FeriadoRepository";
 
 export class RegistroDiarioService {
   /**
@@ -16,12 +18,31 @@ export class RegistroDiarioService {
    */
   static upsertRegistro(
     empleadoId: number,
-    dto: Omit<UpsertRegistroDiarioParams, "empleadoId">
+    dto: Omit<UpsertRegistroDiarioParams, "empleadoId" | "horasFeriado">
   ): Promise<RegistroDiarioDetail> {
-    return RegistroDiarioRepository.upsertWithActivities({
-      empleadoId,
-      ...dto,
-    });
+    return (async () => {
+      const fecha = dto.fecha;
+
+      // Verificar si la fecha es feriado
+      const feriado = await FeriadoRepository.findByDate(fecha);
+
+      // Siempre sobreescribir: 0 si no es feriado; si es feriado, horas programadas
+      let horasFeriado: number = 0;
+      if (feriado) {
+        const horario =
+          await HorarioTrabajoDomain.getHorarioTrabajoByDateAndEmpleado(
+            fecha,
+            String(empleadoId)
+          );
+        horasFeriado = horario.cantidadHorasLaborables ?? 0;
+      }
+
+      return RegistroDiarioRepository.upsertWithActivities({
+        empleadoId,
+        ...dto,
+        horasFeriado,
+      });
+    })();
   }
 
   /**

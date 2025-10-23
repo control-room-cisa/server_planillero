@@ -31,6 +31,8 @@ export type UpsertRegistroDiarioParams = {
   comentarioSupervisor?: string;
   comentarioRrhh?: string;
   actividades?: ActividadInput[];
+  /** Horas feriado provistas por el frontend */
+  horasFeriado?: number;
 };
 
 /** Detalle con actividades y su job */
@@ -38,69 +40,13 @@ export type RegistroDiarioDetail = RegistroDiario & {
   actividades: Array<Actividad & { job: Job }>;
 };
 
-/* ========= Helpers para cálculo de horas con almuerzo ========= */
-
-/**
- * Itera por cada día UTC entre start y end y descuenta el solape con 12:00–13:00.
- * Devuelve horas decimales tras el descuento cuando aplica.
- */
-function computeHoursWithLunchDiscount(
-  start: Date,
-  end: Date,
-  esHoraCorrida?: boolean
-): number {
-  // base
-  const msBase = end.getTime() - start.getTime();
-  if (msBase <= 0) return 0;
-
-  // si es hora corrida, no se descuenta almuerzo
-  if (esHoraCorrida) {
-    return msBase / 3_600_000;
-  }
-
-  // recorrer días que toca el intervalo y sumar solapes con 12:00–13:00 UTC de cada día
-  let msDescuentoTotal = 0;
-
-  // normalizar a medianoche UTC de los días de inicio y fin
-  const startDay = new Date(
-    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate())
-  );
-  const endDay = new Date(
-    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate())
-  );
-
-  for (
-    let d = new Date(startDay.getTime());
-    d.getTime() <= endDay.getTime();
-    d = new Date(d.getTime() + 24 * 60 * 60 * 1000)
-  ) {
-    const lunchStart = new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 12, 0, 0, 0)
-    );
-    const lunchEnd = new Date(
-      Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 13, 0, 0, 0)
-    );
-
-    // solape del [start, end] con [lunchStart, lunchEnd]
-    const overlapMs = Math.max(
-      0,
-      Math.min(end.getTime(), lunchEnd.getTime()) -
-        Math.max(start.getTime(), lunchStart.getTime())
-    );
-
-    msDescuentoTotal += overlapMs;
-  }
-
-  const msFinal = Math.max(0, msBase - msDescuentoTotal);
-  return msFinal / 3_600_000;
-}
+/* sin recálculo de horas en backend: se respeta duracionHoras del frontend */
 
 export class RegistroDiarioRepository {
   /**
    * Inserta o actualiza (upsert) un registro diario + actividades.
    * Detecta existencia por fecha (YYYY-MM-DD) y empleado.
-   * Recalcula `duracionHoras` en servidor aplicando descuento de almuerzo
-   * (12:00–13:00) sólo cuando NO es hora corrida.
+   * No recalcula duracionHoras; usa el valor recibido del frontend.
    */
   static async upsertWithActivities(
     params: UpsertRegistroDiarioParams
@@ -116,42 +62,17 @@ export class RegistroDiarioRepository {
       },
     });
 
-    // 2) Preparamos payload de actividades (recalculando duracionHoras aquí)
+    // 2) Preparamos payload de actividades respetando duracionHoras del frontend
     const actPayload =
-      actividades?.map((a) => {
-        const start = a.horaInicio ? new Date(a.horaInicio) : null;
-        const end = a.horaFin ? new Date(a.horaFin) : null;
-
-        let duracionRecalc = a.duracionHoras ?? 0;
-        if (start && end) {
-          // Para horas extra, NO descontar almuerzo bajo ninguna circunstancia
-          if (a.esExtra) {
-            const msBase = end.getTime() - start.getTime();
-            const horas = Math.max(0, msBase / 3_600_000);
-            // Redondear a 2 decimales para mantener precisión
-            duracionRecalc = Math.round(horas * 100) / 100;
-          } else {
-            // Para horas normales, aplicar descuento de almuerzo según esHoraCorrida
-            const horas = computeHoursWithLunchDiscount(
-              start,
-              end,
-              restOfDia.esHoraCorrida
-            );
-            // Redondear a 2 decimales para mantener precisión
-            duracionRecalc = Math.round(horas * 100) / 100;
-          }
-        }
-
-        return {
-          jobId: a.jobId,
-          duracionHoras: duracionRecalc,
-          horaInicio: a.horaInicio ?? null,
-          horaFin: a.horaFin ?? null,
-          esExtra: a.esExtra ?? false,
-          className: a.className,
-          descripcion: a.descripcion,
-        };
-      }) ?? [];
+      actividades?.map((a) => ({
+        jobId: a.jobId,
+        duracionHoras: a.duracionHoras ?? 0,
+        horaInicio: a.horaInicio ?? null,
+        horaFin: a.horaFin ?? null,
+        esExtra: a.esExtra ?? false,
+        className: a.className,
+        descripcion: a.descripcion,
+      })) ?? [];
 
     if (existente) {
       // 3a) Si existe, borra actividades previas y actualiza el resto
@@ -175,6 +96,7 @@ export class RegistroDiarioRepository {
           codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
           comentarioRrhh: restOfDia.comentarioRrhh,
+          horasFeriado: restOfDia.horasFeriado,
 
           actividades: {
             create: actPayload,
@@ -205,6 +127,7 @@ export class RegistroDiarioRepository {
           codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
           comentarioRrhh: restOfDia.comentarioRrhh,
+          horasFeriado: restOfDia.horasFeriado,
 
           actividades: {
             create: actPayload,
