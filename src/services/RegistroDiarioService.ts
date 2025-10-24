@@ -75,13 +75,13 @@ export class RegistroDiarioService {
   }
 
   /**
-   * Permite a un supervisor actualizar el job de una actividad específica
+   * Permite a un supervisor actualizar el job y descripción de una actividad específica
    * de otro empleado. Solo disponible para supervisores (rolId = 2).
    */
   static async updateJobBySupervisor(
     supervisorId: number,
     empleadoId: number,
-    dto: { actividadId: number; nuevoJobId: number }
+    dto: { actividadId: number; nuevoJobId: number; descripcion?: string }
   ) {
     return RegistroDiarioRepository.updateJobBySupervisor(
       supervisorId,

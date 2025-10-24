@@ -222,17 +222,22 @@ export const aprobacionRrhh: RequestHandler<
 
 /**
  * PATCH /api/registrodiario/update-job-supervisor
- * Permite a un supervisor actualizar el job de una actividad específica
+ * Permite a un supervisor actualizar el job y descripción de una actividad específica
  * de otro empleado. Solo disponible para supervisores (rolId = 2).
  */
 export const updateJobBySupervisor: RequestHandler<
   {},
   ApiResponse<RegistroDiarioDetail>,
-  { empleadoId: number; actividadId: number; nuevoJobId: number }
+  {
+    empleadoId: number;
+    actividadId: number;
+    nuevoJobId: number;
+    descripcion?: string;
+  }
 > = async (req, res, next) => {
   try {
     const supervisorId = (req as AuthRequest).user.id;
-    const { empleadoId, actividadId, nuevoJobId } = req.body;
+    const { empleadoId, actividadId, nuevoJobId, descripcion } = req.body;
 
     // Validaciones básicas
     if (!empleadoId || !actividadId || !nuevoJobId) {
@@ -251,7 +256,16 @@ export const updateJobBySupervisor: RequestHandler<
     ) {
       return res.status(400).json({
         success: false,
-        message: "Todos los campos deben ser números",
+        message:
+          "Los campos empleadoId, actividadId y nuevoJobId deben ser números",
+        data: null,
+      });
+    }
+
+    if (descripcion !== undefined && typeof descripcion !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "El campo descripcion debe ser una cadena de texto",
         data: null,
       });
     }
@@ -259,12 +273,12 @@ export const updateJobBySupervisor: RequestHandler<
     const updated = await RegistroDiarioService.updateJobBySupervisor(
       supervisorId,
       empleadoId,
-      { actividadId, nuevoJobId }
+      { actividadId, nuevoJobId, descripcion }
     );
 
     return res.json({
       success: true,
-      message: "Job de la actividad actualizado correctamente",
+      message: "Actividad actualizada correctamente",
       data: updated,
     });
   } catch (err) {

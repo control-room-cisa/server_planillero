@@ -235,13 +235,13 @@ export class RegistroDiarioRepository {
   }
 
   /**
-   * Permite a un supervisor actualizar el job de una actividad específica
+   * Permite a un supervisor actualizar el job y descripción de una actividad específica
    * de otro empleado. Solo disponible para supervisores (rolId = 2).
    */
   static async updateJobBySupervisor(
     supervisorId: number,
     empleadoId: number,
-    dto: { actividadId: number; nuevoJobId: number }
+    dto: { actividadId: number; nuevoJobId: number; descripcion?: string }
   ): Promise<RegistroDiarioDetail> {
     // Verificar que el supervisor tenga rolId = 2
     const supervisor = await prisma.empleado.findFirst({
@@ -318,11 +318,12 @@ export class RegistroDiarioRepository {
       throw new Error("Job no encontrado o no está activo");
     }
 
-    // Actualizar el job de la actividad
+    // Actualizar el job y descripción de la actividad
     await prisma.actividad.update({
       where: { id: dto.actividadId },
       data: {
         jobId: dto.nuevoJobId,
+        ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
         updatedAt: new Date(),
       },
     });
