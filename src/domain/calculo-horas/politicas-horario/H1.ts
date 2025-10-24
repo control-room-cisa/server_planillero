@@ -1097,13 +1097,15 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         }
       >
     ): HorasPorJob[] => {
-      return Array.from(map.values()).map((item) => ({
-        jobId: item.jobId,
-        codigoJob: item.codigoJob,
-        nombreJob: item.nombreJob,
-        cantidadHoras: Math.round(item.horas * 100) / 100,
-        comentarios: item.comentarios,
-      }));
+      return Array.from(map.values())
+        .map((item) => ({
+          jobId: item.jobId,
+          codigoJob: item.codigoJob,
+          nombreJob: item.nombreJob,
+          cantidadHoras: Math.round(item.horas * 100) / 100,
+          comentarios: item.comentarios,
+        }))
+        .filter((item) => item.cantidadHoras > 0);
     };
 
     // Construir resultado
