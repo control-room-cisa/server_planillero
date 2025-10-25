@@ -292,21 +292,22 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       const esDomingo = dow === 0;
       const esFestivo = feriadoInfo.esFeriado;
 
-      // Día libre de contrato (ej. sábado)
+      // Día libre de contrato
       const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
         f,
         empleadoId
       );
+
+      // p100 SOLO si el día está marcado explícitamente como día libre (feriados)
+      const esDomOFest = hTrabajo.esDiaLibre;
+
+      // En días no laborables bloquear p75 (mixta)
+      // Solo bloquear mixta si es día libre o si no hay horas laborables configuradas
       const esDiaLibreContrato =
         hTrabajo.esDiaLibre ||
         hTrabajo.cantidadHorasLaborables === 0 ||
         hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
-
-      // p100 sólo por domingo/feriado (no por día libre)
-      const esDomOFest = esDomingo || esFestivo;
-
-      // En días no laborables bloquear p75 (mixta)
-      racha.bloquearMixta = esDomingo || esFestivo || esDiaLibreContrato;
+      racha.bloquearMixta = esDiaLibreContrato;
 
       // Contadores por día (para logging)
       let normalMinDia = 0;
@@ -566,17 +567,14 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           f,
           empleadoId
         );
-        const feriadoInfo = await this.esFeriado(f);
-        const dow = new Date(`${f}T00:00:00`).getDay();
-        const esDomOFest = dow === 0 || feriadoInfo.esFeriado;
-
         // bloquear mixta en no laborables durante la siembra
         const ht = await this.getHorarioTrabajoByDateAndEmpleado(f, empleadoId);
+        const esDomOFest = ht.esDiaLibre; // p100 solo si es día libre explícito
         const esDiaLibreContrato =
           ht.esDiaLibre ||
           ht.cantidadHorasLaborables === 0 ||
           ht.horarioTrabajo.inicio === ht.horarioTrabajo.fin;
-        r.bloquearMixta = esDiaLibreContrato || esDomOFest;
+        r.bloquearMixta = esDiaLibreContrato;
 
         for (const seg of segmentos) {
           const dur = PoliticaH1.segDurMin(seg);
@@ -639,15 +637,22 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     let cantidadHorasLaborables = 0;
     let esDiaLibre = false;
 
+    // Solo los feriados marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
-      esDiaLibre = dia === 0;
+      esDiaLibre = true;
     } else {
       switch (dia) {
-        case 0:
-          esDiaLibre = true; // Domingo
+        case 0: // Domingo: 0h por defecto, pero NO automáticamente "día libre"
+          inicio = "07:00";
+          fin = "07:00";
+          incluyeAlmuerzo = false;
+          cantidadHorasLaborables = 0;
           break;
-        case 6:
-          esDiaLibre = true; // Sábado (0h)
+        case 6: // Sábado: 0h por defecto, pero NO automáticamente "día libre"
+          inicio = "07:00";
+          fin = "07:00";
+          incluyeAlmuerzo = false;
+          cantidadHorasLaborables = 0;
           break;
         case 5:
           inicio = "07:00";

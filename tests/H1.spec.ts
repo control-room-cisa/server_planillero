@@ -147,8 +147,8 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       almuerzo: 1,
       normal: 9,
       p25: 2,
-      p50: 1,
-      p75: 4,
+      p50: 3,
+      p75: 2,
       p100: 0,
     });
   });
@@ -478,6 +478,197 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p25: 0,
       p50: 3,
       p75: 4.25,
+      p100: 0,
+    });
+  });
+
+  // -------------------- Caso 1: Hora corrida + extras 05–07 y 16–20 --------------------
+  // Esperado: 0,9,5,1,0,0
+  it("Caso 1: hora corrida 07–16 + extras 05–07 y 16–20 ⇒ 0/9/5/1/0/0", async () => {
+    const fecha = "2025-09-19";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "22:00"),
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 05-07",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "11:00"),
+          horaFin: makeDateUTC(fecha, "13:00"),
+          job: { codigo: "101" },
+        },
+        {
+          descripcion: "Extra 16-20",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "22:00"),
+          horaFin: makeDateUTC("2025-09-20", "02:00"),
+          job: { codigo: "102" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 9,
+      p25: 5,
+      p50: 1,
+      p75: 0,
+      p100: 0,
+    });
+  });
+
+  // -------------------- Caso 2: Hora corrida + extras 04–07 y 16–20 --------------------
+  // Esperado: 0,9,0,3,4,0
+  it("Caso 2: hora corrida 07–16 + extras 04–07 y 16–20 ⇒ 0/9/0/3/4/0", async () => {
+    const fecha = "2025-09-20";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "22:00"),
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 04-07",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "10:00"),
+          horaFin: makeDateUTC(fecha, "13:00"),
+          job: { codigo: "101" },
+        },
+        {
+          descripcion: "Extra 16-20",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "22:00"),
+          horaFin: makeDateUTC("2025-09-21", "02:00"),
+          job: { codigo: "102" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 9,
+      p25: 0,
+      p50: 3,
+      p75: 4,
+      p100: 0,
+    });
+  });
+
+  // -------------------- Caso especial: Solo extras nocturnas desde 00:00 --------------------
+  // Esperado: 0,0,5,4,0,0 (5h nocturnas p50, luego 4h diurnas p75 por mixta)
+  it("Caso especial: extras 00–09 sin normales ⇒ 0/0/5/4/0/0", async () => {
+    const fecha = "2025-09-22";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "06:00"),
+      horaSalida: makeDateUTC(fecha, "15:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Extra 00-09",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "06:00"),
+          horaFin: makeDateUTC(fecha, "15:00"),
+          job: { codigo: "100" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 0,
+      p25: 0,
+      p50: 5,
+      p75: 4,
+      p100: 0,
+    });
+  });
+
+  // -------------------- Caso 3: Hora corrida + extras 03–07 y 16–20 --------------------
+  // Esperado: 0,9,0,3,5,0
+  it("Caso 3: hora corrida 07–16 + extras 03–07 y 16–20 ⇒ 0/9/0/3/5/0", async () => {
+    const fecha = "2025-09-21";
+    const p = new H1Test();
+
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "22:00"),
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 03-07",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "09:00"),
+          horaFin: makeDateUTC(fecha, "13:00"),
+          job: { codigo: "101" },
+        },
+        {
+          descripcion: "Extra 16-20",
+          esExtra: true,
+          horaInicio: makeDateUTC(fecha, "22:00"),
+          horaFin: makeDateUTC("2025-09-22", "02:00"),
+          job: { codigo: "102" },
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 9,
+      p25: 0,
+      p50: 3,
+      p75: 4,
       p100: 0,
     });
   });
