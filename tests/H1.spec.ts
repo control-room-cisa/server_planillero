@@ -337,6 +337,26 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const fecha = "2025-09-16";
     const p = new H1Test();
 
+    // Seedear el día anterior (15/09) para que sembrarRachaAntesDe pueda simular
+    const diaAnterior = "2025-09-15";
+    p.seedFeriado(diaAnterior, true);
+    p.seedRegistro(diaAnterior, {
+      fecha: diaAnterior,
+      horaEntrada: makeDateUTC(diaAnterior, "13:00"),
+      horaSalida: makeDateUTC(diaAnterior, "13:00"),
+      esHoraCorrida: false,
+      esDiaLibre: true,
+      actividades: [
+        {
+          descripcion: "Extra 16-24",
+          esExtra: true,
+          horaInicio: makeDateUTC(diaAnterior, "22:00"),
+          horaFin: makeDateUTC(fecha, "06:00"),
+          job: { codigo: "100" },
+        },
+      ],
+    });
+
     p.seedRegistro(fecha, {
       fecha,
       horaEntrada: makeDateUTC(fecha, "13:00"),
@@ -592,8 +612,8 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
 
     p.seedRegistro(fecha, {
       fecha,
-      horaEntrada: makeDateUTC(fecha, "06:00"),
-      horaSalida: makeDateUTC(fecha, "15:00"),
+      horaEntrada: makeDateUTC(fecha, "07:00"),
+      horaSalida: makeDateUTC(fecha, "07:00"),
       esHoraCorrida: false,
       esDiaLibre: false,
       actividades: [
@@ -668,7 +688,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       normal: 9,
       p25: 0,
       p50: 3,
-      p75: 4,
+      p75: 5,
       p100: 0,
     });
   });

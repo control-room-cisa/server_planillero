@@ -88,11 +88,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
   private static nuevaRacha(): ExtraStreak {
     return {
       minutosExtraAcum: 0,
+      minutosP50Acum: 0, // minutos clasificados específicamente como p50
       vistoDiurna: false,
       vistoNocturna: false,
       piso: 0,
       domOFestActivo: false, // arrastre de C4 a través de medianoche
       bloquearMixta: false, // deshabilitar p75 en días no laborables
+      existeDiurnaExtra: false, // indica si hay tramo extra diurno (5-19h) en la racha
     };
   }
   private static copiarRacha(r: ExtraStreak): ExtraStreak {
@@ -120,14 +122,33 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // C4: 2.00× (dominical/festiva) con arrastre entre días mientras no haya LIBRE
     const arrastraC4 = esDomOFest || r.domOFestActivo;
     if (arrastraC4) {
-      b.extraC4Min += 15; // p100
+      b.extraC4Min += 15; // p100 para presentación
       r.domOFestActivo = true; // persiste hasta que la racha termine (LIBRE)
       r.minutosExtraAcum += 15;
+
+      // Mantener racha subyacente completa (como si fuera día normal)
+      const base = esDiurna ? 1.25 : 1.5;
+      if (r.piso < base) r.piso = base;
+
+      // Activar bandera si es diurno extra
+      if (esDiurna) {
+        r.existeDiurnaExtra = true;
+      }
+
+      // Acumular minutosP50Acum según la clasificación que tendría en día normal
+      // Regla: se clasifica como p50 cuando piso >= 1.5 (sea diurna o nocturna)
+      if (r.piso >= 1.5) {
+        r.minutosP50Acum += 15;
+      }
+
       if (esDiurna) r.vistoDiurna = true;
       else r.vistoNocturna = true;
+
       if (process.env.DEBUG_H1) {
         // eslint-disable-next-line no-console
-        console.log(`[H1][EXTRA C4] +15 → min=${r.minutosExtraAcum}`);
+        console.log(
+          `[H1][EXTRA C4] +15 → min=${r.minutosExtraAcum}, p50Acum=${r.minutosP50Acum}`
+        );
       }
       return;
     }
@@ -136,15 +157,20 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     const base = esDiurna ? 1.25 : 1.5;
     if (r.piso < base) r.piso = base;
 
-    // Mixta sólo si está habilitada para el día
-    const cruzaBandaYCompletaUmbral =
-      r.minutosExtraAcum >= 180 &&
-      ((r.vistoNocturna && esDiurna && !r.vistoDiurna) ||
-        (r.vistoDiurna && !esDiurna && !r.vistoNocturna));
-    const mixtaActiva =
-      !r.bloquearMixta &&
-      (PoliticaH1.rachaEsMixta(r) || cruzaBandaYCompletaUmbral);
-    const mult = mixtaActiva ? Math.max(1.75, r.piso) : r.piso;
+    // Activar bandera si el slot actual es diurno (5-19h)
+    // Se hace ANTES de verificar p75
+    if (esDiurna) {
+      r.existeDiurnaExtra = true;
+    }
+
+    // Verificar si se debe pasar a p75 (mixta)
+    // Condiciones: >=3h de p50 específicamente Y existeDiurnaExtra activa
+    let aplicarP75 = false;
+    if (!r.bloquearMixta && r.minutosP50Acum >= 180 && r.existeDiurnaExtra) {
+      aplicarP75 = true;
+    }
+
+    const mult = aplicarP75 ? 1.75 : r.piso;
 
     if (mult >= 1.75) {
       b.extraC3Min += 15; // p75
@@ -154,6 +180,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       }
     } else if (mult >= 1.5) {
       b.extraC2Min += 15; // p50
+      r.minutosP50Acum += 15; // Acumular minutos p50
       if (process.env.DEBUG_H1) {
         // eslint-disable-next-line no-console
         console.log(`[H1][EXTRA p50] mult=${mult}`);
@@ -200,6 +227,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // Sembrar racha antes del primer día
     let racha = await this.sembrarRachaAntesDe(fechaInicio, empleadoId);
 
+    // if (process.env.DEBUG_H1) {
+    //   // eslint-disable-next-line no-console
+    //   console.log(
+    //     `[H1][INICIO] ${fechaInicio} racha heredada: minExtra=${racha.minutosExtraAcum}, minP50=${racha.minutosP50Acum}, existeDiur=${racha.existeDiurnaExtra}, vDiur=${racha.vistoDiurna}, vNoc=${racha.vistoNocturna}`
+    //   );
+    // }
+
     // Buckets en minutos
     const b: Buckets = {
       normalMin: 0,
@@ -229,63 +263,14 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // Recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
-      // Fallback: si al iniciar el día no hay mixta pero el día anterior tuvo >=3h EXTRA
-      // y ambas franjas (diurna y nocturna), heredar esa condición para que 00:00 comience en mixta.
-      if (!PoliticaH1.rachaEsMixta(racha)) {
-        try {
-          const prev = PoliticaH1.addDays(f, -1);
-          const { segmentos: segPrev } =
-            await this.generarSegmentosDeDiaConValidacion(prev, empleadoId);
-          let extraMinPrev = 0;
-          let vDiurPrev = false;
-          let vNocPrev = false;
-          for (const s of segPrev) {
-            if (s.tipo !== "EXTRA") continue;
-            const dur = PoliticaH1.segDurMin(s);
-            extraMinPrev += dur;
-            const esDiurSeg = PoliticaH1.isDiurna(s);
-            if (esDiurSeg) vDiurPrev = true;
-            else vNocPrev = true;
-          }
-          if (extraMinPrev >= 180 && vDiurPrev && vNocPrev) {
-            racha.minutosExtraAcum = extraMinPrev;
-            racha.vistoDiurna = true;
-            racha.vistoNocturna = true;
-          }
-        } catch {
-          /* ignore */
-        }
-      }
+      // No necesitamos Fallback si sembrarRachaAntesDe funciona correctamente
+      // Eliminar este bloque y confiar en sembrarRachaAntesDe
       const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
         f,
         empleadoId
       );
 
-      // Priming de racha para evitar desfase en cruce nocturna→diurna al inicio del día
-      if (racha.minutosExtraAcum === 0) {
-        let acumulLeadingExtra = 0;
-        let vioNocturna = false;
-        let vioDiurna = false;
-        let cubreDesdeMedianoche = false;
-        for (const seg of segmentos) {
-          if (seg.tipo !== "EXTRA") break;
-          if (seg.inicio === "00:00") cubreDesdeMedianoche = true;
-          const dur = PoliticaH1.segDurMin(seg);
-          acumulLeadingExtra += dur;
-          if (PoliticaH1.isDiurna(seg)) vioDiurna = true;
-          else vioNocturna = true;
-        }
-        if (
-          cubreDesdeMedianoche &&
-          acumulLeadingExtra >= 180 &&
-          vioNocturna &&
-          vioDiurna
-        ) {
-          racha.minutosExtraAcum = 180;
-          racha.vistoDiurna = true;
-          racha.vistoNocturna = true;
-        }
-      }
+      // (Priming eliminado - sembrarRachaAntesDe ahora maneja todo)
       // info del día
       const feriadoInfo = await this.esFeriado(f);
       const dow = new Date(`${f}T00:00:00`).getDay(); // 0=Dom
@@ -553,53 +538,131 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     fechaInicio: string,
     empleadoId: string
   ): Promise<ExtraStreak> {
-    const escalas = [7, 14, 21, 30]; // hasta 30 días hacia atrás
-    for (const back of escalas) {
-      const desde = PoliticaH1.addDays(fechaInicio, -back);
-      const hasta = PoliticaH1.addDays(fechaInicio, -1);
+    // Paso 1: Verificar si el día actual empieza con EXTRA desde 00:00
+    const { segmentos: segHoy } = await this.generarSegmentosDeDiaConValidacion(
+      fechaInicio,
+      empleadoId
+    );
 
-      let r = PoliticaH1.nuevaRacha();
-      let f = desde;
-      let huboLibre = false;
-
-      while (f <= hasta) {
-        const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
-          f,
-          empleadoId
-        );
-        // bloquear mixta en no laborables durante la siembra
-        const ht = await this.getHorarioTrabajoByDateAndEmpleado(f, empleadoId);
-        const esDomOFest = ht.esDiaLibre; // p100 solo si es día libre explícito
-        const esDiaLibreContrato =
-          ht.esDiaLibre ||
-          ht.cantidadHorasLaborables === 0 ||
-          ht.horarioTrabajo.inicio === ht.horarioTrabajo.fin;
-        r.bloquearMixta = esDiaLibreContrato;
-
-        for (const seg of segmentos) {
-          const dur = PoliticaH1.segDurMin(seg);
-          if (dur <= 0) continue;
-
-          if (seg.tipo === "LIBRE") {
-            r = PoliticaH1.nuevaRacha();
-            huboLibre = true;
-            continue;
-          }
-          if (seg.tipo === "ALMUERZO" || seg.tipo === "NORMAL") continue;
-
-          // EXTRA
-          const slots = dur / 15;
-          const esDiurna = PoliticaH1.isDiurna(seg);
-          for (let i = 0; i < slots; i++) {
-            PoliticaH1.aplicarExtraSlot(esDomOFest, esDiurna, r, DUMMY_BUCKETS);
-          }
+    let empiezaConExtraDesde00 = false;
+    // if (process.env.DEBUG_H1) {
+    //   console.log(
+    //     `[H1][sembrarRacha] ${fechaInicio} segmentos iniciales:`,
+    //     segHoy
+    //       .slice(0, 3)
+    //       .map((s) => ({ tipo: s.tipo, inicio: s.inicio, fin: s.fin }))
+    //   );
+    // }
+    for (const seg of segHoy) {
+      if (seg.tipo === "LIBRE") break; // Si empieza con LIBRE, no heredar
+      if (seg.tipo === "EXTRA") {
+        // Verificar si el inicio es "00:00" o empieza en la medianoche
+        const inicio = seg.inicio.substring(0, 5); // Tomar solo "HH:MM"
+        // if (process.env.DEBUG_H1) {
+        //   console.log(
+        //     `[H1][sembrarRacha] ${fechaInicio} primer EXTRA inicio="${inicio}"`
+        //   );
+        // }
+        if (inicio === "00:00") {
+          empiezaConExtraDesde00 = true;
         }
-        f = PoliticaH1.addDays(f, 1);
+        break; // Ya encontramos el primer EXTRA, salir del loop
+      }
+      // Continuar si es NORMAL o ALMUERZO
+    }
+
+    // Si NO empieza con EXTRA desde 00:00, no heredar racha
+    if (!empiezaConExtraDesde00) {
+      // if (process.env.DEBUG_H1) {
+      //   console.log(
+      //     `[H1][sembrarRacha] ${fechaInicio} NO empieza con EXTRA desde 00:00`
+      //   );
+      // }
+      return PoliticaH1.nuevaRacha();
+    }
+
+    // if (process.env.DEBUG_H1) {
+    //   console.log(
+    //     `[H1][sembrarRacha] ${fechaInicio} SÍ empieza con EXTRA desde 00:00, heredando de día anterior`
+    //   );
+    // }
+
+    // Paso 2: Simular el día inmediato anterior completo
+    const diaAnterior = PoliticaH1.addDays(fechaInicio, -1);
+    let r = PoliticaH1.nuevaRacha();
+
+    try {
+      const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
+        diaAnterior,
+        empleadoId
+      );
+
+      // if (process.env.DEBUG_H1) {
+      //   console.log(
+      //     `[H1][sembrarRacha] ${diaAnterior} tiene ${segmentos.length} segmentos`
+      //   );
+      // }
+
+      let terminaConLibre = false;
+      let huboExtra = false; // Solo contar LIBRE después de ver al menos un EXTRA
+
+      for (const seg of segmentos) {
+        const dur = PoliticaH1.segDurMin(seg);
+        if (dur <= 0) continue;
+
+        if (seg.tipo === "LIBRE") {
+          // Solo resetear la racha si ya hemos visto al menos un EXTRA
+          if (huboExtra) {
+            r = PoliticaH1.nuevaRacha();
+            terminaConLibre = true;
+            huboExtra = false; // Resetear para futuras rachas en el mismo día
+          }
+          continue;
+        }
+
+        if (seg.tipo === "ALMUERZO" || seg.tipo === "NORMAL") {
+          terminaConLibre = false;
+          continue;
+        }
+
+        // EXTRA
+        huboExtra = true;
+        terminaConLibre = false;
+        const slots = dur / 15;
+        const esDiurna = PoliticaH1.isDiurna(seg);
+        for (let i = 0; i < slots; i++) {
+          // Simular clasificación REAL (como si fuera día normal)
+          PoliticaH1.aplicarExtraSlot(false, esDiurna, r, DUMMY_BUCKETS);
+        }
       }
 
-      if (huboLibre || back === 30) return r;
+      // Si el día anterior termina con LIBRE, retornar racha nueva
+      if (terminaConLibre) {
+        // if (process.env.DEBUG_H1) {
+        //   console.log(
+        //     `[H1][sembrarRacha] ${diaAnterior} termina con LIBRE → racha nueva`
+        //   );
+        // }
+        return PoliticaH1.nuevaRacha();
+      }
+
+      // Si no termina con LIBRE, retornar la racha final
+      // if (process.env.DEBUG_H1) {
+      //   console.log(
+      //     `[H1][sembrarRacha] ${diaAnterior} NO termina con LIBRE → heredar racha: minExtra=${r.minutosExtraAcum}, minP50=${r.minutosP50Acum}, existeDiur=${r.existeDiurnaExtra}, vDiur=${r.vistoDiurna}, vNoc=${r.vistoNocturna}, piso=${r.piso}`
+      //   );
+      // }
+      return r;
+    } catch (err) {
+      // Si hay error al obtener el día anterior, retornar racha nueva
+      // if (process.env.DEBUG_H1) {
+      //   console.log(
+      //     `[H1][sembrarRacha] Error al procesar ${diaAnterior}:`,
+      //     err
+      //   );
+      // }
+      return PoliticaH1.nuevaRacha();
     }
-    return PoliticaH1.nuevaRacha();
   }
 
   // -------------------------- otros métodos requeridos --------------------------
@@ -1150,11 +1213,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
 type ExtraStreak = {
   minutosExtraAcum: number; // total EXTRA desde último LIBRE
+  minutosP50Acum: number; // minutos clasificados específicamente como p50
   vistoDiurna: boolean;
   vistoNocturna: boolean;
   piso: number; // 0 | 1.25 | 1.5 (no decrece)
   domOFestActivo: boolean; // arrastre de p100 entre días
   bloquearMixta: boolean; // deshabilita p75 en no laborables
+  existeDiurnaExtra: boolean; // indica si hay tramo extra diurno (5-19h) en la racha
 };
 
 type Buckets = {
