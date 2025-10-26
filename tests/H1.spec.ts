@@ -304,7 +304,7 @@ describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       horaEntrada: makeDateUTC(fecha, "13:00"),
       horaSalida: makeDateUTC(fecha, "13:00"),
       esHoraCorrida: false,
-      esDiaLibre: true,
+      esDiaLibre: false,
       actividades: [
         {
           descripcion: "Extra 16-24",

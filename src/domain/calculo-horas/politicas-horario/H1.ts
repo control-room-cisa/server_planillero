@@ -269,6 +269,8 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       const esDomingo = dow === 0;
       const esFestivo = feriadoInfo.esFeriado;
 
+      console.log("esFestivo", esFestivo, feriadoInfo);
+
       // Día libre de contrato
       const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
         f,
@@ -692,22 +694,24 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     let cantidadHorasLaborables = 0;
     let esDiaLibre = false;
 
-    // Solo los feriados marcan el día como "día libre"
+    // Los feriados y domingos marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
       esDiaLibre = true;
     } else {
       switch (dia) {
-        case 0: // Domingo: 0h por defecto, pero NO automáticamente "día libre"
+        case 0: // Domingo: 0h y día libre (no laborable)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;
           cantidadHorasLaborables = 0;
+          esDiaLibre = true;
           break;
-        case 6: // Sábado: 0h por defecto, pero NO automáticamente "día libre"
+        case 6: // Sábado: 0h laborables pero NO día libre (es laborable)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;
           cantidadHorasLaborables = 0;
+          esDiaLibre = false;
           break;
         case 5:
           inicio = "07:00";
