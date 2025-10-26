@@ -33,7 +33,7 @@ model Empresa {
   departamentos Departamento[]
   jobs          Job[]          @relation("EmpresaJobs")
   jobsMostrar   Job[]          @relation("EmpresaMostrarJobs")
-  planillas     Planilla[]
+  nominas       Nomina[]
 
   @@map("empresas")
 }
@@ -136,7 +136,7 @@ model Empleado {
   departamentoId Int          @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
 
-  planillas             Planilla[]
+  nominas               Nomina[]
   accesosComoSupervisor PlanillaAcceso[] @relation("SupervisorAccesos")
   accesosComoEmpleado   PlanillaAcceso[] @relation("EmpleadoAccesos")
   registrosDiarios      RegistroDiario[]
@@ -144,29 +144,67 @@ model Empleado {
   @@map("empleados")
 }
 
-// -------- planillas -------
-enum EstadoPlanilla {
-  A
-  R
-}
+// (Planilla eliminada; se sustituye por Nomina)
 
-model Planilla {
-  id          Int            @id @default(autoincrement())
-  fechaInicio DateTime       @map("fecha_inicio")
-  fechaFin    DateTime       @map("fecha_fin")
-  estado      EstadoPlanilla @map("estado")
-  empleadoId  Int            @map("empleado_id")
-  empresaId   Int            @map("empresa_id")
-  createdAt   DateTime       @default(now()) @map("created_at")
-  updatedAt   DateTime?      @map("updated_at")
-  deletedAt   DateTime?      @map("deleted_at")
+/// ---- nominas (resumen de nómina por período) ----
+model Nomina {
+  id Int @id @default(autoincrement())
 
-  empleado Empleado @relation(fields: [empleadoId], references: [id])
-  empresa  Empresa  @relation(fields: [empresaId], references: [id])
+  // Relaciones
+  empleadoId Int      @map("empleado_id")
+  empleado   Empleado @relation(fields: [empleadoId], references: [id])
+  empresaId  Int      @map("empresa_id")
+  empresa    Empresa  @relation(fields: [empresaId], references: [id])
 
-  @@index([empleadoId], name: "fk_planillas_empleados_idx")
-  @@index([empresaId], name: "fk_planillas_empresas_idx")
-  @@map("planillas")
+  nombrePeriodoNomina String?  @map("nombre_nomina") @db.VarChar(100)
+  // Período de nómina normalizado
+  fechaInicio         DateTime @map("fecha_inicio")
+  fechaFin            DateTime @map("fecha_fin")
+
+  // Datos base
+  sueldoMensual   Float  @map("sueldo_mensual")
+  diasLaborados   Float? @map("dias_laborados")
+  diasVacaciones  Float? @map("dias_vacaciones")
+  diasIncapacidad Float? @map("dias_incapacidad")
+
+  // Subtotales y montos
+  subtotalQuincena             Float? @map("subtotal_quincena")
+  montoVacaciones              Float? @map("monto_vacaciones")
+  montoDiasLaborados           Float? @map("monto_dias_laborados")
+  montoExcedenteIHSS           Float? @map("monto_excedente_ihss")
+  montoIncapacidadCubreEmpresa Float? @map("monto_incapacidad_cubre_empresa")
+
+  // Montos horas extra
+  montoHoras25  Float? @map("monto_ot_25")
+  montoHoras50  Float? @map("monto_ot_50")
+  montoHoras75  Float? @map("monto_ot_75")
+  montoHoras100 Float? @map("monto_ot_100")
+
+  // Ajustes y totales
+  ajuste                Float? @map("ajuste")
+  totalPercepciones     Float? @map("total_percepciones")
+  deduccionIHSS         Float? @map("deduccion_ihss")
+  deduccionISR          Float? @map("deduccion_isr")
+  deduccionRAP          Float? @map("deduccion_rap")
+  deduccionAlimentacion Float? @map("deduccion_alimentacion")
+  cobroPrestamo         Float? @map("cobro_prestamo")
+  impuestoVecinal       Float? @map("impuesto_vecinal")
+  otros                 Float? @map("otros")
+  totalDeducciones      Float? @map("total_deducciones")
+  totalNetoPagar        Float? @map("total_neto_pagar")
+
+  // Auditoría
+  codigoEmpleadoCreacion String? @map("codigo_empleado_creacion") @db.VarChar(20)
+
+  // Timestamps
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  @@unique([empleadoId, fechaInicio, fechaFin], name: "uq_nomina_empleado_periodo")
+  @@index([empleadoId], name: "idx_nominas_empleado")
+  @@index([empresaId], name: "idx_nominas_empresa")
+  @@map("nominas")
 }
 
 // ---- planilla accesos ----
