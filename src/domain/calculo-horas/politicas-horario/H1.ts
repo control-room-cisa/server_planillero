@@ -106,21 +106,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
   // Aplica un slot de 15 min de EXTRA a la racha y suma buckets
   private static aplicarExtraSlot(
-    esDomOFest: boolean,
+    esLibreOFest: boolean,
     esDiurna: boolean,
     r: ExtraStreak,
     b: Buckets
   ) {
-    if (process.env.DEBUG_H1) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[H1][EXTRA pre] min=${r.minutosExtraAcum} diurna=${esDiurna} ` +
-          `vDiur=${r.vistoDiurna} vNoc=${r.vistoNocturna} piso=${r.piso} ` +
-          `domOFest=${r.domOFestActivo} bloqueaMixta=${r.bloquearMixta}`
-      );
-    }
-    // C4: 2.00× (dominical/festiva) con arrastre entre días mientras no haya LIBRE
-    const arrastraC4 = esDomOFest || r.domOFestActivo;
+    // C4: 2.00× (libre/festiva) con arrastre entre días mientras no haya LIBRE
+    const arrastraC4 = esLibreOFest || r.domOFestActivo;
     if (arrastraC4) {
       b.extraC4Min += 15; // p100 para presentación
       r.domOFestActivo = true; // persiste hasta que la racha termine (LIBRE)
@@ -144,12 +136,12 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       if (esDiurna) r.vistoDiurna = true;
       else r.vistoNocturna = true;
 
-      if (process.env.DEBUG_H1) {
-        // eslint-disable-next-line no-console
-        console.log(
-          `[H1][EXTRA C4] +15 → min=${r.minutosExtraAcum}, p50Acum=${r.minutosP50Acum}`
-        );
-      }
+      // if (process.env.DEBUG_H1) {
+      //   // eslint-disable-next-line no-console
+      //   console.log(
+      //     `[H1][EXTRA C4] +15 → min=${r.minutosExtraAcum}, p50Acum=${r.minutosP50Acum}`
+      //   );
+      // }
       return;
     }
 
@@ -174,34 +166,34 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
     if (mult >= 1.75) {
       b.extraC3Min += 15; // p75
-      if (process.env.DEBUG_H1) {
-        // eslint-disable-next-line no-console
-        console.log(`[H1][EXTRA p75] mult=${mult}`);
-      }
+      // if (process.env.DEBUG_H1) {
+      //   // eslint-disable-next-line no-console
+      //   console.log(`[H1][EXTRA p75] mult=${mult}`);
+      // }
     } else if (mult >= 1.5) {
       b.extraC2Min += 15; // p50
       r.minutosP50Acum += 15; // Acumular minutos p50
-      if (process.env.DEBUG_H1) {
-        // eslint-disable-next-line no-console
-        console.log(`[H1][EXTRA p50] mult=${mult}`);
-      }
+      // if (process.env.DEBUG_H1) {
+      //   // eslint-disable-next-line no-console
+      //   console.log(`[H1][EXTRA p50] mult=${mult}`);
+      // }
     } else {
       b.extraC1Min += 15; // p25
-      if (process.env.DEBUG_H1) {
-        // eslint-disable-next-line no-console
-        console.log(`[H1][EXTRA p25] mult=${mult}`);
-      }
+      // if (process.env.DEBUG_H1) {
+      //   // eslint-disable-next-line no-console
+      //   console.log(`[H1][EXTRA p25] mult=${mult}`);
+      // }
     }
 
     r.minutosExtraAcum += 15;
     if (esDiurna) r.vistoDiurna = true;
     else r.vistoNocturna = true;
-    if (process.env.DEBUG_H1) {
-      // eslint-disable-next-line no-console
-      console.log(
-        `[H1][EXTRA post] min=${r.minutosExtraAcum} vDiur=${r.vistoDiurna} vNoc=${r.vistoNocturna} piso=${r.piso}`
-      );
-    }
+    // if (process.env.DEBUG_H1) {
+    //   // eslint-disable-next-line no-console
+    //   console.log(
+    //     `[H1][EXTRA post] min=${r.minutosExtraAcum} vDiur=${r.vistoDiurna} vNoc=${r.vistoNocturna} piso=${r.piso}`
+    //   );
+    // }
   }
 
   private static minutosAhoras(min: number): number {
@@ -283,8 +275,8 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         empleadoId
       );
 
-      // p100 SOLO si el día está marcado explícitamente como día libre (feriados)
-      const esDomOFest = hTrabajo.esDiaLibre;
+      // p100 si es día libre del contrato O si es feriado
+      const esLibreOFest = hTrabajo.esDiaLibre || esFestivo;
 
       // En días no laborables bloquear p75 (mixta)
       // Solo bloquear mixta si es día libre o si no hay horas laborables configuradas
@@ -354,7 +346,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
             const slots = dur / 15; // segmentos vienen ya cortados (05/19)
             const esDiurna = PoliticaH1.isDiurna(seg);
             for (let i = 0; i < slots; i++) {
-              PoliticaH1.aplicarExtraSlot(esDomOFest, esDiurna, racha, b);
+              PoliticaH1.aplicarExtraSlot(esLibreOFest, esDiurna, racha, b);
             }
             extraMinDia += dur;
             break;
@@ -411,23 +403,23 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         normalMinDia - especialesSegDia - especialesAddDia
       );
 
-      console.log(
-        `[H1][${f}] normal=${(normalDiaAjustado / 60).toFixed(2)}h, ` +
-          `almuerzo=${(almuerzoMinDia / 60).toFixed(2)}h, extra=${(
-            extraMinDia / 60
-          ).toFixed(2)}h, libre=${(libreMinDia / 60).toFixed(2)}h | ` +
-          `E01(incap)=${((incapDiaSeg + addIncapDia) / 60).toFixed(
-            2
-          )}h, E02(vac)=${((vacDiaSeg + addVacDia) / 60).toFixed(
-            2
-          )}h, E03(permCS)=${((permCSDiaSeg + addPermCSDia) / 60).toFixed(
-            2
-          )}h, E04(permSS)=${((permSSDiaSeg + addPermSSDia) / 60).toFixed(
-            2
-          )}h, E05(inasist)=${((inasistDiaSeg + addInasistDia) / 60).toFixed(
-            2
-          )}h`
-      );
+      // console.log(
+      //   `[H1][${f}] normal=${(normalDiaAjustado / 60).toFixed(2)}h, ` +
+      //     `almuerzo=${(almuerzoMinDia / 60).toFixed(2)}h, extra=${(
+      //       extraMinDia / 60
+      //     ).toFixed(2)}h, libre=${(libreMinDia / 60).toFixed(2)}h | ` +
+      //     `E01(incap)=${((incapDiaSeg + addIncapDia) / 60).toFixed(
+      //       2
+      //     )}h, E02(vac)=${((vacDiaSeg + addVacDia) / 60).toFixed(
+      //       2
+      //     )}h, E03(permCS)=${((permCSDiaSeg + addPermCSDia) / 60).toFixed(
+      //       2
+      //     )}h, E04(permSS)=${((permSSDiaSeg + addPermSSDia) / 60).toFixed(
+      //       2
+      //     )}h, E05(inasist)=${((inasistDiaSeg + addInasistDia) / 60).toFixed(
+      //       2
+      //     )}h`
+      // );
 
       f = PoliticaH1.addDays(f, 1);
     }
