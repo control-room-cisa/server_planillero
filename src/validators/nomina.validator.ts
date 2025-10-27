@@ -3,7 +3,7 @@ import { z } from "zod";
 
 export const crearNominaSchema = z.object({
   empleadoId: z.number().int().positive("empleadoId es requerido"),
-  empresaId: z.number().int().positive("empresaId es requerido"),
+  // empresaId se resolverá en backend a partir del empleado
   nombrePeriodoNomina: z.string().max(100).optional(),
   fechaInicio: z.coerce.date({ required_error: "fechaInicio es requerida" }),
   fechaFin: z.coerce.date({ required_error: "fechaFin es requerida" }),

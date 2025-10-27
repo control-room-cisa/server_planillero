@@ -6,6 +6,7 @@ import type {
   ActualizarNominaDto,
 } from "../validators/nomina.validator";
 import { AppError } from "../errors/AppError";
+import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 
 export class NominaService {
   static async getById(id: number): Promise<Nomina> {
@@ -27,10 +28,32 @@ export class NominaService {
     payload: CrearNominaDto,
     codigoEmpleadoCreacion?: string | null
   ): Promise<Nomina> {
+    // Resolver empresa desde el empleado (departamento -> empresa)
+    const empleado = await EmpleadoRepository.findById(payload.empleadoId);
+    if (!empleado?.departamentoId) {
+      throw new AppError("Empleado sin departamento asociado", 400);
+    }
+    const empleadoConDepto = await EmpleadoRepository.findById(
+      payload.empleadoId
+    );
+    // obtener empresaId vía prisma directamente para evitar múltiples consultas
+    const depto = await (async () => {
+      return await (
+        await import("../config/prisma")
+      ).prisma.departamento.findFirst({
+        where: { id: empleado.departamentoId },
+        select: { empresaId: true },
+      });
+    })();
+    const empresaId = depto?.empresaId;
+    if (!empresaId) {
+      throw new AppError("No se pudo resolver la empresa del empleado", 400);
+    }
+
     // Prisma types: map DTO to create input
     return NominaRepository.create({
       empleado: { connect: { id: payload.empleadoId } },
-      empresa: { connect: { id: payload.empresaId } },
+      empresa: { connect: { id: empresaId } },
       nombrePeriodoNomina: payload.nombrePeriodoNomina ?? null,
       fechaInicio: payload.fechaInicio,
       fechaFin: payload.fechaFin,

@@ -269,8 +269,6 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       const esDomingo = dow === 0;
       const esFestivo = feriadoInfo.esFeriado;
 
-      console.log("esFestivo", esFestivo, feriadoInfo);
-
       // Día libre de contrato
       const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
         f,
