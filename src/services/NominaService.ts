@@ -103,9 +103,6 @@ export class NominaService {
       ...(payload.empleadoId
         ? { empleado: { connect: { id: payload.empleadoId } } }
         : {}),
-      ...(payload.empresaId
-        ? { empresa: { connect: { id: payload.empresaId } } }
-        : {}),
       nombrePeriodoNomina:
         payload.nombrePeriodoNomina ?? existing.nombrePeriodoNomina,
       fechaInicio: payload.fechaInicio ?? existing.fechaInicio,
