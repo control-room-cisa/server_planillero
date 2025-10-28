@@ -71,6 +71,25 @@ export const crearNomina: RequestHandler<
   }
 };
 
+export const leerNominaPorId: RequestHandler<
+  { id: string },
+  ApiResponse<Nomina>,
+  {}
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "id inválido", data: null });
+    }
+    const data = await NominaService.getById(id);
+    return res.json({ success: true, message: "Nómina", data });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const actualizarNomina: RequestHandler<
   { id: string },
   ApiResponse<Nomina>,

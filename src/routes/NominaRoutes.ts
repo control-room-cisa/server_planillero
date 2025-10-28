@@ -6,6 +6,7 @@ import {
   crearNomina,
   actualizarNomina,
   leerNominasResumenPorEmpleado,
+  leerNominaPorId,
 } from "../controllers/NominaController";
 import { Roles } from "../enums/roles";
 
@@ -52,6 +53,24 @@ router.get(
     next();
   },
   leerNominasResumenPorEmpleado
+);
+
+// GET /api/nominas/:id (lectura)
+router.get(
+  "/:id",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (
+      anyReq.user?.rolId !== Roles.RRHH &&
+      anyReq.user?.rolId !== Roles.CONTABILIDAD
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "No autorizado", data: null });
+    }
+    next();
+  },
+  leerNominaPorId
 );
 
 // POST /api/nominas
