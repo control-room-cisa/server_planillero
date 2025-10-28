@@ -69,6 +69,7 @@ export class NominaService {
       montoExcedenteIHSS: payload.montoExcedenteIHSS ?? null,
       montoIncapacidadCubreEmpresa:
         payload.montoIncapacidadCubreEmpresa ?? null,
+      montoPermisosJustificados: payload.montoPermisosJustificados ?? null,
 
       montoHoras25: payload.montoHoras25 ?? null,
       montoHoras50: payload.montoHoras50 ?? null,
@@ -124,6 +125,8 @@ export class NominaService {
       montoIncapacidadCubreEmpresa:
         payload.montoIncapacidadCubreEmpresa ??
         existing.montoIncapacidadCubreEmpresa,
+      montoPermisosJustificados:
+        payload.montoPermisosJustificados ?? existing.montoPermisosJustificados,
 
       montoHoras25: payload.montoHoras25 ?? existing.montoHoras25,
       montoHoras50: payload.montoHoras50 ?? existing.montoHoras50,

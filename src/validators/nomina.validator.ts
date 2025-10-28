@@ -18,6 +18,7 @@ export const crearNominaSchema = z.object({
   montoDiasLaborados: z.number().optional(),
   montoExcedenteIHSS: z.number().optional(),
   montoIncapacidadCubreEmpresa: z.number().optional(),
+  montoPermisosJustificados: z.number().optional(),
 
   montoHoras25: z.number().optional(),
   montoHoras50: z.number().optional(),

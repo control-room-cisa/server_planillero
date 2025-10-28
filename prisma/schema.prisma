@@ -173,6 +173,7 @@ model Nomina {
   montoDiasLaborados           Float? @map("monto_dias_laborados")
   montoExcedenteIHSS           Float? @map("monto_excedente_ihss")
   montoIncapacidadCubreEmpresa Float? @map("monto_incapacidad_cubre_empresa")
+  montoPermisosJustificados    Float? @map("monto_permisos_justificados")
 
   // Montos horas extra
   montoHoras25  Float? @map("monto_ot_25")
