@@ -35,6 +35,11 @@ export const crearNominaSchema = z.object({
   otros: z.number().optional(),
   totalDeducciones: z.number().optional(),
   totalNetoPagar: z.number().optional(),
+
+  comentario: z
+    .string()
+    .max(200, "El comentario no debe exceder 200 caracteres")
+    .optional(),
 });
 
 export type CrearNominaDto = z.infer<typeof crearNominaSchema>;

@@ -35,6 +35,8 @@ export interface NominaDto {
   totalDeducciones?: number | null;
   totalNetoPagar?: number | null;
 
+  comentario?: string | null;
+
   createdAt?: Date | null;
   updatedAt?: Date | null;
 }
