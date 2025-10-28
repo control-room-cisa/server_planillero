@@ -5,6 +5,7 @@ import {
   leerNominas,
   crearNomina,
   actualizarNomina,
+  leerNominasResumenPorEmpleado,
 } from "../controllers/NominaController";
 import { Roles } from "../enums/roles";
 
@@ -13,24 +14,74 @@ const router = Router();
 // Requiere sesión iniciada
 router.use(authenticateJWT);
 
-// Middleware simple de autorización por rol (por ahora solo RRHH)
-router.use((req, res, next) => {
-  const anyReq: any = req;
-  if (anyReq.user?.rolId !== Roles.RRHH) {
-    return res
-      .status(403)
-      .json({ success: false, message: "Solo RRHH", data: null });
-  }
-  next();
-});
+// Autorización por rol:
+// - Lectura: RRHH o CONTABILIDAD
+// - Escritura/actualización: solo RRHH
 
-// GET /api/nominas
-router.get("/", leerNominas);
+// GET /api/nominas (lectura)
+router.get(
+  "/",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (
+      anyReq.user?.rolId !== Roles.RRHH &&
+      anyReq.user?.rolId !== Roles.CONTABILIDAD
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "No autorizado", data: null });
+    }
+    next();
+  },
+  leerNominas
+);
+
+// GET /api/nominas/resumen?empleadoId=... (lectura)
+router.get(
+  "/resumen",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (
+      anyReq.user?.rolId !== Roles.RRHH &&
+      anyReq.user?.rolId !== Roles.CONTABILIDAD
+    ) {
+      return res
+        .status(403)
+        .json({ success: false, message: "No autorizado", data: null });
+    }
+    next();
+  },
+  leerNominasResumenPorEmpleado
+);
 
 // POST /api/nominas
-router.post("/", crearNomina);
+router.post(
+  "/",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (anyReq.user?.rolId !== Roles.RRHH) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Solo RRHH", data: null });
+    }
+    next();
+  },
+  crearNomina
+);
 
 // PUT /api/nominas/:id
-router.put("/:id", actualizarNomina);
+router.put(
+  "/:id",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (anyReq.user?.rolId !== Roles.RRHH) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Solo RRHH", data: null });
+    }
+    next();
+  },
+  actualizarNomina
+);
 
 export default router;

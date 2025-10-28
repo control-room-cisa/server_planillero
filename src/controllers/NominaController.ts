@@ -94,3 +94,64 @@ export const actualizarNomina: RequestHandler<
     next(err);
   }
 };
+
+// Nuevo: listar nóminas (resumen) por empleado
+export const leerNominasResumenPorEmpleado: RequestHandler<
+  {},
+  ApiResponse<
+    Array<{
+      id: number;
+      nombrePeriodoNomina: string;
+      fechaInicio: string;
+      fechaFin: string;
+    }>
+  >, // resumen
+  {},
+  { empleadoId: string }
+> = async (req, res, next) => {
+  try {
+    const empleadoIdStr = req.query.empleadoId;
+    if (!empleadoIdStr) {
+      return res.status(400).json({
+        success: false,
+        message: "Error de validación",
+        data: null,
+        validationErrors: {
+          empleadoId: ["empleadoId es requerido"],
+        },
+      } as any);
+    }
+    const empleadoId = Number(empleadoIdStr);
+    if (!Number.isFinite(empleadoId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Error de validación",
+        data: null,
+        validationErrors: {
+          empleadoId: ["empleadoId inválido"],
+        },
+      } as any);
+    }
+
+    // Reusar servicio existente (suponiendo que tiene list con filtros)
+    const nominas = await NominaService.list({ empleadoId });
+    const resumen = (nominas || []).map((n: any) => ({
+      id: n.id,
+      nombrePeriodoNomina: n.nombrePeriodoNomina,
+      fechaInicio: n.fechaInicio,
+      fechaFin: n.fechaFin,
+    }));
+    return res.json({
+      success: true,
+      message: "Listado de nóminas por empleado",
+      data: resumen,
+    });
+  } catch (err: any) {
+    // Responder en estándar ApiResponse con mensaje y sin datos, más detalle mínimo
+    return res.status(500).json({
+      success: false,
+      message: err?.message || "Error interno al listar nóminas",
+      data: null,
+    } as any);
+  }
+};
