@@ -2,6 +2,7 @@
 import type { Job, Prisma } from "@prisma/client";
 import { JobRepository } from "../repositories/JobRepository";
 import type { CreateJobDto, UpdateJobDto } from "../validators/job.validator";
+import { prisma } from "../config/prisma";
 
 export class JobService {
   /**
@@ -145,5 +146,30 @@ export class JobService {
     // Validar existencia
     await this.getJobById(id);
     await JobRepository.remove(id);
+  }
+
+  /**
+   * Obtiene la empresaId del departamento de un empleado
+   * @param empleadoId ID del empleado
+   * @returns empresaId del departamento del empleado, o null si no se encuentra
+   */
+  static async getEmpresaDelDepartamentoPorEmpleado(
+    empleadoId: number
+  ): Promise<number | null> {
+    const empleado = await prisma.empleado.findFirst({
+      where: {
+        id: empleadoId,
+        deletedAt: null,
+      },
+      select: {
+        departamento: {
+          select: {
+            empresaId: true,
+          },
+        },
+      },
+    });
+
+    return empleado?.departamento?.empresaId ?? null;
   }
 }

@@ -5,6 +5,8 @@ import { ApiResponse } from "../dtos/ApiResponse";
 import type { Job, Prisma } from "@prisma/client";
 import { createJobSchema, updateJobSchema } from "../validators/job.validator";
 import { z } from "zod";
+import { AuthRequest } from "../middlewares/authMiddleware";
+import { Roles } from "../enums/roles";
 
 export const listJobs: RequestHandler<
   {}, // params
@@ -14,14 +16,21 @@ export const listJobs: RequestHandler<
     empresaId?: string;
     mostrarEmpresaId?: string;
     activo?: string;
+    empleadoId?: string;
   }
 > = async (req, res, next) => {
   try {
+    const authReq = req as AuthRequest;
+    const user = authReq.user;
+
     const empresaId = req.query.empresaId
       ? Number(req.query.empresaId)
       : undefined;
     const mostrarEmpresaId = req.query.mostrarEmpresaId
       ? Number(req.query.mostrarEmpresaId)
+      : undefined;
+    const empleadoIdParam = req.query.empleadoId
+      ? Number(req.query.empleadoId)
       : undefined;
 
     let activo: boolean | undefined;
@@ -29,9 +38,34 @@ export const listJobs: RequestHandler<
     if (req.query.activo === "false") activo = false;
     // si no viene activo, queda undefined → devuelve todos
 
+    // Determinar qué empleado usar para el filtro de empresa
+    let empleadoIdParaFiltro: number | undefined;
+
+    // Si viene empleadoId en query, usarlo (supervisor viendo empleado)
+    if (empleadoIdParam) {
+      empleadoIdParaFiltro = empleadoIdParam;
+    }
+    // Si el usuario NO es CONTABILIDAD ni RRHH, usar su propio empleadoId
+    // (CONTABILIDAD y RRHH pueden ver todos los jobs)
+    else if (user.rolId !== Roles.CONTABILIDAD && user.rolId !== Roles.RRHH) {
+      empleadoIdParaFiltro = user.id;
+    }
+
+    // Obtener mostrarEmpresaId del departamento del empleado si aplica
+    let mostrarEmpresaIdFiltrado = mostrarEmpresaId;
+    if (empleadoIdParaFiltro) {
+      const empresaDelEmpleado =
+        await JobService.getEmpresaDelDepartamentoPorEmpleado(
+          empleadoIdParaFiltro
+        );
+      if (empresaDelEmpleado) {
+        mostrarEmpresaIdFiltrado = empresaDelEmpleado;
+      }
+    }
+
     const jobs = await JobService.listJobs({
       empresaId,
-      mostrarEmpresaId,
+      mostrarEmpresaId: mostrarEmpresaIdFiltrado,
       activo,
     });
 
