@@ -235,6 +235,33 @@ export class RegistroDiarioRepository {
   }
 
   /**
+   * Actualiza la aprobación de RRHH a true para todos los registros diarios
+   * de un empleado en un rango de fechas.
+   */
+  static async updateRrhhApprovalByDateRange(
+    empleadoId: number,
+    fechaInicio: string,
+    fechaFin: string,
+    codigoRrhh?: string
+  ): Promise<{ count: number }> {
+    return prisma.registroDiario.updateMany({
+      where: {
+        empleadoId,
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin,
+        },
+        deletedAt: null,
+      },
+      data: {
+        aprobacionRrhh: true,
+        codigoRrhh: codigoRrhh ?? null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
+  /**
    * Permite a un supervisor actualizar el job y descripción de una actividad específica
    * de otro empleado. Solo disponible para supervisores (rolId = 2).
    */

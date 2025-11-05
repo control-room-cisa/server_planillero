@@ -7,6 +7,7 @@ import type {
 } from "../validators/nomina.validator";
 import { AppError } from "../errors/AppError";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
+import { RegistroDiarioService } from "./RegistroDiarioService";
 
 export class NominaService {
   static async getById(id: number): Promise<Nomina> {
@@ -51,7 +52,7 @@ export class NominaService {
     }
 
     // Prisma types: map DTO to create input
-    return NominaRepository.create({
+    const created = await NominaRepository.create({
       empleado: { connect: { id: payload.empleadoId } },
       empresa: { connect: { id: empresaId } },
       nombrePeriodoNomina: payload.nombrePeriodoNomina ?? null,
@@ -89,6 +90,36 @@ export class NominaService {
       totalNetoPagar: payload.totalNetoPagar ?? null,
       codigoEmpleadoCreacion: codigoEmpleadoCreacion ?? null,
     });
+
+    // Actualizar aprobacionRrhh a true para todos los registros diarios
+    // del empleado en el rango de fechas de la nómina
+    try {
+      // Convertir fechas a formato "YYYY-MM-DD" para el filtro de registros diarios
+      const fechaInicioStr =
+        payload.fechaInicio instanceof Date
+          ? payload.fechaInicio.toISOString().split("T")[0]
+          : String(payload.fechaInicio).split("T")[0];
+      const fechaFinStr =
+        payload.fechaFin instanceof Date
+          ? payload.fechaFin.toISOString().split("T")[0]
+          : String(payload.fechaFin).split("T")[0];
+
+      await RegistroDiarioService.aprobarRrhhByDateRange(
+        payload.empleadoId,
+        fechaInicioStr,
+        fechaFinStr,
+        codigoEmpleadoCreacion ?? undefined
+      );
+    } catch (error) {
+      // Si falla la actualización de registros, loguear el error pero no fallar la creación de la nómina
+      console.error(
+        "Error al actualizar aprobación RRHH en registros diarios:",
+        error
+      );
+      // Podrías optar por hacer rollback de la nómina si es crítico, pero por ahora solo logueamos
+    }
+
+    return created;
   }
 
   static async update(
@@ -98,51 +129,13 @@ export class NominaService {
     const existing = await NominaRepository.findById(id);
     if (!existing) throw new AppError("Nómina no encontrada", 404);
 
+    // Prisma ignora automáticamente los campos undefined en las actualizaciones
     return NominaRepository.update(id, {
-      // Relaciones opcionales
+      ...payload,
+      // Relaciones opcionales requieren sintaxis especial de Prisma
       ...(payload.empleadoId
         ? { empleado: { connect: { id: payload.empleadoId } } }
         : {}),
-      nombrePeriodoNomina:
-        payload.nombrePeriodoNomina ?? existing.nombrePeriodoNomina,
-      fechaInicio: payload.fechaInicio ?? existing.fechaInicio,
-      fechaFin: payload.fechaFin ?? existing.fechaFin,
-      sueldoMensual: payload.sueldoMensual ?? existing.sueldoMensual,
-
-      diasLaborados: payload.diasLaborados ?? existing.diasLaborados,
-      diasVacaciones: payload.diasVacaciones ?? existing.diasVacaciones,
-      diasIncapacidad: payload.diasIncapacidad ?? existing.diasIncapacidad,
-
-      subtotalQuincena: payload.subtotalQuincena ?? existing.subtotalQuincena,
-      montoVacaciones: payload.montoVacaciones ?? existing.montoVacaciones,
-      montoDiasLaborados:
-        payload.montoDiasLaborados ?? existing.montoDiasLaborados,
-      montoExcedenteIHSS:
-        payload.montoExcedenteIHSS ?? existing.montoExcedenteIHSS,
-      montoIncapacidadCubreEmpresa:
-        payload.montoIncapacidadCubreEmpresa ??
-        existing.montoIncapacidadCubreEmpresa,
-      montoPermisosJustificados:
-        payload.montoPermisosJustificados ?? existing.montoPermisosJustificados,
-
-      montoHoras25: payload.montoHoras25 ?? existing.montoHoras25,
-      montoHoras50: payload.montoHoras50 ?? existing.montoHoras50,
-      montoHoras75: payload.montoHoras75 ?? existing.montoHoras75,
-      montoHoras100: payload.montoHoras100 ?? existing.montoHoras100,
-
-      ajuste: payload.ajuste ?? existing.ajuste,
-      totalPercepciones:
-        payload.totalPercepciones ?? existing.totalPercepciones,
-      deduccionIHSS: payload.deduccionIHSS ?? existing.deduccionIHSS,
-      deduccionISR: payload.deduccionISR ?? existing.deduccionISR,
-      deduccionRAP: payload.deduccionRAP ?? existing.deduccionRAP,
-      deduccionAlimentacion:
-        payload.deduccionAlimentacion ?? existing.deduccionAlimentacion,
-      cobroPrestamo: payload.cobroPrestamo ?? existing.cobroPrestamo,
-      impuestoVecinal: payload.impuestoVecinal ?? existing.impuestoVecinal,
-      otros: payload.otros ?? existing.otros,
-      totalDeducciones: payload.totalDeducciones ?? existing.totalDeducciones,
-      totalNetoPagar: payload.totalNetoPagar ?? existing.totalNetoPagar,
     });
   }
 }

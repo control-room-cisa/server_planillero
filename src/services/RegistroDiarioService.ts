@@ -75,6 +75,24 @@ export class RegistroDiarioService {
   }
 
   /**
+   * Actualiza la aprobación de RRHH a true para todos los registros diarios
+   * de un empleado en un rango de fechas.
+   */
+  static async aprobarRrhhByDateRange(
+    empleadoId: number,
+    fechaInicio: string,
+    fechaFin: string,
+    codigoRrhh?: string
+  ): Promise<{ count: number }> {
+    return RegistroDiarioRepository.updateRrhhApprovalByDateRange(
+      empleadoId,
+      fechaInicio,
+      fechaFin,
+      codigoRrhh
+    );
+  }
+
+  /**
    * Permite a un supervisor actualizar el job y descripción de una actividad específica
    * de otro empleado. Solo disponible para supervisores (rolId = 2).
    */
