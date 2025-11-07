@@ -9,6 +9,7 @@ import empleadoRoutes from "./routes/empleadoRoutes";
 import calculoHorasTrabajoRoutes from "./routes/calculoHorasTrabajoRoutes";
 import feriadoRoutes from "./routes/FeriadoRoute";
 import nominaRoutes from "./routes/NominaRoutes";
+import planillaAccesoRevisionRoutes from "./routes/PlanillaAccesoRevisionRoutes";
 
 import path from "path";
 import { config } from "dotenv";
@@ -38,6 +39,7 @@ app.use("/api/empleados", empleadoRoutes);
 app.use("/api/calculo-horas", calculoHorasTrabajoRoutes);
 app.use("/api/feriados", feriadoRoutes);
 app.use("/api/nominas", nominaRoutes);
+app.use("/api/planilla-acceso-revision", planillaAccesoRevisionRoutes);
 
 app.use(errorHandler);
 
