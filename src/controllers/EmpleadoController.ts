@@ -192,12 +192,13 @@ export const listByDepartment: RequestHandler<
     }
 
     const empleados = await EmpleadoService.getByDepartment(
-      user.departamentoId
+      user.departamentoId,
+      user.id // Pasar el ID del supervisor para incluir empleados de PlanillaAcceso
     );
 
     return res.json({
       success: true,
-      message: "Empleados de tu departamento",
+      message: "Empleados de tu departamento y colaboradores asignados",
       data: empleados,
     } as ApiResponse<EmployeeDto[]>);
   } catch (err) {

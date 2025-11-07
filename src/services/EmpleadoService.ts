@@ -8,6 +8,7 @@ import {
 } from "../dtos/employee.dto";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { RegistroDiarioRepository } from "../repositories/RegistroDiarioRepository";
+import { PlanillaAccesoRevisionRepository } from "../repositories/PlanillaAccesoRevisionRepository";
 import { FileService } from "./FileService";
 
 const SALT_ROUNDS = 10;
@@ -80,9 +81,47 @@ export class EmpleadoService {
     return bcrypt.hash(password, SALT_ROUNDS);
   }
 
-  static async getByDepartment(departamentoId: number): Promise<EmployeeDto[]> {
-    const rows = await EmpleadoRepository.findByDepartment(departamentoId);
-    // Cargar en paralelo el estado de los últimos 20 días para todos los empleados
+  static async getByDepartment(
+    departamentoId: number,
+    supervisorId?: number
+  ): Promise<EmployeeDto[]> {
+    // 1. Obtener empleados del mismo departamento
+    const empleadosDepartamento =
+      await EmpleadoRepository.findByDepartment(departamentoId);
+
+    // 2. Si hay supervisorId, obtener empleados de PlanillaAcceso
+    let empleadosPlanillaAcceso: Empleado[] = [];
+    if (supervisorId) {
+      const accesos = await PlanillaAccesoRevisionRepository.findAll({
+        supervisorId,
+      });
+      // Extraer los empleados únicos de los accesos
+      const empleadoIds = new Set(
+        accesos.map((acceso) => acceso.empleadoId)
+      );
+      if (empleadoIds.size > 0) {
+        empleadosPlanillaAcceso = await EmpleadoRepository.findByIds(
+          Array.from(empleadoIds)
+        );
+      }
+    }
+
+    // 3. Combinar ambos conjuntos y eliminar duplicados por ID
+    const empleadosMap = new Map<number, any>();
+
+    // Agregar empleados del departamento
+    empleadosDepartamento.forEach((e) => {
+      empleadosMap.set(e.id, e);
+    });
+
+    // Agregar empleados de PlanillaAcceso (sobrescriben si hay duplicados)
+    empleadosPlanillaAcceso.forEach((e) => {
+      empleadosMap.set(e.id, e);
+    });
+
+    const rows = Array.from(empleadosMap.values());
+
+    // 4. Cargar en paralelo el estado de los últimos 20 días para todos los empleados
     const enriched = await Promise.all(
       rows.map(async (e: any) => {
         const approvals =

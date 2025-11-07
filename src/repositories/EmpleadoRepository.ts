@@ -131,4 +131,22 @@ export class EmpleadoRepository {
       },
     });
   }
+
+  /** Busca empleados por una lista de IDs */
+  static async findByIds(ids: number[]): Promise<Empleado[]> {
+    if (ids.length === 0) return [];
+    return prisma.empleado.findMany({
+      where: {
+        id: { in: ids },
+        deletedAt: null,
+      },
+      include: {
+        departamento: {
+          include: {
+            empresa: { select: { nombre: true } },
+          },
+        },
+      },
+    });
+  }
 }
