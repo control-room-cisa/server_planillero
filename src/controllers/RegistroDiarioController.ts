@@ -27,7 +27,7 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 export const upsertRegistroDiario: RequestHandler<
   {},
   ApiResponse<RegistroDiarioDetail>,
-  Omit<UpsertRegistroDiarioParams, "empleadoId" | "horasFeriado">,
+  Omit<UpsertRegistroDiarioParams, "empleadoId">,
   { idEmpleado?: string }
 > = async (req, res, next) => {
   try {

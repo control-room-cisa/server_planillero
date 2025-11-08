@@ -18,23 +18,27 @@ export class RegistroDiarioService {
    */
   static upsertRegistro(
     empleadoId: number,
-    dto: Omit<UpsertRegistroDiarioParams, "empleadoId" | "horasFeriado">
+    dto: Omit<UpsertRegistroDiarioParams, "empleadoId">
   ): Promise<RegistroDiarioDetail> {
     return (async () => {
       const fecha = dto.fecha;
 
-      // Verificar si la fecha es feriado
-      const feriado = await FeriadoRepository.findByDate(fecha);
-
-      // Siempre sobreescribir: 0 si no es feriado; si es feriado, horas programadas
-      let horasFeriado: number = 0;
-      if (feriado) {
-        const horario =
-          await HorarioTrabajoDomain.getHorarioTrabajoByDateAndEmpleado(
-            fecha,
-            String(empleadoId)
-          );
-        horasFeriado = horario.cantidadHorasLaborables ?? 0;
+      // Si el frontend envía horasFeriado, usarlo; si no, calcularlo
+      let horasFeriado: number = dto.horasFeriado ?? 0;
+      
+      // Si no viene del frontend, calcularlo automáticamente (comportamiento anterior)
+      if (horasFeriado === 0) {
+        const feriado = await FeriadoRepository.findByDate(fecha);
+        if (feriado) {
+          const horario =
+            await HorarioTrabajoDomain.getHorarioTrabajoByDateAndEmpleado(
+              fecha,
+              String(empleadoId)
+            );
+          // Nota: horario.cantidadHorasLaborables será 0 cuando es feriado
+          // Por eso el frontend debe enviar el valor calculado
+          horasFeriado = horario.cantidadHorasLaborables ?? 0;
+        }
       }
 
       return RegistroDiarioRepository.upsertWithActivities({
