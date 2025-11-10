@@ -533,6 +533,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         permisoSinSueldoHoras: conteoHoras.cantidadHoras.permisoSinSueldo || 0,
         inasistenciasHoras: conteoHoras.cantidadHoras.inasistencias || 0,
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
+        horasFeriado: 0,
         deduccionesISR: 0,
         deduccionesRAP: 0,
         deduccionesComida: 0,

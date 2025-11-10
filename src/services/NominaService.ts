@@ -88,6 +88,7 @@ export class NominaService {
       otros: payload.otros ?? null,
       totalDeducciones: payload.totalDeducciones ?? null,
       totalNetoPagar: payload.totalNetoPagar ?? null,
+      comentario: payload.comentario ?? null,
       codigoEmpleadoCreacion: codigoEmpleadoCreacion ?? null,
     });
 

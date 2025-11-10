@@ -14,6 +14,9 @@ class H1Test extends PoliticaH1 {
     this.feriados[fecha] = esFeriado;
   }
   protected async getRegistroDiario(_empleadoId: string, fecha: string) {
+    // En producción, el repositorio solo devuelve actividades del día actual
+    // Las actividades que cruzan medianoche se manejan en el segmentador
+    // pero para el prorrateo por job, solo se cuentan las actividades del día actual
     return this.registros[fecha] ?? null;
   }
   protected async esFeriado(fecha: string) {
@@ -24,6 +27,13 @@ class H1Test extends PoliticaH1 {
   }
   protected async getEmpleado(_empleadoId: string) {
     return { id: Number(_empleadoId), nombre: "Test" } as any;
+  }
+
+  // Helper para agregar días a una fecha
+  private addDays(fecha: string, dias: number): string {
+    const d = new Date(`${fecha}T00:00:00.000Z`);
+    d.setUTCDate(d.getUTCDate() + dias);
+    return d.toISOString().split("T")[0];
   }
 }
 
@@ -67,6 +77,15 @@ function allJobsOfDay(exp: {
     arr.forEach((j) => s.add(j.codigoJob))
   );
   return [...s].sort();
+}
+
+// Helper para formatear valor - marca con ❌ si no coincide
+function formatValue(got: number, exp: number): string {
+  const gotStr = got.toFixed(4);
+  if (Math.abs(got - exp) > 0.0001) {
+    return `${gotStr}❌`;
+  }
+  return gotStr;
 }
 
 // Tabla ancha: una fila por job con columnas esperado/obtenido por banda
@@ -121,54 +140,124 @@ function rowsWideByJob(
     return {
       job: codigo,
       "norm✓": eN,
-      "norm✗": gN,
-      normΔ: Number((gN - eN).toFixed(4)),
+      "norm✗": formatValue(gN, eN),
       "25%✓": e25,
-      "25%✗": g25,
-      "25%Δ": Number((g25 - e25).toFixed(4)),
+      "25%✗": formatValue(g25, e25),
       "50%✓": e50,
-      "50%✗": g50,
-      "50%Δ": Number((g50 - e50).toFixed(4)),
+      "50%✗": formatValue(g50, e50),
       "75%✓": e75,
-      "75%✗": g75,
-      "75%Δ": Number((g75 - e75).toFixed(4)),
+      "75%✗": formatValue(g75, e75),
       "100%✓": e100,
-      "100%✗": g100,
-      "100%Δ": Number((g100 - e100).toFixed(4)),
+      "100%✗": formatValue(g100, e100),
     };
   });
 
   // Totales por banda (fila final)
+  const totalNormExp = sumHoras(expBands.normal);
+  const totalNormGot = sumHoras(gotBands.normal ?? []);
+  const total25Exp = sumHoras(expBands.p25);
+  const total25Got = sumHoras(gotBands.p25 ?? []);
+  const total50Exp = sumHoras(expBands.p50);
+  const total50Got = sumHoras(gotBands.p50 ?? []);
+  const total75Exp = sumHoras(expBands.p75);
+  const total75Got = sumHoras(gotBands.p75 ?? []);
+  const total100Exp = sumHoras(expBands.p100);
+  const total100Got = sumHoras(gotBands.p100 ?? []);
+
   rows.push({
     job: "TOTAL",
-    "norm✓": sumHoras(expBands.normal),
-    "norm✗": sumHoras(gotBands.normal ?? []),
-    normΔ: Number(
-      (sumHoras(gotBands.normal ?? []) - sumHoras(expBands.normal)).toFixed(4)
-    ),
-    "25%✓": sumHoras(expBands.p25),
-    "25%✗": sumHoras(gotBands.p25 ?? []),
-    "25%Δ": Number(
-      (sumHoras(gotBands.p25 ?? []) - sumHoras(expBands.p25)).toFixed(4)
-    ),
-    "50%✓": sumHoras(expBands.p50),
-    "50%✗": sumHoras(gotBands.p50 ?? []),
-    "50%Δ": Number(
-      (sumHoras(gotBands.p50 ?? []) - sumHoras(expBands.p50)).toFixed(4)
-    ),
-    "75%✓": sumHoras(expBands.p75),
-    "75%✗": sumHoras(gotBands.p75 ?? []),
-    "75%Δ": Number(
-      (sumHoras(gotBands.p75 ?? []) - sumHoras(expBands.p75)).toFixed(4)
-    ),
-    "100%✓": sumHoras(expBands.p100),
-    "100%✗": sumHoras(gotBands.p100 ?? []),
-    "100%Δ": Number(
-      (sumHoras(gotBands.p100 ?? []) - sumHoras(expBands.p100)).toFixed(4)
-    ),
+    "norm✓": totalNormExp,
+    "norm✗": formatValue(totalNormGot, totalNormExp),
+    "25%✓": total25Exp,
+    "25%✗": formatValue(total25Got, total25Exp),
+    "50%✓": total50Exp,
+    "50%✗": formatValue(total50Got, total50Exp),
+    "75%✓": total75Exp,
+    "75%✗": formatValue(total75Got, total75Exp),
+    "100%✓": total100Exp,
+    "100%✗": formatValue(total100Got, total100Exp),
   });
 
   return rows;
+}
+
+// Verifica si hay diferencias antes de imprimir
+function hasDifferences(
+  got: {
+    normal: HorasPorJob[];
+    p25: HorasPorJob[];
+    p50: HorasPorJob[];
+    p75: HorasPorJob[];
+    p100: HorasPorJob[];
+    totalHorasLaborables: number;
+    horasFeriado?: number;
+  },
+  exp: {
+    normal: HorasPorJob[];
+    p25: HorasPorJob[];
+    p50: HorasPorJob[];
+    p75: HorasPorJob[];
+    p100: HorasPorJob[];
+    totalHorasLaborables: number;
+    horasFeriado?: number;
+  }
+): boolean {
+  const assertBandEqual = (gotArr: HorasPorJob[], expArr: HorasPorJob[]) => {
+    const norm = (a: HorasPorJob[]) =>
+      [...a]
+        .map(({ codigoJob, cantidadHoras }) => ({
+          codigoJob,
+          cantidadHoras: Number(cantidadHoras.toFixed(4)),
+        }))
+        .sort((x, y) =>
+          x.codigoJob < y.codigoJob
+            ? -1
+            : x.codigoJob > y.codigoJob
+            ? 1
+            : x.cantidadHoras - y.cantidadHoras
+        );
+    const gotNorm = norm(gotArr ?? []);
+    const expNorm = norm(expArr);
+    if (gotNorm.length !== expNorm.length) return false;
+    for (let i = 0; i < gotNorm.length; i++) {
+      if (
+        gotNorm[i].codigoJob !== expNorm[i].codigoJob ||
+        Math.abs(gotNorm[i].cantidadHoras - expNorm[i].cantidadHoras) > 0.0001
+      ) {
+        return false;
+      }
+    }
+    return Math.abs(sumHoras(gotArr ?? []) - sumHoras(expArr)) < 0.0001;
+  };
+
+  const totalGot =
+    sumHoras(got.normal ?? []) +
+    sumHoras(got.p25 ?? []) +
+    sumHoras(got.p50 ?? []) +
+    sumHoras(got.p75 ?? []) +
+    sumHoras(got.p100 ?? []);
+  const totalExp =
+    sumHoras(exp.normal) +
+    sumHoras(exp.p25) +
+    sumHoras(exp.p50) +
+    sumHoras(exp.p75) +
+    sumHoras(exp.p100);
+
+  if (Math.abs(totalGot - totalExp) > 0.0001) return true;
+  if (
+    Math.abs((got.totalHorasLaborables ?? 0) - exp.totalHorasLaborables) >
+    0.0001
+  )
+    return true;
+  if (Math.abs((got.horasFeriado ?? 0) - (exp.horasFeriado ?? 0)) > 0.0001)
+    return true;
+  if (!assertBandEqual(got.normal ?? [], exp.normal)) return true;
+  if (!assertBandEqual(got.p25 ?? [], exp.p25)) return true;
+  if (!assertBandEqual(got.p50 ?? [], exp.p50)) return true;
+  if (!assertBandEqual(got.p75 ?? [], exp.p75)) return true;
+  if (!assertBandEqual(got.p100 ?? [], exp.p100)) return true;
+
+  return false;
 }
 
 // Mantén tus asserts banda a banda; sólo cambiamos el logger:
@@ -181,6 +270,7 @@ function logProrrateoAndAssert(
     p75: HorasPorJob[];
     p100: HorasPorJob[];
     totalHorasLaborables: number;
+    horasFeriado: number;
     vacacionesHoras: number;
     permisoConSueldoHoras: number;
     permisoSinSueldoHoras: number;
@@ -199,67 +289,86 @@ function logProrrateoAndAssert(
     p75: HorasPorJob[];
     p100: HorasPorJob[];
     totalHorasLaborables: number;
+    horasFeriado?: number;
   }
 ) {
-  // 1) Tabla ancha, una fila por job del día (aunque tenga 0s en alguna banda)
-  const wide = rowsWideByJob(
+  // Verificar si hay diferencias antes de imprimir
+  const hasDiff = hasDifferences(
     {
       normal: got.normal ?? [],
       p25: got.p25 ?? [],
       p50: got.p50 ?? [],
       p75: got.p75 ?? [],
       p100: got.p100 ?? [],
+      totalHorasLaborables: got.totalHorasLaborables ?? 0,
+      horasFeriado: got.horasFeriado ?? 0,
     },
-    {
-      normal: exp.normal,
-      p25: exp.p25,
-      p50: exp.p50,
-      p75: exp.p75,
-      p100: exp.p100,
-    }
+    exp
   );
 
-  // eslint-disable-next-line no-console
-  console.log(`\n▶️ ${fecha} — Prorrateo por Job (Esperado vs Obtenido)`);
-  // eslint-disable-next-line no-console
-  console.table(wide);
+  const shouldLogDetails = hasDiff || (exp.horasFeriado ?? 0) > 0;
 
-  // 2) Resumen total diario y totalHorasLaborables
-  const totalGot =
-    sumHoras(got.normal ?? []) +
-    sumHoras(got.p25 ?? []) +
-    sumHoras(got.p50 ?? []) +
-    sumHoras(got.p75 ?? []) +
-    sumHoras(got.p100 ?? []);
-  const totalExp =
-    sumHoras(exp.normal) +
-    sumHoras(exp.p25) +
-    sumHoras(exp.p50) +
-    sumHoras(exp.p75) +
-    sumHoras(exp.p100);
+  // Solo imprimir si hay diferencias o queremos revisar feriados
+  if (shouldLogDetails) {
+    // 1) Tabla ancha, una fila por job del día (aunque tenga 0s en alguna banda)
+    const wide = rowsWideByJob(
+      {
+        normal: got.normal ?? [],
+        p25: got.p25 ?? [],
+        p50: got.p50 ?? [],
+        p75: got.p75 ?? [],
+        p100: got.p100 ?? [],
+      },
+      {
+        normal: exp.normal,
+        p25: exp.p25,
+        p50: exp.p50,
+        p75: exp.p75,
+        p100: exp.p100,
+      }
+    );
 
-  // eslint-disable-next-line no-console
-  console.table([
-    {
-      métrica: "TOT",
-      "✓": Number(totalExp.toFixed(4)),
-      "✗": Number(totalGot.toFixed(4)),
-      Δ: Number((totalGot - totalExp).toFixed(4)),
-      ok: totalGot === totalExp ? "✅" : "❌",
-    },
-    {
-      métrica: "Lab",
-      "✓": Number(exp.totalHorasLaborables.toFixed(4)),
-      "✗": Number((got.totalHorasLaborables ?? 0).toFixed(4)),
-      Δ: Number(
-        ((got.totalHorasLaborables ?? 0) - exp.totalHorasLaborables).toFixed(4)
-      ),
-      ok:
-        (got.totalHorasLaborables ?? 0) === exp.totalHorasLaborables
-          ? "✅"
-          : "❌",
-    },
-  ]);
+    // eslint-disable-next-line no-console
+    console.log(`\n▶️ ${fecha} — Prorrateo por Job (Esperado vs Obtenido)`);
+    // eslint-disable-next-line no-console
+    console.table(wide);
+
+    // 2) Resumen total diario y totalHorasLaborables
+    const totalGot =
+      sumHoras(got.normal ?? []) +
+      sumHoras(got.p25 ?? []) +
+      sumHoras(got.p50 ?? []) +
+      sumHoras(got.p75 ?? []) +
+      sumHoras(got.p100 ?? []);
+    const totalExp =
+      sumHoras(exp.normal) +
+      sumHoras(exp.p25) +
+      sumHoras(exp.p50) +
+      sumHoras(exp.p75) +
+      sumHoras(exp.p100);
+
+    // eslint-disable-next-line no-console
+    console.table([
+      {
+        métrica: "TOT",
+        "✓": Number(totalExp.toFixed(4)),
+        "✗": formatValue(totalGot, totalExp),
+      },
+      {
+        métrica: "Lab",
+        "✓": Number(exp.totalHorasLaborables.toFixed(4)),
+        "✗": formatValue(
+          got.totalHorasLaborables ?? 0,
+          exp.totalHorasLaborables
+        ),
+      },
+      {
+        métrica: "Fer",
+        "✓": Number((exp.horasFeriado ?? 0).toFixed(4)),
+        "✗": formatValue(got.horasFeriado ?? 0, exp.horasFeriado ?? 0),
+      },
+    ]);
+  }
 
   // 3) Asserts (igual que antes)
   const assertBand = (gotArr: HorasPorJob[], expArr: HorasPorJob[]) => {
@@ -286,12 +395,26 @@ function logProrrateoAndAssert(
   assertBand(got.p75 ?? [], exp.p75);
   assertBand(got.p100 ?? [], exp.p100);
 
+  const totalGot =
+    sumHoras(got.normal ?? []) +
+    sumHoras(got.p25 ?? []) +
+    sumHoras(got.p50 ?? []) +
+    sumHoras(got.p75 ?? []) +
+    sumHoras(got.p100 ?? []);
+  const totalExp =
+    sumHoras(exp.normal) +
+    sumHoras(exp.p25) +
+    sumHoras(exp.p50) +
+    sumHoras(exp.p75) +
+    sumHoras(exp.p100);
+
   expect(Number(totalGot.toFixed(6))).toBeCloseTo(
     Number(totalExp.toFixed(6)),
     6
   );
   expect(got.totalHorasLaborables).toBeCloseTo(exp.totalHorasLaborables, 6);
 
+  expect(got.horasFeriado ?? 0).toBe(exp.horasFeriado ?? 0);
   expect(got.vacacionesHoras).toBe(0);
   expect(got.permisoConSueldoHoras).toBe(0);
   expect(got.permisoSinSueldoHoras).toBe(0);
@@ -305,7 +428,6 @@ function logProrrateoAndAssert(
 }
 
 /** =========================
-/** =========================
  *   Datos esperados por día
  *  ========================= */
 const expectedByDate: Record<string, any> = {
@@ -316,10 +438,11 @@ const expectedByDate: Record<string, any> = {
       { jobId: 0, codigoJob: "108", nombreJob: "108", cantidadHoras: 3 },
     ],
     p25: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 2 }],
-    p50: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 1 }],
-    p75: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 4 }],
+    p50: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 3 }],
+    p75: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 2 }],
     p100: [],
     totalHorasLaborables: 9,
+    horasFeriado: 0,
   },
   "2025-09-12": {
     normal: [
@@ -335,6 +458,7 @@ const expectedByDate: Record<string, any> = {
     ],
     p100: [],
     totalHorasLaborables: 8,
+    horasFeriado: 0,
   },
   "2025-09-13": {
     normal: [],
@@ -343,6 +467,7 @@ const expectedByDate: Record<string, any> = {
     p75: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 8 }],
     p100: [],
     totalHorasLaborables: 0,
+    horasFeriado: 0,
   },
   "2025-09-14": {
     normal: [],
@@ -351,6 +476,7 @@ const expectedByDate: Record<string, any> = {
     p75: [],
     p100: [],
     totalHorasLaborables: 0,
+    horasFeriado: 0,
   },
   "2025-09-15": {
     normal: [],
@@ -359,6 +485,7 @@ const expectedByDate: Record<string, any> = {
     p75: [],
     p100: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 8 }],
     totalHorasLaborables: 0,
+    horasFeriado: 0,
   },
   "2025-09-16": {
     normal: [
@@ -371,6 +498,7 @@ const expectedByDate: Record<string, any> = {
     p75: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 7 }],
     p100: [],
     totalHorasLaborables: 9,
+    horasFeriado: 0,
   },
   "2025-09-17": {
     normal: [
@@ -381,6 +509,7 @@ const expectedByDate: Record<string, any> = {
     p75: [{ jobId: 0, codigoJob: "105", nombreJob: "105", cantidadHoras: 2 }],
     p100: [],
     totalHorasLaborables: 9,
+    horasFeriado: 0,
   },
   "2025-09-18": {
     normal: [
@@ -393,6 +522,39 @@ const expectedByDate: Record<string, any> = {
     ],
     p100: [],
     totalHorasLaborables: 9,
+    horasFeriado: 0,
+  },
+  "2025-09-19": {
+    normal: [
+      {
+        jobId: 0,
+        codigoJob: "00",
+        nombreJob: "Feriados",
+        cantidadHoras: 9,
+      },
+    ],
+    p25: [],
+    p50: [],
+    p75: [],
+    p100: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 4 }],
+    totalHorasLaborables: 0,
+    horasFeriado: 9,
+  },
+  "2025-09-20": {
+    normal: [
+      {
+        jobId: 0,
+        codigoJob: "00",
+        nombreJob: "Feriados",
+        cantidadHoras: 9,
+      },
+    ],
+    p25: [],
+    p50: [],
+    p75: [],
+    p100: [],
+    totalHorasLaborables: 0,
+    horasFeriado: 9,
   },
 };
 
@@ -634,6 +796,40 @@ function seedInputForDate(p: H1Test, fecha: string) {
       });
       break;
 
+    case "2025-09-19":
+      p.seedFeriado(fecha, true);
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "13:00"),
+        esHoraCorrida: false,
+        esDiaLibre: true,
+        horasFeriado: 9,
+        actividades: [
+          {
+            descripcion: "Extra 08-12",
+            esExtra: true,
+            horaInicio: makeDateUTC(fecha, "08:00"),
+            horaFin: makeDateUTC(fecha, "12:00"),
+            job: { codigo: "100" },
+          },
+        ],
+      });
+      break;
+
+    case "2025-09-20":
+      p.seedFeriado(fecha, true);
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "13:00"),
+        esHoraCorrida: false,
+        esDiaLibre: true,
+        horasFeriado: 9,
+        actividades: [],
+      });
+      break;
+
     default:
       throw new Error(`Fecha no soportada en fixtures: ${fecha}`);
   }
@@ -642,7 +838,7 @@ function seedInputForDate(p: H1Test, fecha: string) {
 /** =========================
  *     Suite de pruebas
  *  ========================= */
-describe("PoliticaH1 - Prorrateo por Job (11–18/09/2025) con tablas comparativas", () => {
+describe("PoliticaH1 - Prorrateo por Job (11–20/09/2025) con tablas comparativas", () => {
   const fechas = [
     "2025-09-11",
     "2025-09-12",
@@ -652,12 +848,18 @@ describe("PoliticaH1 - Prorrateo por Job (11–18/09/2025) con tablas comparativ
     "2025-09-16",
     "2025-09-17",
     "2025-09-18",
+    "2025-09-19",
+    "2025-09-20",
   ];
 
   for (const fecha of fechas) {
     it(`${fecha}: prorrateo por job coincide con esperado`, async () => {
       const p = new H1Test();
-      seedInputForDate(p, fecha);
+      // Sembrar datos históricos hasta la fecha actual para que la racha se herede correctamente.
+      const idx = fechas.indexOf(fecha);
+      for (let i = 0; i <= idx; i++) {
+        seedInputForDate(p, fechas[i]);
+      }
 
       const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
         fecha,

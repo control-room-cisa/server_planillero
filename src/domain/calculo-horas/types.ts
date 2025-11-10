@@ -91,6 +91,7 @@ export interface ConteoHorasProrrateo {
     inasistenciasHoras: number; // E05 horas / 8
 
     totalHorasLaborables: number;
+    horasFeriado: number; // Horas laborables asignadas a feriado
 
     deduccionesISR: number;
     deduccionesRAP: number;

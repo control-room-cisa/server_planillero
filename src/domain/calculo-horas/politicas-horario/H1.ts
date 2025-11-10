@@ -112,7 +112,9 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     b: Buckets
   ) {
     // C4: 2.00× (libre/festiva) con arrastre entre días mientras no haya LIBRE
-    const arrastraC4 = esLibreOFest || r.domOFestActivo;
+    // domOFestActivo solo aplica p100 si el día actual también es feriado/libre
+    // Si el día actual NO es feriado/libre, domOFestActivo solo eleva el piso
+    const arrastraC4 = esLibreOFest;
     if (arrastraC4) {
       b.extraC4Min += 15; // p100 para presentación
       r.domOFestActivo = true; // persiste hasta que la racha termine (LIBRE)
@@ -146,8 +148,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     }
 
     // No dominical/festiva → escalera normal
+    // Si domOFestActivo está activo pero el día actual NO es feriado/libre,
+    // solo usar domOFestActivo para elevar el piso, no para clasificar como p100
     const base = esDiurna ? 1.25 : 1.5;
     if (r.piso < base) r.piso = base;
+
+    // Si domOFestActivo está activo, también asegurar que el piso esté elevado
+    // (esto ya se hizo arriba, pero es para claridad en la lógica)
 
     // Activar bandera si el slot actual es diurno (5-19h)
     // Se hace ANTES de verificar p75
@@ -255,6 +262,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     // Recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
+      const registroDelDia = await this.getRegistroDiario(empleadoId, f);
       // No necesitamos Fallback si sembrarRachaAntesDe funciona correctamente
       // Eliminar este bloque y confiar en sembrarRachaAntesDe
       const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
@@ -268,6 +276,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       const dow = new Date(`${f}T00:00:00`).getDay(); // 0=Dom
       const esDomingo = dow === 0;
       const esFestivo = feriadoInfo.esFeriado;
+      const esDiaLibreMarcado = registroDelDia?.esDiaLibre === true;
 
       // Día libre de contrato
       const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
@@ -276,7 +285,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       );
 
       // p100 si es día libre del contrato O si es feriado
-      const esLibreOFest = hTrabajo.esDiaLibre || esFestivo;
+      const esLibreOFest = esDiaLibreMarcado || esFestivo;
 
       // En días no laborables bloquear p75 (mixta)
       // Solo bloquear mixta si es día libre o si no hay horas laborables configuradas
@@ -361,7 +370,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         addPermSSDia = 0,
         addInasistDia = 0;
       try {
-        const reg = await this.getRegistroDiario(empleadoId, f);
+        const reg = registroDelDia;
         if (reg?.actividades?.length) {
           for (const act of reg.actividades as any[]) {
             if (act?.esExtra) continue; // solo normales
@@ -584,6 +593,15 @@ export class PoliticaH1 extends PoliticaHorarioBase {
     let r = PoliticaH1.nuevaRacha();
 
     try {
+      // Obtener información del día anterior (feriado y horario de trabajo)
+      const feriadoInfoAnterior = await this.esFeriado(diaAnterior);
+      const registroAnterior = await this.getRegistroDiario(
+        empleadoId,
+        diaAnterior
+      );
+      const esLibreOFestAnterior =
+        registroAnterior?.esDiaLibre === true || feriadoInfoAnterior.esFeriado;
+
       const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
         diaAnterior,
         empleadoId
@@ -591,7 +609,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
       // if (process.env.DEBUG_H1) {
       //   console.log(
-      //     `[H1][sembrarRacha] ${diaAnterior} tiene ${segmentos.length} segmentos`
+      //     `[H1][sembrarRacha] ${diaAnterior} tiene ${segmentos.length} segmentos, esLibreOFest=${esLibreOFestAnterior}`
       //   );
       // }
 
@@ -623,8 +641,13 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         const slots = dur / 15;
         const esDiurna = PoliticaH1.isDiurna(seg);
         for (let i = 0; i < slots; i++) {
-          // Simular clasificación REAL (como si fuera día normal)
-          PoliticaH1.aplicarExtraSlot(false, esDiurna, r, DUMMY_BUCKETS);
+          // Simular clasificación REAL usando el estado real del día anterior (feriado/libre)
+          PoliticaH1.aplicarExtraSlot(
+            esLibreOFestAnterior,
+            esDiurna,
+            r,
+            DUMMY_BUCKETS
+          );
         }
       }
 
@@ -815,7 +838,10 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       }
     >();
 
+    const baseKey = 0; // tests esperan jobId 0
+
     // Recorrer cada día del período y procesar actividades directamente
+    let totalHorasFeriado = 0;
     let currentDate = fechaInicio;
     while (currentDate <= fechaFin) {
       try {
@@ -860,8 +886,6 @@ export class PoliticaH1 extends PoliticaHorarioBase {
 
         // Map auxiliar para resolver nombre real por código cuando esté disponible
         const codigoANombre: Map<string, string> = new Map();
-
-        const baseKey = 0; // tests esperan jobId 0
         const upsertNormal = (
           codigo: string,
           nombre: string,
@@ -910,6 +934,38 @@ export class PoliticaH1 extends PoliticaHorarioBase {
           prev.total += diurnaH + nocturnaH;
           extrasPorJob.set(codigo, prev);
         };
+
+        const horasFeriadoDia = Number(
+          ((registroDiario as any)?.horasFeriado ?? 0) as number
+        );
+
+        if (horasFeriadoDia > 0) {
+          // eslint-disable-next-line no-console
+          console.log(
+            `[PoliticaH1][Prorrateo] ${currentDate} horasFeriadoDia=${horasFeriadoDia}`
+          );
+          totalHorasFeriado += horasFeriadoDia;
+          upsertNormal("00", "Feriados", horasFeriadoDia);
+          let feriadoEntry: {
+            jobId: number;
+            codigoJob: string;
+            nombreJob: string;
+            horas: number;
+            comentarios: string[];
+          } | null = null;
+          for (const v of horasPorJobNormal.values()) {
+            if (v.codigoJob === "00") {
+              feriadoEntry = v;
+              break;
+            }
+          }
+          // eslint-disable-next-line no-console
+          console.log(
+            `[PoliticaH1][Prorrateo] ${currentDate} job Feriados horas acumuladas=${
+              feriadoEntry?.horas ?? 0
+            } totalHorasFeriado=${totalHorasFeriado}`
+          );
+        }
 
         for (const act of (registroDiario as any).actividades ?? []) {
           const codigo =
@@ -1146,6 +1202,43 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       currentDate = PoliticaH1.addDays(currentDate, 1);
     }
 
+    if (totalHorasFeriado > 0) {
+      let feriadoEntry:
+        | {
+            jobId: number;
+            codigoJob: string;
+            nombreJob: string;
+            horas: number;
+            comentarios: string[];
+          }
+        | undefined;
+      for (const v of horasPorJobNormal.values()) {
+        if (v.codigoJob === "00") {
+          feriadoEntry = v;
+          break;
+        }
+      }
+      if (feriadoEntry) {
+        const diff = Math.abs(feriadoEntry.horas - totalHorasFeriado);
+        // eslint-disable-next-line no-console
+        console.log(
+          `[PoliticaH1][Prorrateo] totalHorasFeriado=${totalHorasFeriado} horasJobFeriados=${feriadoEntry.horas} diff=${diff}`
+        );
+      } else {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[PoliticaH1][Prorrateo] totalHorasFeriado=${totalHorasFeriado} pero no se encontró job Feriados. Creando fallback.`
+        );
+        horasPorJobNormal.set(`${baseKey}:00` as unknown as number, {
+          jobId: baseKey,
+          codigoJob: "00",
+          nombreJob: "Feriados",
+          horas: totalHorasFeriado,
+          comentarios: [],
+        });
+      }
+    }
+
     // Convertir mapas a arrays
     const convertMapToArray = (
       map: Map<
@@ -1186,6 +1279,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         permisoSinSueldoHoras: conteoHoras.cantidadHoras.permisoSinSueldo || 0,
         inasistenciasHoras: conteoHoras.cantidadHoras.inasistencias || 0,
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
+        horasFeriado: totalHorasFeriado,
         deduccionesISR: 0,
         deduccionesRAP: 0,
         deduccionesComida: 0,
