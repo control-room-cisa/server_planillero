@@ -157,6 +157,7 @@ model Nomina {
   empresa    Empresa  @relation(fields: [empresaId], references: [id])
 
   nombrePeriodoNomina String?  @map("nombre_nomina") @db.VarChar(100)
+  codigoNomina        String?  @unique @map("codigo_nomina") @db.VarChar(10)
   // Período de nómina normalizado
   fechaInicio         DateTime @map("fecha_inicio")
   fechaFin            DateTime @map("fecha_fin")
@@ -196,6 +197,9 @@ model Nomina {
 
   // Comentarios
   comentario String? @map("comentario") @db.VarChar(200)
+
+  // Estado de pago
+  pagado Boolean @default(false) @map("pagado")
 
   // Auditoría
   codigoEmpleadoCreacion String? @map("codigo_empleado_creacion") @db.VarChar(20)

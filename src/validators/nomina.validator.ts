@@ -43,6 +43,7 @@ export const crearNominaSchema = z.object({
     .nullable()
     .optional()
     .transform((val) => (val === "" ? null : val)),
+  pagado: z.boolean().optional(),
 });
 
 export type CrearNominaDto = z.infer<typeof crearNominaSchema>;

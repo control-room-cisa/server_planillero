@@ -101,7 +101,13 @@ export const leerNominas: RequestHandler<
   {},
   ApiResponse<Nomina[]>,
   {},
-  { empleadoId?: string; empresaId?: string; start?: string; end?: string }
+  {
+    empleadoId?: string;
+    empresaId?: string;
+    start?: string;
+    end?: string;
+    codigoNomina?: string;
+  }
 > = async (req, res, next) => {
   try {
     const empleadoId = req.query.empleadoId
@@ -110,13 +116,14 @@ export const leerNominas: RequestHandler<
     const empresaId = req.query.empresaId
       ? Number(req.query.empresaId)
       : undefined;
-    const { start, end } = req.query;
+    const { start, end, codigoNomina } = req.query;
 
     const data = await NominaService.list({
       empleadoId,
       empresaId,
       start,
       end,
+      codigoNomina: codigoNomina as string | undefined,
     });
     return res.json({ success: true, message: "Listado de nóminas", data });
   } catch (err) {
@@ -206,6 +213,17 @@ export const actualizarNomina: RequestHandler<
 > = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
+
+    // Verificar que la nómina existe y no está pagada
+    const existing = await NominaService.getById(id);
+    if ((existing as any).pagado === true) {
+      return res.status(400).json({
+        success: false,
+        message: "No se puede editar una nómina que ya está pagada",
+        data: null,
+      });
+    }
+
     const payload = actualizarNominaSchema.parse(req.body);
     const updated = await NominaService.update(id, payload);
     return res.json({
@@ -281,5 +299,38 @@ export const leerNominasResumenPorEmpleado: RequestHandler<
       message: err?.message || "Error interno al listar nóminas",
       data: null,
     } as any);
+  }
+};
+
+export const eliminarNomina: RequestHandler<
+  { id: string },
+  ApiResponse<Nomina>
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res
+        .status(400)
+        .json({ success: false, message: "id inválido", data: null });
+    }
+
+    // Verificar que la nómina existe y no está pagada
+    const existing = await NominaService.getById(id);
+    if ((existing as any).pagado === true) {
+      return res.status(400).json({
+        success: false,
+        message: "No se puede eliminar una nómina que ya está pagada",
+        data: null,
+      });
+    }
+
+    const deleted = await NominaService.delete(id);
+    return res.json({
+      success: true,
+      message: "Nómina eliminada",
+      data: deleted,
+    });
+  } catch (err) {
+    next(err);
   }
 };

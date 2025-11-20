@@ -12,14 +12,16 @@ export class NominaRepository {
     empresaId?: number;
     start?: string;
     end?: string;
+    codigoNomina?: string;
   }): Promise<Nomina[]> {
-    const { empleadoId, empresaId, start, end } = params;
+    const { empleadoId, empresaId, start, end, codigoNomina } = params;
     return prisma.nomina.findMany({
       where: {
         deletedAt: null,
         empleadoId,
         empresaId,
-        ...(start && end
+        ...(codigoNomina ? { codigoNomina } : {}),
+        ...(start && end && !codigoNomina
           ? {
               fechaInicio: { gte: new Date(start) },
               fechaFin: { lte: new Date(end) },
@@ -39,5 +41,13 @@ export class NominaRepository {
     data: Prisma.NominaUpdateInput
   ): Promise<Nomina> {
     return prisma.nomina.update({ where: { id }, data });
+  }
+
+  static async delete(id: number): Promise<Nomina> {
+    // Eliminación lógica
+    return prisma.nomina.update({
+      where: { id },
+      data: { deletedAt: new Date() },
+    });
   }
 }

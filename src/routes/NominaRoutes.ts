@@ -7,6 +7,7 @@ import {
   actualizarNomina,
   leerNominasResumenPorEmpleado,
   leerNominaPorId,
+  eliminarNomina,
 } from "../controllers/NominaController";
 import { Roles } from "../enums/roles";
 
@@ -101,6 +102,21 @@ router.put(
     next();
   },
   actualizarNomina
+);
+
+// DELETE /api/nominas/:id
+router.delete(
+  "/:id",
+  (req, res, next) => {
+    const anyReq: any = req;
+    if (anyReq.user?.rolId !== Roles.RRHH) {
+      return res
+        .status(403)
+        .json({ success: false, message: "Solo RRHH", data: null });
+    }
+    next();
+  },
+  eliminarNomina
 );
 
 export default router;

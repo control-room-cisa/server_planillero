@@ -9,6 +9,42 @@ import { AppError } from "../errors/AppError";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { RegistroDiarioService } from "./RegistroDiarioService";
 
+// Función para generar código de nómina: YYYYMMP
+// YYYY = año, MM = mes (01-12), P = período (A primera quincena, B segunda quincena)
+function generarCodigoNomina(fechaInicio: Date, fechaFin: Date): string {
+  const inicio = fechaInicio instanceof Date ? fechaInicio : new Date(fechaInicio);
+  const fin = fechaFin instanceof Date ? fechaFin : new Date(fechaFin);
+  
+  const diaFin = fin.getDate();
+  const diaInicio = inicio.getDate();
+  
+  // Determinar período: A (primera quincena) o B (segunda quincena)
+  // Primera quincena: días 27-11 (del mes siguiente) → usar mes del fin
+  // Segunda quincena: días 12-26 → usar mes del fin
+  let periodo: string;
+  let año: number;
+  let mes: string;
+  
+  if (diaFin === 11 || diaInicio === 27) {
+    // Primera quincena: 27 del mes anterior al 11 del mes actual
+    periodo = "A";
+    año = fin.getFullYear();
+    mes = String(fin.getMonth() + 1).padStart(2, "0");
+  } else if (diaFin === 26 || diaInicio === 12) {
+    // Segunda quincena: 12-26 del mismo mes
+    periodo = "B";
+    año = fin.getFullYear();
+    mes = String(fin.getMonth() + 1).padStart(2, "0");
+  } else {
+    // Fallback: usar mes del fin
+    año = fin.getFullYear();
+    mes = String(fin.getMonth() + 1).padStart(2, "0");
+    periodo = diaFin <= 15 ? "A" : "B";
+  }
+  
+  return `${año}${mes}${periodo}`;
+}
+
 export class NominaService {
   static async getById(id: number): Promise<Nomina> {
     const found = await NominaRepository.findById(id);
@@ -21,6 +57,7 @@ export class NominaService {
     empresaId?: number;
     start?: string;
     end?: string;
+    codigoNomina?: string;
   }): Promise<Nomina[]> {
     return NominaRepository.findMany(params);
   }
@@ -51,11 +88,21 @@ export class NominaService {
       throw new AppError("No se pudo resolver la empresa del empleado", 400);
     }
 
+    // Generar código de nómina
+    const fechaInicioDate = payload.fechaInicio instanceof Date 
+      ? payload.fechaInicio 
+      : new Date(payload.fechaInicio);
+    const fechaFinDate = payload.fechaFin instanceof Date 
+      ? payload.fechaFin 
+      : new Date(payload.fechaFin);
+    const codigoNomina = generarCodigoNomina(fechaInicioDate, fechaFinDate);
+
     // Prisma types: map DTO to create input
     const created = await NominaRepository.create({
       empleado: { connect: { id: payload.empleadoId } },
       empresa: { connect: { id: empresaId } },
       nombrePeriodoNomina: payload.nombrePeriodoNomina ?? null,
+      codigoNomina: codigoNomina,
       fechaInicio: payload.fechaInicio,
       fechaFin: payload.fechaFin,
       sueldoMensual: payload.sueldoMensual,
@@ -138,5 +185,13 @@ export class NominaService {
         ? { empleado: { connect: { id: payload.empleadoId } } }
         : {}),
     });
+  }
+
+  static async delete(id: number): Promise<Nomina> {
+    const existing = await NominaRepository.findById(id);
+    if (!existing) throw new AppError("Nómina no encontrada", 404);
+    
+    // Eliminación lógica
+    return NominaRepository.delete(id);
   }
 }
