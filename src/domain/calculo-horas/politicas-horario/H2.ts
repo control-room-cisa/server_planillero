@@ -536,7 +536,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         horasFeriado: 0,
         deduccionesISR: 0,
         deduccionesRAP: 0,
-        deduccionesComida: 0,
+        deduccionesAlimentacion: 0,
         deduccionesIHSS: 0,
         Prestamo: 0,
         Total: 0,

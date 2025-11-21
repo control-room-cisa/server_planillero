@@ -9,6 +9,7 @@ import {
 import type { Segmento15 } from "./segmentador";
 import { JobRepository } from "../../../repositories/JobRepository";
 import { SegmentadorTiempo } from "../segmentador-tiempo";
+import { GastosAlimentacionService } from "../../../services/GastosAlimentacionService";
 
 /**
  * Empleados con horario fijo de Lunes a Viernes
@@ -527,6 +528,58 @@ export class PoliticaH1 extends PoliticaHorarioBase {
       permisoSinSueldo: diasPermisoSS,
       inasistencias: diasInasistencias,
     };
+
+    // Calcular deducciones de alimentación
+    let deduccionesAlimentacion = 0;
+    let errorAlimentacion:
+      | { tieneError: boolean; mensajeError: string }
+      | undefined;
+    try {
+      const empleado = await this.getEmpleado(empleadoId);
+      if (empleado?.codigo) {
+        const gastosAlimentacion =
+          await GastosAlimentacionService.obtenerConsumo({
+            codigoEmpleado: empleado.codigo,
+            fechaInicio,
+            fechaFin,
+          });
+        // Verificar si la respuesta tiene success = false
+        if (!gastosAlimentacion.success) {
+          errorAlimentacion = {
+            tieneError: true,
+            mensajeError:
+              gastosAlimentacion.message ||
+              "El servicio de gastos de alimentación respondió con error",
+          };
+        } else {
+          // Sumar todos los precios de los items
+          deduccionesAlimentacion = (gastosAlimentacion.items || []).reduce(
+            (total, item) => total + item.precio,
+            0
+          );
+        }
+      } else {
+        errorAlimentacion = {
+          tieneError: true,
+          mensajeError: "El empleado no tiene código asignado",
+        };
+      }
+    } catch (error: any) {
+      // Capturar el mensaje de error
+      const mensajeError =
+        error?.message || "Error al obtener deducciones de alimentación";
+      errorAlimentacion = {
+        tieneError: true,
+        mensajeError,
+      };
+      console.error(
+        `Error al obtener gastos de alimentación para empleado ${empleadoId}:`,
+        error
+      );
+    }
+
+    result.deduccionesAlimentacion = deduccionesAlimentacion;
+    result.errorAlimentacion = errorAlimentacion;
 
     return result;
   }
@@ -1282,7 +1335,7 @@ export class PoliticaH1 extends PoliticaHorarioBase {
         horasFeriado: totalHorasFeriado,
         deduccionesISR: 0,
         deduccionesRAP: 0,
-        deduccionesComida: 0,
+        deduccionesAlimentacion: 0,
         deduccionesIHSS: 0,
         Prestamo: 0,
         Total: 0,

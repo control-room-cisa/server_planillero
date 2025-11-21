@@ -65,6 +65,17 @@ export interface ConteoHorasTrabajadas {
     inasistencias: number; // E05 horas / 8
   };
   /**
+   * Deducciones de alimentación calculadas
+   */
+  deduccionesAlimentacion?: number;
+  /**
+   * Información sobre el error al obtener gastos de alimentación
+   */
+  errorAlimentacion?: {
+    tieneError: boolean;
+    mensajeError: string;
+  };
+  /**
    * Errores de validación encontrados durante el cálculo
    */
   validationErrors?: ConteoHorasValidationError;
@@ -95,7 +106,7 @@ export interface ConteoHorasProrrateo {
 
     deduccionesISR: number;
     deduccionesRAP: number;
-    deduccionesComida: number;
+    deduccionesAlimentacion: number;
     deduccionesIHSS: number;
     Prestamo: number;
     Total: number;
