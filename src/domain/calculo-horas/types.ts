@@ -69,6 +69,10 @@ export interface ConteoHorasTrabajadas {
    */
   deduccionesAlimentacion?: number;
   /**
+   * Detalle de deducciones de alimentación por consumo
+   */
+  deduccionesAlimentacionDetalle?: DeduccionAlimentacionDetalle[];
+  /**
    * Información sobre el error al obtener gastos de alimentación
    */
   errorAlimentacion?: {
@@ -79,6 +83,12 @@ export interface ConteoHorasTrabajadas {
    * Errores de validación encontrados durante el cálculo
    */
   validationErrors?: ConteoHorasValidationError;
+}
+
+export interface DeduccionAlimentacionDetalle {
+  producto: string;
+  precio: number;
+  fecha: string;
 }
 
 /**

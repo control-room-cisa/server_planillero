@@ -9,6 +9,8 @@ import { RegistroDiarioRepository } from "../../../repositories/RegistroDiarioRe
 import { FeriadoRepository } from "../../../repositories/FeriadoRepository";
 import { EmpleadoRepository } from "../../../repositories/EmpleadoRepository";
 import { ResultadoSegmentacion, segmentarRegistroDiario } from "./segmentador";
+import { GastosAlimentacionService } from "../../../services/GastosAlimentacionService";
+import type { DeduccionAlimentacionDetalle } from "../types";
 
 /**
  * Clase base abstracta para todas las políticas de horario
@@ -135,5 +137,79 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
   protected validarFormatoFecha(fecha: string): boolean {
     const regex = /^\d{4}-\d{2}-\d{2}$/;
     return regex.test(fecha);
+  }
+
+  /**
+   * Calcula las deducciones de alimentación para un empleado en un rango de fechas.
+   * Retorna tanto el total como el detalle por consumo (si está disponible).
+   */
+  protected async calcularDeduccionesAlimentacion(
+    empleadoId: string,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<{
+    deduccionesAlimentacion: number;
+    detalle: DeduccionAlimentacionDetalle[];
+    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+  }> {
+    let deduccionesAlimentacion = 0;
+    let detalle: DeduccionAlimentacionDetalle[] = [];
+    let errorAlimentacion:
+      | { tieneError: boolean; mensajeError: string }
+      | undefined;
+
+    try {
+      const empleado = await this.getEmpleado(empleadoId);
+      if (empleado?.codigo) {
+        const gastosAlimentacion =
+          await GastosAlimentacionService.obtenerConsumo({
+            codigoEmpleado: empleado.codigo,
+            fechaInicio,
+            fechaFin,
+          });
+
+        if (!gastosAlimentacion.success) {
+          errorAlimentacion = {
+            tieneError: true,
+            mensajeError:
+              gastosAlimentacion.message ||
+              "El servicio de gastos de alimentación respondió con error",
+          };
+        } else {
+          detalle = (gastosAlimentacion.items || []).map((item) => ({
+            producto: item.producto,
+            precio: item.precio,
+            fecha: item.fecha,
+          }));
+
+          deduccionesAlimentacion = detalle.reduce(
+            (total, item) => total + item.precio,
+            0
+          );
+        }
+      } else {
+        errorAlimentacion = {
+          tieneError: true,
+          mensajeError: "El empleado no tiene código asignado",
+        };
+      }
+    } catch (error: any) {
+      const mensajeError =
+        error?.message || "Error al obtener deducciones de alimentación";
+      errorAlimentacion = {
+        tieneError: true,
+        mensajeError,
+      };
+      console.error(
+        `Error al obtener gastos de alimentación para empleado ${empleadoId}:`,
+        error
+      );
+    }
+
+    return {
+      deduccionesAlimentacion,
+      detalle,
+      errorAlimentacion,
+    };
   }
 }
