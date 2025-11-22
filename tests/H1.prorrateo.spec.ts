@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { PoliticaH1 } from "../src/domain/calculo-horas/politicas-horario/H1";
+import { PoliticaH1_1 } from "../src/domain/calculo-horas/politicas-horario/H1_1";
 
 /** =========================
  *   Stubs / helpers comunes
  *  ========================= */
-class H1Test extends PoliticaH1 {
+class H1Test extends PoliticaH1_1 {
   private registros: Record<string, any> = {};
   private feriados: Record<string, boolean> = {};
   seedRegistro(fecha: string, reg: any) {
@@ -277,7 +277,7 @@ function logProrrateoAndAssert(
     inasistenciasHoras: number;
     deduccionesISR: number;
     deduccionesRAP: number;
-    deduccionesComida: number;
+    deduccionesAlimentacion: number;
     deduccionesIHSS: number;
     Prestamo: number;
     Total: number;
@@ -421,7 +421,7 @@ function logProrrateoAndAssert(
   expect(got.inasistenciasHoras).toBe(0);
   expect(got.deduccionesISR).toBe(0);
   expect(got.deduccionesRAP).toBe(0);
-  expect(got.deduccionesComida).toBe(0);
+  expect(got.deduccionesAlimentacion).toBe(0);
   expect(got.deduccionesIHSS).toBe(0);
   expect(got.Prestamo).toBe(0);
   expect(got.Total).toBe(0);
@@ -838,7 +838,7 @@ function seedInputForDate(p: H1Test, fecha: string) {
 /** =========================
  *     Suite de pruebas
  *  ========================= */
-describe("PoliticaH1 - Prorrateo por Job (11–20/09/2025) con tablas comparativas", () => {
+describe("PoliticaH1_1 - Prorrateo por Job (11–20/09/2025) con tablas comparativas", () => {
   const fechas = [
     "2025-09-11",
     "2025-09-12",

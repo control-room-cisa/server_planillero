@@ -1,9 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { PoliticaH1 } from "../src/domain/calculo-horas/politicas-horario/H1";
+import { PoliticaH1_1 } from "../src/domain/calculo-horas/politicas-horario/H1_1";
 import type { HorarioTrabajo } from "../src/domain/calculo-horas/types";
 
 // ------- Stubs -------
-class H1Test extends PoliticaH1 {
+class H1Test extends PoliticaH1_1 {
   private registros: Record<string, any> = {};
   private feriados: Record<string, boolean> = {};
   private horarios: Record<
@@ -53,7 +53,7 @@ class H1Test extends PoliticaH1 {
     const personalizado = this.horarios[fecha];
     if (personalizado) {
       return {
-        tipoHorario: "H1",
+        tipoHorario: "H1_1",
         fecha,
         empleadoId,
         horarioTrabajo: {
@@ -525,7 +525,7 @@ function seedHistoricoHastaFecha(p: H1Test, fecha: string) {
   }
 }
 
-describe("PoliticaH1 - Casos 11–18/09/2025 (con logs y libre)", () => {
+describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
   // -------------------- 11/09/2025 --------------------
   // Esperado: 1,9,2,3,2,0
   it("11/09/2025: normal 7–17 + extra 17–24 ⇒ 1/9/2/3/2/0", async () => {

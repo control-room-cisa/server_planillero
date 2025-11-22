@@ -1,7 +1,10 @@
-// src/domain/politicas-horario/fabrica-politicas.ts
+// src/domain/calculo-horas/politicas-horario/fabrica-politicas.ts
 import { TipoHorario } from "@prisma/client";
 import { IPoliticaHorario } from "../interfaces";
 import { PoliticaH1 } from "./H1";
+import { PoliticaH1_1 } from "./H1_1";
+import { PoliticaH1_2 } from "./H1_2";
+import { PoliticaH1_3 } from "./H1_3";
 import { PoliticaH2 } from "./H2";
 
 /**
@@ -14,7 +17,18 @@ export class FabricaPoliticas {
   static crearPolitica(tipoHorario: TipoHorario): IPoliticaHorario {
     switch (tipoHorario) {
       case TipoHorario.H1:
-        return new PoliticaH1();
+        throw new Error(
+          "H1 es una clase abstracta. Use H1_1, H1_2 o H1_3 en su lugar."
+        );
+
+      case TipoHorario.H1_1:
+        return new PoliticaH1_1();
+
+      case TipoHorario.H1_2:
+        return new PoliticaH1_2();
+
+      case TipoHorario.H1_3:
+        return new PoliticaH1_3();
 
       case TipoHorario.H2:
         return new PoliticaH2();
@@ -37,7 +51,12 @@ export class FabricaPoliticas {
    * Verifica si un tipo de horario está soportado
    */
   static esTipoSoportado(tipoHorario: TipoHorario): boolean {
-    const tiposSoportados: TipoHorario[] = [TipoHorario.H1, TipoHorario.H2];
+    const tiposSoportados: TipoHorario[] = [
+      TipoHorario.H1_1,
+      TipoHorario.H1_2,
+      TipoHorario.H1_3,
+      TipoHorario.H2,
+    ];
     return tiposSoportados.includes(tipoHorario);
   }
 
@@ -45,7 +64,12 @@ export class FabricaPoliticas {
    * Obtiene la lista de tipos de horario soportados
    */
   static getTiposSoportados(): TipoHorario[] {
-    return [TipoHorario.H1, TipoHorario.H2];
+    return [
+      TipoHorario.H1_1,
+      TipoHorario.H1_2,
+      TipoHorario.H1_3,
+      TipoHorario.H2,
+    ];
   }
 
   /**

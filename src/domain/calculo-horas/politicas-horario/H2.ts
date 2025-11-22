@@ -1,4 +1,4 @@
-// src/domain/politicas-horario/H2.ts
+// src/domain/calculo-horas/politicas-horario/H2.ts
 import { PoliticaHorarioBase } from "./base";
 import type {
   HorarioTrabajo,
@@ -561,3 +561,4 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     return resultado;
   }
 }
+
