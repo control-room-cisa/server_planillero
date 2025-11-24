@@ -484,6 +484,7 @@ export function segmentarRegistroDiario(
   }
 
   // d) Invariante de cuadre: minutos(RANGO NORMAL) == minutos(NORMAL) + minutos(ALMUERZO dentro de NORMAL)
+  //    IMPORTANTE: Solo contar almuerzo si realmente se aplicó (esHoraCorrida = false)
   const minutosRangoNormal = sumMinutes(rangosNormal);
   const minutosNormal = conCortes
     .filter((s) => s.tipo === "NORMAL")
@@ -491,9 +492,11 @@ export function segmentarRegistroDiario(
   const minutosAlmuerzoTotal = conCortes
     .filter((s) => s.tipo === "ALMUERZO")
     .reduce((acc, s) => acc + (hhmmToMin(s.fin) - hhmmToMin(s.inicio)), 0);
-  const minutosAlmuerzoDentroNormal = sumMinutes(
-    intersecciones([R_ALMUERZO], rangosNormal)
-  );
+
+  // Solo contar almuerzo dentro del rango normal si realmente se aplicó almuerzo
+  const minutosAlmuerzoDentroNormal = aplicaAlmuerzo
+    ? sumMinutes(intersecciones([R_ALMUERZO], rangosNormal))
+    : 0;
 
   if (minutosRangoNormal !== minutosNormal + minutosAlmuerzoDentroNormal) {
     errores.push({
@@ -504,6 +507,8 @@ export function segmentarRegistroDiario(
         minutosRangoNormal,
         minutosNormal,
         minutosAlmuerzoDentroNormal,
+        aplicaAlmuerzo,
+        esHoraCorrida: registro.esHoraCorrida,
       },
       severity: "ERROR",
     });
