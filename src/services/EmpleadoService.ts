@@ -23,10 +23,9 @@ export class EmpleadoService {
       cargo: emp.cargo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
-        emp.urlFotoPerfil ?? undefined,
-        true
+        emp.urlFotoPerfil ?? undefined
       ),
-      urlCv: FileService.buildCvUrl(emp.id, emp.urlCv ?? undefined, true),
+      urlCv: FileService.buildCvUrl(emp.id, emp.urlCv ?? undefined),
     };
   }
 
@@ -38,10 +37,9 @@ export class EmpleadoService {
       codigo: emp.codigo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
-        emp.urlFotoPerfil ?? undefined,
-        true
+        emp.urlFotoPerfil ?? undefined
       ),
-      urlCv: FileService.buildCvUrl(emp.id, emp.urlCv ?? undefined, true),
+      urlCv: FileService.buildCvUrl(emp.id, emp.urlCv ?? undefined),
       nombreUsuario: emp.nombreUsuario ?? undefined,
       correoElectronico: emp.correoElectronico ?? undefined,
       dni: emp.dni ?? undefined,
@@ -139,10 +137,9 @@ export class EmpleadoService {
           cargo: e.cargo ?? undefined,
           urlFotoPerfil: FileService.buildFotoUrl(
             e.id,
-            e.urlFotoPerfil ?? undefined,
-            true
+            e.urlFotoPerfil ?? undefined
           ),
-          urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
+          urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined),
           activo: e.activo,
           registrosUltimos20Dias: approvals.map((a) => ({
             fecha: a.fecha,
@@ -177,10 +174,9 @@ export class EmpleadoService {
       cargo: e.cargo ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
-        e.urlFotoPerfil ?? undefined,
-        true
+        e.urlFotoPerfil ?? undefined
       ),
-      urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined, true),
+      urlCv: FileService.buildCvUrl(e.id, e.urlCv ?? undefined),
       activo: e.activo,
     }));
   }
