@@ -43,7 +43,8 @@ export class NominaRepository {
     fechaFin: Date | string,
     excludeId?: number
   ): Promise<Nomina[]> {
-    const inicio = fechaInicio instanceof Date ? fechaInicio : new Date(fechaInicio);
+    const inicio =
+      fechaInicio instanceof Date ? fechaInicio : new Date(fechaInicio);
     const fin = fechaFin instanceof Date ? fechaFin : new Date(fechaFin);
 
     return prisma.nomina.findMany({
@@ -76,9 +77,6 @@ export class NominaRepository {
       data: {
         deletedAt: new Date(),
         deletedBy: deletedBy ?? null,
-        ...(deletedBy
-          ? { deletedByEmpleado: { connect: { id: deletedBy } } }
-          : {}),
       },
     });
   }
