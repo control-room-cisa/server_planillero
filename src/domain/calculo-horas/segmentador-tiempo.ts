@@ -144,6 +144,32 @@ export class SegmentadorTiempo {
 
     const hayHorasLaborables = hayJornada || hayActividadesAlrededorAlmuerzo;
 
+    // Buscar actividades extras que se intersecten con este intervalo ANTES de verificar horario laboral
+    // Las actividades extras tienen prioridad y pueden estar fuera del horario laboral declarado
+    // Una actividad se intersecta si: actInicio < fin && actFin > inicio
+    const actividadExtra = actividades.find(
+      (act) => {
+        if (!act.esExtra || !act.horaInicio || !act.horaFin) return false;
+        const actInicio = this.dateToTimeString(act.horaInicio);
+        const actFin = this.dateToTimeString(act.horaFin);
+        // Verificar intersección: actInicio < fin && actFin > inicio
+        return actInicio < fin && actFin > inicio;
+      }
+    );
+
+    if (actividadExtra) {
+      // Obtener jobId: puede venir directamente o desde job.id o job.codigo
+      const jobId =
+        actividadExtra.jobId ||
+        (actividadExtra.job && actividadExtra.job.id) ||
+        undefined;
+      return {
+        tipo: TipoIntervalo.EXTRA,
+        jobId: jobId,
+        descripcion: actividadExtra.descripcion,
+      };
+    }
+
     if (
       !esHoraCorrida &&
       hayHorasLaborables &&
@@ -169,31 +195,28 @@ export class SegmentadorTiempo {
 
     // Nota: La regla de almuerzo ya fue aplicada arriba con precedencia
 
-    // Buscar actividades extras que coincidan exactamente con este intervalo
-    const actividadExtra = actividades.find(
-      (act) =>
-        act.esExtra &&
-        act.horaInicio &&
-        act.horaFin &&
-        this.dateToTimeString(act.horaInicio) === inicio &&
-        this.dateToTimeString(act.horaFin) === fin
-    );
-
-    if (actividadExtra) {
-      return {
-        tipo: TipoIntervalo.EXTRA,
-        jobId: actividadExtra.jobId,
-        descripcion: actividadExtra.descripcion,
-      };
-    }
-
-    // Buscar actividades normales que puedan aplicar a este intervalo
-    const actividadNormal = actividades.find((act) => !act.esExtra);
+    // Buscar actividades normales que se intersecten con este intervalo
+    const actividadNormal = actividades.find((act) => {
+      if (act.esExtra) return false;
+      // Si la actividad tiene horaInicio/horaFin, verificar intersección
+      if (act.horaInicio && act.horaFin) {
+        const actInicio = this.dateToTimeString(act.horaInicio);
+        const actFin = this.dateToTimeString(act.horaFin);
+        return actInicio < fin && actFin > inicio;
+      }
+      // Si no tiene horaInicio/horaFin, asumir que aplica a todo el horario laboral
+      return true;
+    });
 
     if (actividadNormal) {
+      // Obtener jobId: puede venir directamente o desde job.id o job.codigo
+      const jobId =
+        actividadNormal.jobId ||
+        (actividadNormal.job && actividadNormal.job.id) ||
+        undefined;
       return {
         tipo: TipoIntervalo.NORMAL,
-        jobId: actividadNormal.jobId,
+        jobId: jobId,
         descripcion: actividadNormal.descripcion,
       };
     }
@@ -226,6 +249,14 @@ export class SegmentadorTiempo {
    * Convierte un Date a string en formato HH:mm
    */
   private static dateToTimeString(date: Date): string {
-    return date.toTimeString().slice(0, 5);
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: "America/Tegucigalpa",
+    }).formatToParts(date);
+    const hour = parts.find((p) => p.type === "hour")?.value ?? "00";
+    const minute = parts.find((p) => p.type === "minute")?.value ?? "00";
+    return `${hour}:${minute}`;
   }
 }
