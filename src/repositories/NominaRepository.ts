@@ -32,6 +32,32 @@ export class NominaRepository {
     });
   }
 
+  /**
+   * Busca nóminas que se solapan con el rango de fechas dado para un empleado.
+   * Solo considera nóminas no eliminadas (deletedAt IS NULL).
+   * Un solapamiento ocurre cuando: (start <= fechaFin) AND (end >= fechaInicio)
+   */
+  static async findOverlapping(
+    empleadoId: number,
+    fechaInicio: Date | string,
+    fechaFin: Date | string,
+    excludeId?: number
+  ): Promise<Nomina[]> {
+    const inicio = fechaInicio instanceof Date ? fechaInicio : new Date(fechaInicio);
+    const fin = fechaFin instanceof Date ? fechaFin : new Date(fechaFin);
+
+    return prisma.nomina.findMany({
+      where: {
+        empleadoId,
+        deletedAt: null, // Solo nóminas activas
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+        // Solapamiento: fechaInicio <= fin AND fechaFin >= inicio
+        fechaInicio: { lte: fin },
+        fechaFin: { gte: inicio },
+      },
+    });
+  }
+
   static async create(data: Prisma.NominaCreateInput): Promise<Nomina> {
     return prisma.nomina.create({ data });
   }
@@ -43,11 +69,17 @@ export class NominaRepository {
     return prisma.nomina.update({ where: { id }, data });
   }
 
-  static async delete(id: number): Promise<Nomina> {
-    // Eliminación lógica
+  static async delete(id: number, deletedBy?: number | null): Promise<Nomina> {
+    // Eliminación lógica con auditoría
     return prisma.nomina.update({
       where: { id },
-      data: { deletedAt: new Date() },
+      data: {
+        deletedAt: new Date(),
+        deletedBy: deletedBy ?? null,
+        ...(deletedBy
+          ? { deletedByEmpleado: { connect: { id: deletedBy } } }
+          : {}),
+      },
     });
   }
 }

@@ -143,8 +143,8 @@ export const crearNomina: RequestHandler<
       {
         ...payload,
       },
-      // código del empleado creador, si existe (campo opcional en schema)
-      (user as any)?.codigo ?? null
+      // ID del empleado creador para auditoría
+      user?.id ?? null
     );
     return res.status(201).json({
       success: true,
@@ -225,7 +225,8 @@ export const actualizarNomina: RequestHandler<
     }
 
     const payload = actualizarNominaSchema.parse(req.body);
-    const updated = await NominaService.update(id, payload);
+    const user = (req as AuthRequest).user;
+    const updated = await NominaService.update(id, payload, user?.id ?? null);
     return res.json({
       success: true,
       message: "Nómina actualizada",
@@ -324,7 +325,8 @@ export const eliminarNomina: RequestHandler<
       });
     }
 
-    const deleted = await NominaService.delete(id);
+    const user = (req as AuthRequest).user;
+    const deleted = await NominaService.delete(id, user?.id ?? null);
     return res.json({
       success: true,
       message: "Nómina eliminada",

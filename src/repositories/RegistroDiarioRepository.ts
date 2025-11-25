@@ -261,6 +261,28 @@ export class RegistroDiarioRepository {
     });
   }
 
+  static async revertirRrhhApprovalByDateRange(
+    empleadoId: number,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<{ count: number }> {
+    return prisma.registroDiario.updateMany({
+      where: {
+        empleadoId,
+        fecha: {
+          gte: fechaInicio,
+          lte: fechaFin,
+        },
+        deletedAt: null,
+      },
+      data: {
+        aprobacionRrhh: null,
+        codigoRrhh: null,
+        updatedAt: new Date(),
+      },
+    });
+  }
+
   /**
    * Permite a un supervisor actualizar el job y descripción de una actividad específica
    * de otro empleado. Solo disponible para supervisores (rolId = 2).

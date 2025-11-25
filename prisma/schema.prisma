@@ -140,6 +140,9 @@ model Empleado {
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
 
   nominas               Nomina[]
+  nominasCreadas        Nomina[]         @relation("NominaCreatedBy")
+  nominasActualizadas   Nomina[]         @relation("NominaUpdatedBy")
+  nominasEliminadas     Nomina[]         @relation("NominaDeletedBy")
   accesosComoSupervisor PlanillaAcceso[] @relation("SupervisorAccesos")
   accesosComoEmpleado   PlanillaAcceso[] @relation("EmpleadoAccesos")
   registrosDiarios      RegistroDiario[]
@@ -160,7 +163,7 @@ model Nomina {
   empresa    Empresa  @relation(fields: [empresaId], references: [id])
 
   nombrePeriodoNomina String?  @map("nombre_nomina") @db.VarChar(100)
-  codigoNomina        String?  @unique @map("codigo_nomina") @db.VarChar(10)
+  codigoNomina        String?  @map("codigo_nomina") @db.VarChar(10)
   // Período de nómina normalizado
   fechaInicio         DateTime @map("fecha_inicio")
   fechaFin            DateTime @map("fecha_fin")
@@ -205,14 +208,21 @@ model Nomina {
   pagado Boolean @default(false) @map("pagado")
 
   // Auditoría
-  codigoEmpleadoCreacion String? @map("codigo_empleado_creacion") @db.VarChar(20)
+  createdBy         Int?      @map("created_by")
+  updatedBy         Int?      @map("updated_by")
+  deletedBy         Int?      @map("deleted_by")
+  createdByEmpleado Empleado? @relation("NominaCreatedBy", fields: [createdBy], references: [id])
+  updatedByEmpleado Empleado? @relation("NominaUpdatedBy", fields: [updatedBy], references: [id])
+  deletedByEmpleado Empleado? @relation("NominaDeletedBy", fields: [deletedBy], references: [id])
 
   // Timestamps
   createdAt DateTime? @default(now()) @map("created_at")
   updatedAt DateTime? @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  @@unique([empleadoId, fechaInicio, fechaFin], name: "uq_nomina_empleado_periodo")
+  // Índice único que incluye deletedAt: permite múltiples registros eliminados pero solo uno activo
+  // por combinación de empleadoId, fechaInicio, fechaFin
+  @@unique([empleadoId, fechaInicio, fechaFin, deletedAt], name: "uq_nomina_empleado_periodo_activa")
   @@index([empleadoId], name: "idx_nominas_empleado")
   @@index([empresaId], name: "idx_nominas_empresa")
   @@map("nominas")
