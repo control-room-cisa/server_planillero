@@ -4,6 +4,7 @@ import {
   getHorarioTrabajo,
   getConteoHoras,
   getProrrateo,
+  getDeduccionesAlimentacion,
 } from "../controllers/CalculoHorasTrabajoController";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 
@@ -36,5 +37,14 @@ router.get("/:empleadoId/conteo-horas", getConteoHoras);
  * @access Private
  */
 router.get("/:empleadoId/prorrateo", getProrrateo);
+
+/**
+ * @route GET /api/calculo-horas/:empleadoId/deducciones-alimentacion
+ * @desc Obtiene las deducciones de alimentación de un empleado en un período
+ * @query fechaInicio - Fecha de inicio (YYYY-MM-DD)
+ * @query fechaFin - Fecha de fin (YYYY-MM-DD)
+ * @access Private
+ */
+router.get("/:empleadoId/deducciones-alimentacion", getDeduccionesAlimentacion);
 
 export default router;

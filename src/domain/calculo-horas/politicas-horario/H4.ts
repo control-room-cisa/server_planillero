@@ -338,16 +338,11 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       inasistencias: diasInasistencias,
     };
 
-    const { deduccionesAlimentacion, detalle, errorAlimentacion } =
-      await this.calcularDeduccionesAlimentacion(
-        empleadoId,
-        fechaInicio,
-        fechaFin
-      );
-
-    conteo.deduccionesAlimentacion = deduccionesAlimentacion;
-    conteo.deduccionesAlimentacionDetalle = detalle;
-    conteo.errorAlimentacion = errorAlimentacion;
+    // Las deducciones de alimentación ahora se obtienen en un endpoint separado
+    // para no retrasar el cálculo de horas
+    conteo.deduccionesAlimentacion = 0;
+    conteo.deduccionesAlimentacionDetalle = [];
+    conteo.errorAlimentacion = undefined;
 
     return Object.assign(conteo, { tiposDias });
   }

@@ -176,6 +176,46 @@ export class HorarioTrabajoDomain {
   }
 
   /**
+   * Obtiene las deducciones de alimentación para un empleado en un rango de fechas
+   */
+  static async getDeduccionesAlimentacion(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<{
+    deduccionesAlimentacion: number;
+    detalle: Array<{
+      producto: string;
+      precio: number;
+      fecha: string;
+    }>;
+    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+  }> {
+    // Obtener empleado y su tipo de horario
+    const empleado = await EmpleadoRepository.findById(parseInt(empleadoId));
+    if (!empleado) {
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+    }
+
+    if (!empleado.tipoHorario) {
+      throw new Error(
+        `Empleado ${empleadoId} no tiene tipo de horario asignado`
+      );
+    }
+
+    // Crear política de horario correspondiente
+    const politica = FabricaPoliticas.crearPolitica(empleado.tipoHorario);
+
+    // Obtener deducciones usando la política específica
+    return politica.calcularDeduccionesAlimentacion(
+      empleadoId,
+      fechaInicio,
+      fechaFin,
+      empleado
+    );
+  }
+
+  /**
    * Obtiene el prorrateo de horas trabajadas por job para un empleado en un período
    * Clasifica las horas por job y categoría (normal, p25, p50, p75, p100)
    */

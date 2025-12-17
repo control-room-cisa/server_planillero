@@ -257,3 +257,90 @@ export const getProrrateo: RequestHandler<
     return res.status(st).json(body);
   }
 };
+
+// -----------------------------------------------------------------------------
+// GET /api/calculo-horas/:empleadoId/deducciones-alimentacion?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
+// -----------------------------------------------------------------------------
+export const getDeduccionesAlimentacion: RequestHandler<
+  { empleadoId: string }, // params
+  ApiResponse<{
+    deduccionesAlimentacion: number;
+    detalle: Array<{
+      producto: string;
+      precio: number;
+      fecha: string;
+    }>;
+    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+  }>, // response
+  {}, // body
+  { fechaInicio?: string; fechaFin?: string } // query
+> = async (req, res) => {
+  const { empleadoId } = req.params;
+  const { fechaInicio, fechaFin } = req.query;
+
+  // Validaciones 400
+  const errors400: string[] = [];
+  if (!empleadoId) errors400.push("empleadoId es requerido.");
+  if (!fechaInicio) errors400.push("fechaInicio es requerida.");
+  if (!fechaFin) errors400.push("fechaFin es requerida.");
+  if (fechaInicio && !FECHA_RE.test(fechaInicio))
+    errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
+  if (fechaFin && !FECHA_RE.test(fechaFin))
+    errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
+  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+    errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
+  }
+
+  if (errors400.length) {
+    const { status, body } = buildErr<{
+      deduccionesAlimentacion: number;
+      detalle: Array<{
+        producto: string;
+        precio: number;
+        fecha: string;
+      }>;
+      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+    }>("Parámetros inválidos", errors400, 400);
+    return res.status(status).json(body);
+  }
+
+  try {
+    const data = await HorarioTrabajoDomain.getDeduccionesAlimentacion(
+      String(fechaInicio),
+      String(fechaFin),
+      empleadoId
+    );
+    return res.json(
+      buildOk<typeof data>(
+        "Deducciones de alimentación obtenidas exitosamente",
+        data
+      )
+    );
+  } catch (err: any) {
+    const lower = (err?.message ?? "").toLowerCase();
+    const status =
+      lower.includes("no encontrado") || lower.includes("not found")
+        ? 404
+        : lower.includes("inválid") ||
+          lower.includes("invalid") ||
+          lower.includes("formato")
+        ? 400
+        : 500;
+
+    const errors = normalizeThrownToErrors(err);
+    const { status: st, body } = buildErr<{
+      deduccionesAlimentacion: number;
+      detalle: Array<{
+        producto: string;
+        precio: number;
+        fecha: string;
+      }>;
+      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+    }>(
+      err?.message || "Error obteniendo deducciones de alimentación",
+      errors,
+      status
+    );
+    return res.status(st).json(body);
+  }
+};

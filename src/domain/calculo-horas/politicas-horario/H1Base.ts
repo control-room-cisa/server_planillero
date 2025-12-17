@@ -144,11 +144,309 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
   // -------------------------- implementación de conteo --------------------------
 
+  /**
+   * Resultado del procesamiento de un día individual
+   */
+  private static DayResultType: {
+    buckets: Buckets;
+    addIncapacidadMin: number;
+    addVacacionesMin: number;
+    addPermisoCSMin: number;
+    addPermisoSSMin: number;
+    addInasistenciasMin: number;
+    addCompensatorioMin: number;
+  };
+
+  /**
+   * Procesa un día completo de forma independiente.
+   * Si el día empieza con EXTRA a las 00:00, obtiene la racha del día anterior.
+   * Cada día se puede calcular en paralelo con otros días.
+   */
+  /**
+   * Versión optimizada que recibe el empleado pre-cargado
+   */
+  private async procesarDiaCompletoOptimizado(
+    fecha: string,
+    empleadoId: string,
+    empleado: any
+  ): Promise<typeof PoliticaH1Base.DayResultType> {
+    const tDia = Date.now();
+    
+    // Solo 2 consultas por día: registro y feriado
+    const [registroDelDia, feriadoInfo] =
+      await Promise.all([
+        this.getRegistroDiario(empleadoId, fecha),
+        this.esFeriado(fecha),
+      ]);
+    
+    // Segmentar usando el registro ya obtenido (sin consulta extra)
+    const segmentosResult = this.segmentarConRegistro(fecha, registroDelDia);
+    
+    // Calcular horario de trabajo sin consultas adicionales (usando datos ya obtenidos)
+    const hTrabajo = this.calcularHorarioTrabajoSinConsultas(fecha, empleadoId, feriadoInfo);
+    
+    console.log(`[H1Base] ${fecha} - carga datos: ${Date.now() - tDia}ms`);
+
+    const segmentos = segmentosResult.segmentos;
+
+    // Determinar si necesitamos racha del día anterior
+    let racha = PoliticaH1Base.nuevaRacha();
+    const necesitaRachaAnterior = this.diaEmpiezaConExtraA00(segmentos);
+
+    if (necesitaRachaAnterior) {
+      racha = await this.obtenerRachaDelDiaAnterior(fecha, empleadoId);
+    }
+
+    // Buckets para este día
+    const b: Buckets = {
+      normalMin: 0,
+      almuerzoMin: 0,
+      libreMin: 0,
+      extraC1Min: 0,
+      extraC2Min: 0,
+      extraC3Min: 0,
+      extraC4Min: 0,
+      incapacidadMin: 0,
+      vacacionesMin: 0,
+      permisoConSueldoMin: 0,
+      permisoSinSueldoMin: 0,
+      inasistenciasMin: 0,
+      compensatorioMin: 0,
+    };
+
+    // Acumuladores de actividades sin hora
+    let addIncapacidadMin = 0;
+    let addVacacionesMin = 0;
+    let addPermisoCSMin = 0;
+    let addPermisoSSMin = 0;
+    let addInasistenciasMin = 0;
+    let addCompensatorioMin = 0;
+
+    // Info del día
+    const esFestivo = feriadoInfo.esFeriado;
+    const esDiaLibreMarcado = registroDelDia?.esDiaLibre === true;
+    const esLibreOFest = esDiaLibreMarcado || esFestivo;
+
+    // Bloquear mixta si es día libre de contrato
+    const esDiaLibreContrato =
+      hTrabajo.esDiaLibre ||
+      hTrabajo.cantidadHorasLaborables === 0 ||
+      hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
+    racha.bloquearMixta = esDiaLibreContrato;
+
+    // Procesar segmentos del día
+    for (const seg of segmentos) {
+      const dur = PoliticaH1Base.segDurMin(seg);
+      if (dur <= 0) continue;
+
+      switch (seg.tipo) {
+        case "LIBRE":
+          b.libreMin += dur;
+          racha = PoliticaH1Base.nuevaRacha();
+          break;
+
+        case "ALMUERZO":
+          b.almuerzoMin += dur;
+          break;
+
+        case "NORMAL": {
+          const code = seg.jobCodigo?.toUpperCase?.();
+          if (code === "E01") {
+            b.incapacidadMin += dur;
+          } else if (code === "E02") {
+            b.vacacionesMin += dur;
+          } else if (code === "E03") {
+            b.permisoConSueldoMin += dur;
+          } else if (code === "E04") {
+            b.permisoSinSueldoMin += dur;
+          } else if (code === "E05") {
+            b.inasistenciasMin += dur;
+          } else if (code === "E06" || code === "E07") {
+            b.compensatorioMin += dur;
+          } else {
+            b.normalMin += dur;
+          }
+          break;
+        }
+
+        case "EXTRA": {
+          const slots = dur / 15;
+          const esDiurna = PoliticaH1Base.isDiurna(seg);
+          for (let i = 0; i < slots; i++) {
+            PoliticaH1Base.aplicarExtraSlot(esLibreOFest, esDiurna, racha, b);
+          }
+          break;
+        }
+      }
+    }
+
+    // Procesar actividades sin hora (jobs especiales)
+    try {
+      if (registroDelDia?.actividades?.length) {
+        for (const act of registroDelDia.actividades as any[]) {
+          if (act?.esExtra) continue;
+          const horas = Number(act?.duracionHoras ?? 0);
+          if (!isFinite(horas) || horas <= 0) continue;
+          const codigo = act?.job?.codigo?.toUpperCase?.();
+          if (!codigo) continue;
+          const min = Math.round(horas * 60);
+          if (codigo === "E01") addIncapacidadMin += min;
+          else if (codigo === "E02") addVacacionesMin += min;
+          else if (codigo === "E03") addPermisoCSMin += min;
+          else if (codigo === "E04") addPermisoSSMin += min;
+          else if (codigo === "E05") addInasistenciasMin += min;
+          else if (codigo === "E06" || codigo === "E07") addCompensatorioMin += min;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+
+    return {
+      buckets: b,
+      addIncapacidadMin,
+      addVacacionesMin,
+      addPermisoCSMin,
+      addPermisoSSMin,
+      addInasistenciasMin,
+      addCompensatorioMin,
+    };
+  }
+
+  /**
+   * Calcula el horario de trabajo sin hacer consultas a la BD
+   * (usa el feriadoInfo ya obtenido en paralelo)
+   */
+  protected calcularHorarioTrabajoSinConsultas(
+    fecha: string,
+    empleadoId: string,
+    feriadoInfo: { esFeriado: boolean; nombre: string }
+  ): HorarioTrabajo {
+    const dia = new Date(`${fecha}T00:00:00`).getDay(); // 0=Dom
+
+    let inicio = "07:00";
+    let fin = "07:00";
+    let incluyeAlmuerzo = false;
+    let cantidadHorasLaborables = 0;
+    let esDiaLibre = false;
+
+    // Los feriados y domingos marcan el día como "día libre"
+    if (feriadoInfo.esFeriado) {
+      esDiaLibre = true;
+    } else {
+      switch (dia) {
+        case 0: // Domingo
+          esDiaLibre = true;
+          break;
+        case 6: // Sábado
+          break;
+        case 5: // Viernes
+          fin = "16:00";
+          incluyeAlmuerzo = true;
+          cantidadHorasLaborables = 8;
+          break;
+        default: // Lunes a Jueves
+          fin = "17:00";
+          incluyeAlmuerzo = true;
+          cantidadHorasLaborables = 9;
+          break;
+      }
+    }
+
+    return {
+      tipoHorario: "H1",
+      fecha,
+      empleadoId,
+      horarioTrabajo: { inicio, fin },
+      incluyeAlmuerzo,
+      esDiaLibre,
+      esFestivo: feriadoInfo.esFeriado,
+      nombreDiaFestivo: feriadoInfo.nombre,
+      cantidadHorasLaborables,
+    };
+  }
+
+  /**
+   * Verifica si un día empieza con EXTRA a las 00:00
+   */
+  private diaEmpiezaConExtraA00(segmentos: Segmento15[]): boolean {
+    for (const seg of segmentos) {
+      if (seg.tipo === "LIBRE") return false;
+      if (seg.tipo === "EXTRA") {
+        const inicio = seg.inicio.substring(0, 5);
+        return inicio === "00:00";
+      }
+    }
+    return false;
+  }
+
+  /**
+   * Obtiene la racha final del día anterior (simulando todo el día)
+   */
+  private async obtenerRachaDelDiaAnterior(
+    fecha: string,
+    empleadoId: string
+  ): Promise<ExtraStreak> {
+    const diaAnterior = PoliticaH1Base.addDays(fecha, -1);
+    let r = PoliticaH1Base.nuevaRacha();
+
+    try {
+      const [registroAnterior, feriadoInfoAnterior] =
+        await Promise.all([
+          this.getRegistroDiario(empleadoId, diaAnterior),
+          this.esFeriado(diaAnterior),
+        ]);
+
+      // Segmentar usando el registro ya obtenido (evita consulta duplicada)
+      const segmentosResult = this.segmentarConRegistro(diaAnterior, registroAnterior);
+
+      const esLibreOFestAnterior =
+        registroAnterior?.esDiaLibre === true || feriadoInfoAnterior.esFeriado;
+      const segmentos = segmentosResult.segmentos;
+
+      let huboExtra = false;
+
+      for (const seg of segmentos) {
+        const dur = PoliticaH1Base.segDurMin(seg);
+        if (dur <= 0) continue;
+
+        if (seg.tipo === "LIBRE") {
+          if (huboExtra) {
+            r = PoliticaH1Base.nuevaRacha();
+            huboExtra = false;
+          }
+          continue;
+        }
+
+        if (seg.tipo === "ALMUERZO" || seg.tipo === "NORMAL") continue;
+
+        // EXTRA
+        huboExtra = true;
+        const slots = dur / 15;
+        const esDiurna = PoliticaH1Base.isDiurna(seg);
+        for (let i = 0; i < slots; i++) {
+          PoliticaH1Base.aplicarExtraSlot(
+            esLibreOFestAnterior,
+            esDiurna,
+            r,
+            DUMMY_BUCKETS
+          );
+        }
+      }
+
+      return r;
+    } catch {
+      return PoliticaH1Base.nuevaRacha();
+    }
+  }
+
   async getConteoHorasTrabajajadasByDateAndEmpleado(
     fechaInicio: string,
     fechaFin: string,
     empleadoId: string
   ): Promise<ConteoHorasTrabajadas> {
+    const t0 = Date.now();
+    
     if (
       !this.validarFormatoFecha(fechaInicio) ||
       !this.validarFormatoFecha(fechaFin)
@@ -158,10 +456,33 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     if (fechaFin < fechaInicio)
       throw new Error("El rango de fechas es inválido (fin < inicio).");
 
-    // Sembrar racha antes del primer día
-    let racha = await this.sembrarRachaAntesDe(fechaInicio, empleadoId);
+    // ==================== PROCESAMIENTO 100% PARALELO POR DÍA ====================
+    // Generar lista de fechas del rango
+    const fechas: string[] = [];
+    let f = fechaInicio;
+    while (f <= fechaFin) {
+      fechas.push(f);
+      f = PoliticaH1Base.addDays(f, 1);
+    }
 
-    // Buckets en minutos
+    console.log(`[H1Base] Procesando ${fechas.length} días en paralelo...`);
+    const t1 = Date.now();
+
+    // Pre-cargar datos compartidos UNA SOLA VEZ (empleado es el mismo para todos los días)
+    const empleado = await this.getEmpleado(empleadoId);
+    if (!empleado) throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+    
+    console.log(`[H1Base] Empleado cargado en ${Date.now() - t1}ms`);
+    const t2 = Date.now();
+
+    // Procesar TODOS los días en paralelo (sin deducciones de alimentación)
+    const resultadosPorDia = await Promise.all(
+      fechas.map((fecha) => this.procesarDiaCompletoOptimizado(fecha, empleadoId, empleado))
+    );
+    
+    console.log(`[H1Base] Días procesados en ${Date.now() - t2}ms`);
+
+    // ==================== AGREGAR RESULTADOS ====================
     const b: Buckets = {
       normalMin: 0,
       almuerzoMin: 0,
@@ -170,7 +491,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       extraC2Min: 0,
       extraC3Min: 0,
       extraC4Min: 0,
-      // normales por jobs especiales
       incapacidadMin: 0,
       vacacionesMin: 0,
       permisoConSueldoMin: 0,
@@ -179,7 +499,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       compensatorioMin: 0,
     };
 
-    // Acumuladores adicionales por jobs especiales provenientes de actividades SIN hora (normales)
     let addIncapacidadMin = 0;
     let addVacacionesMin = 0;
     let addPermisoCSMin = 0;
@@ -187,157 +506,28 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     let addInasistenciasMin = 0;
     let addCompensatorioMin = 0;
 
-    // Recorrer días
-    let f = fechaInicio;
-    while (f <= fechaFin) {
-      const registroDelDia = await this.getRegistroDiario(empleadoId, f);
-      const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
-        f,
-        empleadoId
-      );
+    // Sumar todos los buckets de cada día
+    for (const resultado of resultadosPorDia) {
+      b.normalMin += resultado.buckets.normalMin;
+      b.almuerzoMin += resultado.buckets.almuerzoMin;
+      b.libreMin += resultado.buckets.libreMin;
+      b.extraC1Min += resultado.buckets.extraC1Min;
+      b.extraC2Min += resultado.buckets.extraC2Min;
+      b.extraC3Min += resultado.buckets.extraC3Min;
+      b.extraC4Min += resultado.buckets.extraC4Min;
+      b.incapacidadMin += resultado.buckets.incapacidadMin;
+      b.vacacionesMin += resultado.buckets.vacacionesMin;
+      b.permisoConSueldoMin += resultado.buckets.permisoConSueldoMin;
+      b.permisoSinSueldoMin += resultado.buckets.permisoSinSueldoMin;
+      b.inasistenciasMin += resultado.buckets.inasistenciasMin;
+      b.compensatorioMin += resultado.buckets.compensatorioMin;
 
-      // info del día
-      const feriadoInfo = await this.esFeriado(f);
-      const dow = new Date(`${f}T00:00:00`).getDay(); // 0=Dom
-      const esDomingo = dow === 0;
-      const esFestivo = feriadoInfo.esFeriado;
-      const esDiaLibreMarcado = registroDelDia?.esDiaLibre === true;
-
-      // Día libre de contrato
-      const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
-        f,
-        empleadoId
-      );
-
-      // p100 si es día libre del contrato O si es feriado
-      const esLibreOFest = esDiaLibreMarcado || esFestivo;
-
-      // En días no laborables bloquear p75 (mixta)
-      // Solo bloquear mixta si es día libre o si no hay horas laborables configuradas
-      const esDiaLibreContrato =
-        hTrabajo.esDiaLibre ||
-        hTrabajo.cantidadHorasLaborables === 0 ||
-        hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
-      racha.bloquearMixta = esDiaLibreContrato;
-
-      // Contadores por día (para logging)
-      let normalMinDia = 0;
-      let almuerzoMinDia = 0;
-      let libreMinDia = 0;
-      let extraMinDia = 0;
-      let incapDiaSeg = 0,
-        vacDiaSeg = 0,
-        permCSDiaSeg = 0,
-        permSSDiaSeg = 0,
-        inasistDiaSeg = 0;
-
-      for (const seg of segmentos) {
-        const dur = PoliticaH1Base.segDurMin(seg);
-        if (dur <= 0) continue;
-
-        switch (seg.tipo) {
-          case "LIBRE":
-            b.libreMin += dur;
-            libreMinDia += dur;
-            racha = PoliticaH1Base.nuevaRacha(); // reset total (incluye domOFestActivo/bloquearMixta)
-            break;
-
-          case "ALMUERZO":
-            b.almuerzoMin += dur;
-            almuerzoMinDia += dur;
-            // La racha se mantiene
-            break;
-
-          case "NORMAL": {
-            const code = seg.jobCodigo?.toUpperCase?.();
-            if (code === "E01") {
-              b.incapacidadMin += dur;
-              incapDiaSeg += dur;
-            } else if (code === "E02") {
-              b.vacacionesMin += dur;
-              vacDiaSeg += dur;
-            } else if (code === "E03") {
-              b.permisoConSueldoMin += dur;
-              permCSDiaSeg += dur;
-            } else if (code === "E04") {
-              b.permisoSinSueldoMin += dur;
-              permSSDiaSeg += dur;
-            } else if (code === "E05") {
-              b.inasistenciasMin += dur;
-              inasistDiaSeg += dur;
-            } else if (code === "E06" || code === "E07") {
-              b.compensatorioMin += dur;
-              // no cuenta para conteoDias
-            } else {
-              b.normalMin += dur;
-              normalMinDia += dur;
-            }
-            // La racha se mantiene
-            break;
-          }
-
-          case "EXTRA": {
-            const slots = dur / 15; // segmentos vienen ya cortados (05/19)
-            const esDiurna = PoliticaH1Base.isDiurna(seg);
-            for (let i = 0; i < slots; i++) {
-              PoliticaH1Base.aplicarExtraSlot(esLibreOFest, esDiurna, racha, b);
-            }
-            extraMinDia += dur;
-            break;
-          }
-        }
-      }
-
-      // Sumar horas de actividades normales (sin horaInicio/horaFin) por job especial
-      let addIncapDia = 0,
-        addVacDia = 0,
-        addPermCSDia = 0,
-        addPermSSDia = 0,
-        addInasistDia = 0;
-      try {
-        const reg = registroDelDia;
-        if (reg?.actividades?.length) {
-          for (const act of reg.actividades as any[]) {
-            if (act?.esExtra) continue; // solo normales
-            const horas = Number(act?.duracionHoras ?? 0);
-            if (!isFinite(horas) || horas <= 0) continue;
-            const codigo = act?.job?.codigo?.toUpperCase?.();
-            if (!codigo) continue;
-            const min = Math.round(horas * 60);
-            if (codigo === "E01") {
-              addIncapacidadMin += min;
-              addIncapDia += min;
-            } else if (codigo === "E02") {
-              addVacacionesMin += min;
-              addVacDia += min;
-            } else if (codigo === "E03") {
-              addPermisoCSMin += min;
-              addPermCSDia += min;
-            } else if (codigo === "E04") {
-              addPermisoSSMin += min;
-              addPermSSDia += min;
-            } else if (codigo === "E05") {
-              addInasistenciasMin += min;
-              addInasistDia += min;
-            } else if (codigo === "E06" || codigo === "E07") {
-              addCompensatorioMin += min;
-            }
-          }
-        }
-      } catch {
-        /* ignore */
-      }
-
-      const especialesSegDia =
-        incapDiaSeg + vacDiaSeg + permCSDiaSeg + permSSDiaSeg + inasistDiaSeg;
-      const especialesAddDia =
-        addIncapDia + addVacDia + addPermCSDia + addPermSSDia + addInasistDia;
-      const normalDiaAjustado = Math.max(
-        0,
-        normalMinDia - especialesSegDia - especialesAddDia
-      );
-
-      f = PoliticaH1Base.addDays(f, 1);
+      addIncapacidadMin += resultado.addIncapacidadMin;
+      addVacacionesMin += resultado.addVacacionesMin;
+      addPermisoCSMin += resultado.addPermisoCSMin;
+      addPermisoSSMin += resultado.addPermisoSSMin;
+      addInasistenciasMin += resultado.addInasistenciasMin;
+      addCompensatorioMin += resultado.addCompensatorioMin;
     }
 
     // Validar cuadre (en minutos): debe ser 24h * número de días
@@ -435,121 +625,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       inasistencias: diasInasistencias,
     };
 
-    const { deduccionesAlimentacion, detalle, errorAlimentacion } =
-      await this.calcularDeduccionesAlimentacion(
-        empleadoId,
-        fechaInicio,
-        fechaFin
-      );
+    // Las deducciones de alimentación ahora se obtienen en un endpoint separado
+    // para no retrasar el cálculo de horas
+    result.deduccionesAlimentacion = 0;
+    result.deduccionesAlimentacionDetalle = [];
+    result.errorAlimentacion = undefined;
 
-    result.deduccionesAlimentacion = deduccionesAlimentacion;
-    result.deduccionesAlimentacionDetalle = detalle;
-    result.errorAlimentacion = errorAlimentacion;
-
+    console.log(`[H1Base] TOTAL getConteoHoras: ${Date.now() - t0}ms`);
     return result;
-  }
-
-  /**
-   * Siembra la racha al inicio del rango mirando días previos y avanzando el estado
-   * hasta el día anterior. Se detiene si encuentra LIBRE; si no, hereda el estado acumulado.
-   */
-  private async sembrarRachaAntesDe(
-    fechaInicio: string,
-    empleadoId: string
-  ): Promise<ExtraStreak> {
-    // Paso 1: Verificar si el día actual empieza con EXTRA desde 00:00
-    const { segmentos: segHoy } = await this.generarSegmentosDeDiaConValidacion(
-      fechaInicio,
-      empleadoId
-    );
-
-    let empiezaConExtraDesde00 = false;
-    for (const seg of segHoy) {
-      if (seg.tipo === "LIBRE") break; // Si empieza con LIBRE, no heredar
-      if (seg.tipo === "EXTRA") {
-        // Verificar si el inicio es "00:00" o empieza en la medianoche
-        const inicio = seg.inicio.substring(0, 5); // Tomar solo "HH:MM"
-        if (inicio === "00:00") {
-          empiezaConExtraDesde00 = true;
-        }
-        break; // Ya encontramos el primer EXTRA, salir del loop
-      }
-      // Continuar si es NORMAL o ALMUERZO
-    }
-
-    // Si NO empieza con EXTRA desde 00:00, no heredar racha
-    if (!empiezaConExtraDesde00) {
-      return PoliticaH1Base.nuevaRacha();
-    }
-
-    // Paso 2: Simular el día inmediato anterior completo
-    const diaAnterior = PoliticaH1Base.addDays(fechaInicio, -1);
-    let r = PoliticaH1Base.nuevaRacha();
-
-    try {
-      // Obtener información del día anterior (feriado y horario de trabajo)
-      const feriadoInfoAnterior = await this.esFeriado(diaAnterior);
-      const registroAnterior = await this.getRegistroDiario(
-        empleadoId,
-        diaAnterior
-      );
-      const esLibreOFestAnterior =
-        registroAnterior?.esDiaLibre === true || feriadoInfoAnterior.esFeriado;
-
-      const { segmentos } = await this.generarSegmentosDeDiaConValidacion(
-        diaAnterior,
-        empleadoId
-      );
-
-      let terminaConLibre = false;
-      let huboExtra = false; // Solo contar LIBRE después de ver al menos un EXTRA
-
-      for (const seg of segmentos) {
-        const dur = PoliticaH1Base.segDurMin(seg);
-        if (dur <= 0) continue;
-
-        if (seg.tipo === "LIBRE") {
-          // Solo resetear la racha si ya hemos visto al menos un EXTRA
-          if (huboExtra) {
-            r = PoliticaH1Base.nuevaRacha();
-            terminaConLibre = true;
-            huboExtra = false; // Resetear para futuras rachas en el mismo día
-          }
-          continue;
-        }
-
-        if (seg.tipo === "ALMUERZO" || seg.tipo === "NORMAL") {
-          terminaConLibre = false;
-          continue;
-        }
-
-        // EXTRA
-        huboExtra = true;
-        terminaConLibre = false;
-        const slots = dur / 15;
-        const esDiurna = PoliticaH1Base.isDiurna(seg);
-        for (let i = 0; i < slots; i++) {
-          // Simular clasificación REAL usando el estado real del día anterior (feriado/libre)
-          PoliticaH1Base.aplicarExtraSlot(
-            esLibreOFestAnterior,
-            esDiurna,
-            r,
-            DUMMY_BUCKETS
-          );
-        }
-      }
-
-      // Si el día anterior termina con LIBRE, retornar racha nueva
-      if (terminaConLibre) {
-        return PoliticaH1Base.nuevaRacha();
-      }
-
-      // Si no termina con LIBRE, retornar la racha final
-      return r;
-    } catch (err) {
-      // Si hay error al obtener el día anterior, retornar racha nueva
-      return PoliticaH1Base.nuevaRacha();
-    }
   }
 
   // -------------------------- otros métodos requeridos --------------------------

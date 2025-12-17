@@ -74,7 +74,16 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     }
 
     const reg = await this.getRegistroDiario(empleadoId, fecha);
+    return this.segmentarConRegistro(fecha, reg);
+  }
 
+  /**
+   * Segmenta un día usando un registro ya obtenido (evita consultas duplicadas)
+   */
+  protected segmentarConRegistro(
+    fecha: string,
+    reg: any
+  ): ResultadoSegmentacion {
     if (!reg) {
       // Sin registro: todo LIBRE; NO aplica almuerzo.
       const fake: any = {
@@ -142,11 +151,13 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
   /**
    * Calcula las deducciones de alimentación para un empleado en un rango de fechas.
    * Retorna tanto el total como el detalle por consumo (si está disponible).
+   * @param empleadoPrecargado - Empleado ya obtenido (opcional, evita consulta adicional)
    */
-  protected async calcularDeduccionesAlimentacion(
+  async calcularDeduccionesAlimentacion(
     empleadoId: string,
     fechaInicio: string,
-    fechaFin: string
+    fechaFin: string,
+    empleadoPrecargado?: any
   ): Promise<{
     deduccionesAlimentacion: number;
     detalle: DeduccionAlimentacionDetalle[];
@@ -159,7 +170,7 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
       | undefined;
 
     try {
-      const empleado = await this.getEmpleado(empleadoId);
+      const empleado = empleadoPrecargado ?? await this.getEmpleado(empleadoId);
       if (empleado?.codigo) {
         const gastosAlimentacion =
           await GastosAlimentacionService.obtenerConsumo({
