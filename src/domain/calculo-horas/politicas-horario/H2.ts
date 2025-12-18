@@ -6,8 +6,6 @@ import type {
   ConteoHorasProrrateo,
   HorasPorJob,
 } from "../types";
-import { JobRepository } from "../../../repositories/JobRepository";
-import { SegmentadorTiempo } from "../segmentador-tiempo";
 
 /**
  * Política H2 — Turnos rotativos de 12h, sin almuerzo.
@@ -404,7 +402,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       }
     >();
 
-    // Recorrer cada día del período y obtener los segmentos
+    // Recorrer cada día del período y procesar actividades
     let currentDate = fechaInicio;
     while (currentDate <= fechaFin) {
       try {
@@ -419,77 +417,102 @@ export class PoliticaH2 extends PoliticaHorarioBase {
           continue;
         }
 
-        // Segmentar el día usando el registro diario
-        const lineaTiempo = SegmentadorTiempo.segmentarDia(registroDiario);
+        // Helper para agregar horas normales por job
+        const upsertNormal = (
+          jobId: number,
+          codigo: string,
+          nombre: string,
+          horas: number,
+          descripcion?: string | null
+        ) => {
+          if (horas <= 0) return;
+          const existing = horasPorJobNormal.get(jobId);
+          if (existing) {
+            existing.horas += horas;
+            if (descripcion && !existing.comentarios.includes(descripcion)) {
+              existing.comentarios.push(descripcion);
+            }
+          } else {
+            horasPorJobNormal.set(jobId, {
+              jobId,
+              codigoJob: codigo,
+              nombreJob: nombre,
+              horas,
+              comentarios: descripcion ? [descripcion] : [],
+            });
+          }
+        };
 
-        // Procesar cada intervalo del día
-        for (const intervalo of lineaTiempo.intervalos) {
-          // Solo procesar intervalos que tienen jobId (NORMAL y EXTRA)
-          if (!intervalo.jobId) continue;
+        // Helper para agregar horas extras (p25) por job
+        const upsertExtra = (
+          jobId: number,
+          codigo: string,
+          nombre: string,
+          horas: number,
+          descripcion?: string | null
+        ) => {
+          if (horas <= 0) return;
+          const existing = horasPorJobP25.get(jobId);
+          if (existing) {
+            existing.horas += horas;
+            if (descripcion && !existing.comentarios.includes(descripcion)) {
+              existing.comentarios.push(descripcion);
+            }
+          } else {
+            horasPorJobP25.set(jobId, {
+              jobId,
+              codigoJob: codigo,
+              nombreJob: nombre,
+              horas,
+              comentarios: descripcion ? [descripcion] : [],
+            });
+          }
+        };
 
-          // Calcular duración del intervalo en horas
-          const [horaInicio, minInicio] = intervalo.horaInicio
-            .split(":")
-            .map(Number);
-          const [horaFin, minFin] = intervalo.horaFin.split(":").map(Number);
-          const minutosInicio = horaInicio * 60 + minInicio;
-          const minutosFin = horaFin * 60 + minFin;
-          const duracionHoras = (minutosFin - minutosInicio) / 60;
+        // Procesar actividades directamente (sin depender del segmentador para jobId)
+        for (const act of (registroDiario as any).actividades ?? []) {
+          // Obtener código y nombre del job
+          const jobId = act?.jobId || act?.job?.id;
+          const codigo = act?.job?.codigo ?? act?.codigoJob ?? "";
+          const nombre = act?.job?.nombre ?? String(codigo);
+          const descripcion = act?.descripcion || (registroDiario as any)?.comentarioEmpleado || null;
 
-          // Obtener información del job
-          const job = await JobRepository.findById(intervalo.jobId);
-          if (!job) continue;
+          if (!jobId && !codigo) continue;
 
-          const jobInfo = {
-            jobId: job.id,
-            codigoJob: job.codigo || "",
-            nombreJob: job.nombre || "",
-            horas: 0,
-            comentarios: [],
-          };
+          // Determinar si es actividad normal o extra
+          if (!act?.esExtra) {
+            // ACTIVIDAD NORMAL: usar duracionHoras directamente
+            const horas = Number(act?.duracionHoras ?? 0);
+            if (horas > 0) {
+              // Si tenemos jobId, usarlo; si no, buscar por código
+              const id = jobId || 0;
+              upsertNormal(id, codigo, nombre, horas, descripcion);
+            }
+          } else {
+            // ACTIVIDAD EXTRA: calcular horas desde horaInicio/horaFin o usar duracionHoras
+            let horas = 0;
 
-          // Clasificar el intervalo según el tipo
-          // H2 solo usa normal y p25 (extras al 25%)
-          if (intervalo.tipo === "NORMAL") {
-            const existing = horasPorJobNormal.get(job.id);
-            if (existing) {
-              existing.horas += duracionHoras;
+            if (act?.horaInicio && act?.horaFin) {
+              const start = new Date(act.horaInicio);
+              const end = new Date(act.horaFin);
+
+              // Recortar al día actual
+              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
+              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+              const s = new Date(Math.max(start.getTime(), dayStart.getTime()));
+              const e = new Date(Math.min(end.getTime(), dayEnd.getTime()));
+
+              if (e.getTime() > s.getTime()) {
+                horas = (e.getTime() - s.getTime()) / 3_600_000; // ms a horas
+              }
             } else {
-              horasPorJobNormal.set(job.id, {
-                ...jobInfo,
-                horas: duracionHoras,
-              });
+              // Sin horas explícitas, usar duracionHoras
+              horas = Number(act?.duracionHoras ?? 0);
             }
-            const desc =
-              (registroDiario as any)?.comentarioEmpleado ||
-              (intervalo as any)?.descripcion ||
-              (intervalo as any)?.comment ||
-              null;
-            if (desc) {
-              const target = horasPorJobNormal.get(job.id)!;
-              if (!target.comentarios.includes(desc))
-                target.comentarios.push(desc);
-            }
-          } else if (intervalo.tipo === "EXTRA") {
-            // En H2, todas las extras son p25
-            const existing = horasPorJobP25.get(job.id);
-            if (existing) {
-              existing.horas += duracionHoras;
-            } else {
-              horasPorJobP25.set(job.id, {
-                ...jobInfo,
-                horas: duracionHoras,
-              });
-            }
-            const desc =
-              (registroDiario as any)?.comentarioEmpleado ||
-              (intervalo as any)?.descripcion ||
-              (intervalo as any)?.comment ||
-              null;
-            if (desc) {
-              const target = horasPorJobP25.get(job.id)!;
-              if (!target.comentarios.includes(desc))
-                target.comentarios.push(desc);
+
+            if (horas > 0) {
+              const id = jobId || 0;
+              upsertExtra(id, codigo, nombre, horas, descripcion);
             }
           }
         }
