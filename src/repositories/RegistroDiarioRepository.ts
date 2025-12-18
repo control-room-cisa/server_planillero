@@ -22,6 +22,7 @@ export type UpsertRegistroDiarioParams = {
   horaSalida: Date;
   jornada?: string;
   esDiaLibre?: boolean;
+  esIncapacidad?: boolean;
   esHoraCorrida?: boolean;
   comentarioEmpleado?: string;
   aprobacionSupervisor?: boolean;
@@ -88,6 +89,7 @@ export class RegistroDiarioRepository {
           horaSalida: restOfDia.horaSalida,
           jornada: restOfDia.jornada,
           esDiaLibre: restOfDia.esDiaLibre,
+          esIncapacidad: restOfDia.esIncapacidad,
           esHoraCorrida: restOfDia.esHoraCorrida,
           comentarioEmpleado: restOfDia.comentarioEmpleado,
           aprobacionSupervisor: restOfDia.aprobacionSupervisor,
@@ -119,6 +121,7 @@ export class RegistroDiarioRepository {
           horaSalida: restOfDia.horaSalida,
           jornada: restOfDia.jornada,
           esDiaLibre: restOfDia.esDiaLibre,
+          esIncapacidad: restOfDia.esIncapacidad,
           esHoraCorrida: restOfDia.esHoraCorrida,
           comentarioEmpleado: restOfDia.comentarioEmpleado,
           aprobacionSupervisor: restOfDia.aprobacionSupervisor,

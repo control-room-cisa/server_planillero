@@ -253,6 +253,7 @@ model RegistroDiario {
   horaSalida           DateTime  @map("hora_salida")
   jornada              String?   @db.VarChar(1)
   esDiaLibre           Boolean?  @map("es_dia_libre")
+  esIncapacidad        Boolean?  @map("es_incapacidad")
   horasFeriado         Float?    @map("horas_feriado")
   esHoraCorrida        Boolean?  @map("es_hora_corrida")
   comentarioEmpleado   String?   @db.VarChar(500)
