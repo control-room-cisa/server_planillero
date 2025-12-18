@@ -41,9 +41,9 @@ export interface ConteoHorasTrabajadas {
     p100: number; // 100% de recargo (doble)
     libre: number; // 0 del valor de la hora normal
     almuerzo: number; // 0 del valor de la hora normal
-    // Variantes por jobs especiales en horas NORMALES
-    incapacidad?: number; // E01
-    incapacidadIHSS?: number; // E01
+    // Incapacidades (basado en campo esIncapacidad del registro diario)
+    incapacidadEmpresa?: number; // Primeros 3 días consecutivos de incapacidad
+    incapacidadIHSS?: number; // A partir del 4to día consecutivo de incapacidad
     vacaciones?: number; // E02
     permisoConSueldo?: number; // E03
     permisoSinSueldo?: number; // E04
@@ -54,7 +54,7 @@ export interface ConteoHorasTrabajadas {
 
   /**
    * Conteo agregado en días para el período. Base 15 días por período.
-   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo + incapacidad + incapacidadIHSS
+   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo + incapacidadEmpresa + incapacidadIHSS + inasistencias
    */
   conteoDias?: {
     totalPeriodo: number; // siempre 15
@@ -63,6 +63,8 @@ export interface ConteoHorasTrabajadas {
     permisoConSueldo: number; // E03 horas / 8
     permisoSinSueldo: number; // E04 horas / 8
     inasistencias: number; // E05 horas / 8
+    incapacidadEmpresa: number; // Primeros 3 días consecutivos / 8
+    incapacidadIHSS: number; // A partir del 4to día consecutivo / 8
   };
   /**
    * Deducciones de alimentación calculadas

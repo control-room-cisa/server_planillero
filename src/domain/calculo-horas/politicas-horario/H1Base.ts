@@ -23,7 +23,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     return h * 60 + m;
   }
   protected static segDurMin(seg: Segmento15): number {
-    return PoliticaH1Base.HHMM_TO_MIN(seg.fin) - PoliticaH1Base.HHMM_TO_MIN(seg.inicio);
+    return (
+      PoliticaH1Base.HHMM_TO_MIN(seg.fin) -
+      PoliticaH1Base.HHMM_TO_MIN(seg.inicio)
+    );
   }
   protected static isDiurna(seg: Segmento15): boolean {
     const start = PoliticaH1Base.HHMM_TO_MIN(seg.inicio);
@@ -44,6 +47,37 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const d1 = Date.UTC(Y1, M1 - 1, D1);
     const d2 = Date.UTC(Y2, M2 - 1, D2);
     return Math.floor((d2 - d1) / 86400000) + 1;
+  }
+
+  /**
+   * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
+   * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
+   * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
+   *
+   * @param fecha - Fecha del día actual en formato YYYY-MM-DD
+   * @param empleadoId - ID del empleado
+   * @returns true si los 3 días anteriores tienen esIncapacidad=true (consecutivos)
+   */
+  protected async verificar3DiasAnterioresIncapacidad(
+    fecha: string,
+    empleadoId: string
+  ): Promise<boolean> {
+    // Verificar los 3 días anteriores
+    for (let i = 1; i <= 3; i++) {
+      const fechaAnterior = PoliticaH1Base.addDays(fecha, -i);
+      const registroAnterior = await this.getRegistroDiario(
+        empleadoId,
+        fechaAnterior
+      );
+
+      // Si algún día anterior no tiene incapacidad, los días de incapacidad son ≤3
+      if (!registroAnterior || registroAnterior.esIncapacidad !== true) {
+        return false;
+      }
+    }
+
+    // Los 3 días anteriores tienen incapacidad → este es el día 4+ → IHSS
+    return true;
   }
 
   // Estado de racha que cruza días
@@ -149,7 +183,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
    */
   private static DayResultType: {
     buckets: Buckets;
-    addIncapacidadMin: number;
     addVacacionesMin: number;
     addPermisoCSMin: number;
     addPermisoSSMin: number;
@@ -164,6 +197,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
    */
   /**
    * Versión optimizada que recibe el empleado pre-cargado
+   *
+   * REGLA DE INCAPACIDAD:
+   * - Si esIncapacidad=true en el registro diario:
+   *   - Se asignan 8 horas (480 min) de incapacidad
+   *   - Se asignan 16 horas (960 min) de libre
+   *   - Se ignoran todas las actividades del día
+   *   - Si los 3 días anteriores también tienen esIncapacidad=true:
+   *     → Las 8 horas van a incapacidadIHSS (a partir del 4to día)
+   *   - Si alguno de los 3 días anteriores no tiene incapacidad:
+   *     → Las 8 horas van a incapacidadEmpresa (primeros 3 días)
    */
   private async procesarDiaCompletoOptimizado(
     fecha: string,
@@ -171,31 +214,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     empleado: any
   ): Promise<typeof PoliticaH1Base.DayResultType> {
     const tDia = Date.now();
-    
+
     // Solo 2 consultas por día: registro y feriado
-    const [registroDelDia, feriadoInfo] =
-      await Promise.all([
-        this.getRegistroDiario(empleadoId, fecha),
-        this.esFeriado(fecha),
-      ]);
-    
-    // Segmentar usando el registro ya obtenido (sin consulta extra)
-    const segmentosResult = this.segmentarConRegistro(fecha, registroDelDia);
-    
-    // Calcular horario de trabajo sin consultas adicionales (usando datos ya obtenidos)
-    const hTrabajo = this.calcularHorarioTrabajoSinConsultas(fecha, empleadoId, feriadoInfo);
-    
+    const [registroDelDia, feriadoInfo] = await Promise.all([
+      this.getRegistroDiario(empleadoId, fecha),
+      this.esFeriado(fecha),
+    ]);
+
     console.log(`[H1Base] ${fecha} - carga datos: ${Date.now() - tDia}ms`);
-
-    const segmentos = segmentosResult.segmentos;
-
-    // Determinar si necesitamos racha del día anterior
-    let racha = PoliticaH1Base.nuevaRacha();
-    const necesitaRachaAnterior = this.diaEmpiezaConExtraA00(segmentos);
-
-    if (necesitaRachaAnterior) {
-      racha = await this.obtenerRachaDelDiaAnterior(fecha, empleadoId);
-    }
 
     // Buckets para este día
     const b: Buckets = {
@@ -206,7 +232,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       extraC2Min: 0,
       extraC3Min: 0,
       extraC4Min: 0,
-      incapacidadMin: 0,
+      incapacidadEmpresaMin: 0,
+      incapacidadIHSSMin: 0,
       vacacionesMin: 0,
       permisoConSueldoMin: 0,
       permisoSinSueldoMin: 0,
@@ -215,12 +242,69 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     };
 
     // Acumuladores de actividades sin hora
-    let addIncapacidadMin = 0;
     let addVacacionesMin = 0;
     let addPermisoCSMin = 0;
     let addPermisoSSMin = 0;
     let addInasistenciasMin = 0;
     let addCompensatorioMin = 0;
+
+    // ==================== MANEJO DE INCAPACIDAD ====================
+    // Si el día está marcado como incapacidad, asignar 8h de incapacidad y 16h de libre.
+    // Se ignoran todas las actividades del día.
+    if (registroDelDia?.esIncapacidad === true) {
+      const HORAS_INCAPACIDAD_MIN = 8 * 60; // 480 minutos = 8 horas
+      const HORAS_LIBRE_MIN = 16 * 60; // 960 minutos = 16 horas
+
+      // Verificar si los 3 días anteriores también tienen incapacidad
+      const incapacidadMayorATresDias =
+        await this.verificar3DiasAnterioresIncapacidad(fecha, empleadoId);
+
+      if (incapacidadMayorATresDias) {
+        // A partir del 4to día consecutivo → IHSS
+        b.incapacidadIHSSMin = HORAS_INCAPACIDAD_MIN;
+      } else {
+        // Primeros 3 días consecutivos → Empresa
+        b.incapacidadEmpresaMin = HORAS_INCAPACIDAD_MIN;
+      }
+
+      b.libreMin = HORAS_LIBRE_MIN;
+
+      console.log(
+        `[H1Base] ${fecha} - INCAPACIDAD: ${
+          incapacidadMayorATresDias ? "IHSS (>3 días)" : "Empresa (≤3 días)"
+        }`
+      );
+
+      return {
+        buckets: b,
+        addVacacionesMin: 0,
+        addPermisoCSMin: 0,
+        addPermisoSSMin: 0,
+        addInasistenciasMin: 0,
+        addCompensatorioMin: 0,
+      };
+    }
+
+    // ==================== PROCESAMIENTO NORMAL (sin incapacidad) ====================
+    // Segmentar usando el registro ya obtenido (sin consulta extra)
+    const segmentosResult = this.segmentarConRegistro(fecha, registroDelDia);
+
+    // Calcular horario de trabajo sin consultas adicionales (usando datos ya obtenidos)
+    const hTrabajo = this.calcularHorarioTrabajoSinConsultas(
+      fecha,
+      empleadoId,
+      feriadoInfo
+    );
+
+    const segmentos = segmentosResult.segmentos;
+
+    // Determinar si necesitamos racha del día anterior
+    let racha = PoliticaH1Base.nuevaRacha();
+    const necesitaRachaAnterior = this.diaEmpiezaConExtraA00(segmentos);
+
+    if (necesitaRachaAnterior) {
+      racha = await this.obtenerRachaDelDiaAnterior(fecha, empleadoId);
+    }
 
     // Info del día
     const esFestivo = feriadoInfo.esFeriado;
@@ -251,9 +335,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
         case "NORMAL": {
           const code = seg.jobCodigo?.toUpperCase?.();
-          if (code === "E01") {
-            b.incapacidadMin += dur;
-          } else if (code === "E02") {
+          // E01 ya no se maneja aquí - la incapacidad se maneja con el campo esIncapacidad
+          if (code === "E02") {
             b.vacacionesMin += dur;
           } else if (code === "E03") {
             b.permisoConSueldoMin += dur;
@@ -281,6 +364,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     }
 
     // Procesar actividades sin hora (jobs especiales)
+    // NOTA: E01 ya no se maneja aquí - la incapacidad se maneja con el campo esIncapacidad
     try {
       if (registroDelDia?.actividades?.length) {
         for (const act of registroDelDia.actividades as any[]) {
@@ -290,12 +374,13 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           const codigo = act?.job?.codigo?.toUpperCase?.();
           if (!codigo) continue;
           const min = Math.round(horas * 60);
-          if (codigo === "E01") addIncapacidadMin += min;
-          else if (codigo === "E02") addVacacionesMin += min;
+          // E01 ya no se procesa - incapacidad se maneja con esIncapacidad del registro
+          if (codigo === "E02") addVacacionesMin += min;
           else if (codigo === "E03") addPermisoCSMin += min;
           else if (codigo === "E04") addPermisoSSMin += min;
           else if (codigo === "E05") addInasistenciasMin += min;
-          else if (codigo === "E06" || codigo === "E07") addCompensatorioMin += min;
+          else if (codigo === "E06" || codigo === "E07")
+            addCompensatorioMin += min;
         }
       }
     } catch {
@@ -304,7 +389,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     return {
       buckets: b,
-      addIncapacidadMin,
       addVacacionesMin,
       addPermisoCSMin,
       addPermisoSSMin,
@@ -391,14 +475,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     let r = PoliticaH1Base.nuevaRacha();
 
     try {
-      const [registroAnterior, feriadoInfoAnterior] =
-        await Promise.all([
-          this.getRegistroDiario(empleadoId, diaAnterior),
-          this.esFeriado(diaAnterior),
-        ]);
+      const [registroAnterior, feriadoInfoAnterior] = await Promise.all([
+        this.getRegistroDiario(empleadoId, diaAnterior),
+        this.esFeriado(diaAnterior),
+      ]);
 
       // Segmentar usando el registro ya obtenido (evita consulta duplicada)
-      const segmentosResult = this.segmentarConRegistro(diaAnterior, registroAnterior);
+      const segmentosResult = this.segmentarConRegistro(
+        diaAnterior,
+        registroAnterior
+      );
 
       const esLibreOFestAnterior =
         registroAnterior?.esDiaLibre === true || feriadoInfoAnterior.esFeriado;
@@ -446,7 +532,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     empleadoId: string
   ): Promise<ConteoHorasTrabajadas> {
     const t0 = Date.now();
-    
+
     if (
       !this.validarFormatoFecha(fechaInicio) ||
       !this.validarFormatoFecha(fechaFin)
@@ -470,16 +556,19 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Pre-cargar datos compartidos UNA SOLA VEZ (empleado es el mismo para todos los días)
     const empleado = await this.getEmpleado(empleadoId);
-    if (!empleado) throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
-    
+    if (!empleado)
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+
     console.log(`[H1Base] Empleado cargado en ${Date.now() - t1}ms`);
     const t2 = Date.now();
 
     // Procesar TODOS los días en paralelo (sin deducciones de alimentación)
     const resultadosPorDia = await Promise.all(
-      fechas.map((fecha) => this.procesarDiaCompletoOptimizado(fecha, empleadoId, empleado))
+      fechas.map((fecha) =>
+        this.procesarDiaCompletoOptimizado(fecha, empleadoId, empleado)
+      )
     );
-    
+
     console.log(`[H1Base] Días procesados en ${Date.now() - t2}ms`);
 
     // ==================== AGREGAR RESULTADOS ====================
@@ -491,7 +580,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       extraC2Min: 0,
       extraC3Min: 0,
       extraC4Min: 0,
-      incapacidadMin: 0,
+      incapacidadEmpresaMin: 0,
+      incapacidadIHSSMin: 0,
       vacacionesMin: 0,
       permisoConSueldoMin: 0,
       permisoSinSueldoMin: 0,
@@ -499,7 +589,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       compensatorioMin: 0,
     };
 
-    let addIncapacidadMin = 0;
     let addVacacionesMin = 0;
     let addPermisoCSMin = 0;
     let addPermisoSSMin = 0;
@@ -515,14 +604,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       b.extraC2Min += resultado.buckets.extraC2Min;
       b.extraC3Min += resultado.buckets.extraC3Min;
       b.extraC4Min += resultado.buckets.extraC4Min;
-      b.incapacidadMin += resultado.buckets.incapacidadMin;
+      b.incapacidadEmpresaMin += resultado.buckets.incapacidadEmpresaMin;
+      b.incapacidadIHSSMin += resultado.buckets.incapacidadIHSSMin;
       b.vacacionesMin += resultado.buckets.vacacionesMin;
       b.permisoConSueldoMin += resultado.buckets.permisoConSueldoMin;
       b.permisoSinSueldoMin += resultado.buckets.permisoSinSueldoMin;
       b.inasistenciasMin += resultado.buckets.inasistenciasMin;
       b.compensatorioMin += resultado.buckets.compensatorioMin;
 
-      addIncapacidadMin += resultado.addIncapacidadMin;
       addVacacionesMin += resultado.addVacacionesMin;
       addPermisoCSMin += resultado.addPermisoCSMin;
       addPermisoSSMin += resultado.addPermisoSSMin;
@@ -531,6 +620,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     }
 
     // Validar cuadre (en minutos): debe ser 24h * número de días
+    // NOTA: Las horas de incapacidad (empresa + IHSS) se incluyen en el cuadre porque
+    // cuando esIncapacidad=true se asignan 8h de incapacidad + 16h de libre = 24h
     const dias = PoliticaH1Base.daysInclusive(fechaInicio, fechaFin);
     const esperadoMin = dias * 24 * 60;
     const totalMin =
@@ -540,7 +631,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       b.extraC1Min +
       b.extraC2Min +
       b.extraC3Min +
-      b.extraC4Min;
+      b.extraC4Min +
+      b.incapacidadEmpresaMin +
+      b.incapacidadIHSSMin;
 
     if (totalMin !== esperadoMin) {
       throw new Error(
@@ -551,7 +644,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Mapear a interfaz (horas)
     const totalEspecialesAddMin =
-      addIncapacidadMin +
       addVacacionesMin +
       addPermisoCSMin +
       addPermisoSSMin +
@@ -571,9 +663,11 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         p100: PoliticaH1Base.minutosAhoras(b.extraC4Min),
         libre: PoliticaH1Base.minutosAhoras(b.libreMin),
         almuerzo: PoliticaH1Base.minutosAhoras(b.almuerzoMin),
-        incapacidad: PoliticaH1Base.minutosAhoras(
-          b.incapacidadMin + addIncapacidadMin
+        // Incapacidades separadas por tipo
+        incapacidadEmpresa: PoliticaH1Base.minutosAhoras(
+          b.incapacidadEmpresaMin
         ),
+        incapacidadIHSS: PoliticaH1Base.minutosAhoras(b.incapacidadIHSSMin),
         vacaciones: PoliticaH1Base.minutosAhoras(
           b.vacacionesMin + addVacacionesMin
         ),
@@ -606,14 +700,27 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const horasInasistencias = PoliticaH1Base.minutosAhoras(
       b.inasistenciasMin + addInasistenciasMin
     );
+    const horasIncapacidadEmpresa = PoliticaH1Base.minutosAhoras(
+      b.incapacidadEmpresaMin
+    );
+    const horasIncapacidadIHSS = PoliticaH1Base.minutosAhoras(
+      b.incapacidadIHSSMin
+    );
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
+    const diasIncapacidadEmpresa = horasIncapacidadEmpresa / 8;
+    const diasIncapacidadIHSS = horasIncapacidadIHSS / 8;
 
     const diasNoLaboradosPorEspeciales =
-      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
+      diasVacaciones +
+      diasPermisoCS +
+      diasPermisoSS +
+      diasInasistencias +
+      diasIncapacidadEmpresa +
+      diasIncapacidadIHSS;
     const diasLaborados = totalPeriodo - diasNoLaboradosPorEspeciales;
 
     result.conteoDias = {
@@ -623,6 +730,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
       inasistencias: diasInasistencias,
+      incapacidadEmpresa: diasIncapacidadEmpresa,
+      incapacidadIHSS: diasIncapacidadIHSS,
     };
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado
@@ -1214,13 +1323,15 @@ type Buckets = {
   extraC2Min: number; // p50
   extraC3Min: number; // p75
   extraC4Min: number; // p100
+  // Incapacidades (basado en campo esIncapacidad del registro diario)
+  incapacidadEmpresaMin: number; // Primeros 3 días consecutivos
+  incapacidadIHSSMin: number; // A partir del 4to día consecutivo
   // normales por jobs especiales (minutos)
-  incapacidadMin: number; // E01
   vacacionesMin: number; // E02
   permisoConSueldoMin: number; // E03
   permisoSinSueldoMin: number; // E04
   inasistenciasMin: number; // E05
-  compensatorioMin: number; // E05
+  compensatorioMin: number; // E06, E07
 };
 
 const DUMMY_BUCKETS: Buckets = {
@@ -1231,12 +1342,11 @@ const DUMMY_BUCKETS: Buckets = {
   extraC2Min: 0,
   extraC3Min: 0,
   extraC4Min: 0,
-  incapacidadMin: 0,
+  incapacidadEmpresaMin: 0,
+  incapacidadIHSSMin: 0,
   vacacionesMin: 0,
   permisoConSueldoMin: 0,
   permisoSinSueldoMin: 0,
   inasistenciasMin: 0,
   compensatorioMin: 0,
 };
-
-
