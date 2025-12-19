@@ -322,9 +322,16 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
+    const diasIncapacidadEmpresa = 0; // H2 no maneja incapacidad
+    const diasIncapacidadIHSS = 0; // H2 no maneja incapacidad
 
     const diasNoLaborados =
-      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
+      diasVacaciones +
+      diasPermisoCS +
+      diasPermisoSS +
+      diasInasistencias +
+      diasIncapacidadEmpresa +
+      diasIncapacidadIHSS;
     const diasLaborados = totalPeriodo - diasNoLaborados;
 
     conteo.conteoDias = {
@@ -334,6 +341,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
       inasistencias: diasInasistencias,
+      incapacidadEmpresa: diasIncapacidadEmpresa,
+      incapacidadIHSS: diasIncapacidadIHSS,
     };
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado
@@ -475,7 +484,10 @@ export class PoliticaH2 extends PoliticaHorarioBase {
           const jobId = act?.jobId || act?.job?.id;
           const codigo = act?.job?.codigo ?? act?.codigoJob ?? "";
           const nombre = act?.job?.nombre ?? String(codigo);
-          const descripcion = act?.descripcion || (registroDiario as any)?.comentarioEmpleado || null;
+          const descripcion =
+            act?.descripcion ||
+            (registroDiario as any)?.comentarioEmpleado ||
+            null;
 
           if (!jobId && !codigo) continue;
 
@@ -579,4 +591,3 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     return resultado;
   }
 }
-
