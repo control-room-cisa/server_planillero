@@ -78,7 +78,8 @@ export class SegmentadorTiempo {
   }
 
   /**
-   * Valida que las horas normales (esExtra=false) cuadren con la jornada
+   * Valida que las horas normales (esExtra=false y esCompensatorio=false) cuadren con la jornada
+   * NOTA: Las horas compensatorias NO se incluyen en la validación porque se manejan por separado
    */
   private static validarHorasNormales(
     registroDiario: RegistroDiarioDetail
@@ -87,7 +88,7 @@ export class SegmentadorTiempo {
       registroDiario;
 
     const horasNormales = actividades
-      .filter((act) => !act.esExtra)
+      .filter((act) => !act.esExtra && !act.esCompensatorio)
       .reduce((sum, act) => sum + act.duracionHoras, 0);
 
     const duracionJornada =

@@ -87,6 +87,8 @@ type Horas = {
   p75: number;
   p100: number;
   horasFeriado?: number;
+  horasCompensatoriasTomadas?: number;
+  horasCompensatoriasPagadas?: number;
 };
 type HorasExt = Horas & { libre?: number; horasFeriado?: number };
 
@@ -105,6 +107,19 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   const expFeriado = exp.horasFeriado ?? 0;
   const gotFeriado = got.horasFeriado ?? 0;
 
+  const expCompTomadas = exp.horasCompensatoriasTomadas ?? 0;
+  const gotCompTomadas = got.horasCompensatoriasTomadas ?? 0;
+
+  const expCompPagadas = exp.horasCompensatoriasPagadas ?? 0;
+  // horasCompensatoriasPagadas es un array, sumar todas las horas
+  const gotCompPagadasArray = (got as any).horasCompensatoriasPagadas;
+  const gotCompPagadas = Array.isArray(gotCompPagadasArray)
+    ? gotCompPagadasArray.reduce(
+        (sum, item) => sum + (item.cantidadHoras ?? 0),
+        0
+      )
+    : got.horasCompensatoriasPagadas ?? 0;
+
   const rows = [
     { métrica: "almuerzo", esperado: exp.almuerzo, obtenido: got.almuerzo },
     { métrica: "normal", esperado: exp.normal, obtenido: got.normal },
@@ -113,6 +128,16 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
     { métrica: "extra75", esperado: exp.p75, obtenido: got.p75 },
     { métrica: "extra100", esperado: exp.p100, obtenido: got.p100 },
     { métrica: "feriado", esperado: expFeriado, obtenido: gotFeriado },
+    {
+      métrica: "comp_tomadas",
+      esperado: expCompTomadas,
+      obtenido: gotCompTomadas,
+    },
+    {
+      métrica: "comp_pagadas",
+      esperado: expCompPagadas,
+      obtenido: gotCompPagadas,
+    },
     { métrica: "libre", esperado: expLibre, obtenido: gotLibre },
     {
       métrica: "TOTAL",
@@ -142,6 +167,8 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   expect(got.p75).toBe(exp.p75);
   expect(got.p100).toBe(exp.p100);
   expect(gotFeriado).toBe(expFeriado);
+  expect(gotCompTomadas).toBe(expCompTomadas);
+  expect(gotCompPagadas).toBe(expCompPagadas);
 
   // Assert de libre y de identidad TOTAL+libre = 24
   expect(gotLibre).toBe(expLibre);
@@ -161,6 +188,8 @@ const fechasSecuencia = [
   "2025-09-20",
   "2025-09-21",
   "2025-09-22",
+  "2025-09-23",
+  "2025-09-24",
 ];
 
 function seedDataForDate(p: H1Test, fecha: string) {
@@ -508,6 +537,69 @@ function seedDataForDate(p: H1Test, fecha: string) {
         ],
       });
       break;
+    case "2025-09-23":
+      // Caso compensatorio: 5h normales + 4h normales compensatorias
+      // Horario: 5h normales + 1h almuerzo + 4h compensatorias = 10h (07:00-17:00 local = 13:00-23:00 UTC)
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "23:00"),
+        esHoraCorrida: false,
+        esDiaLibre: false,
+        actividades: [
+          {
+            descripcion: "Normal 5h job 203",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "203" },
+            duracionHoras: 5,
+          },
+          {
+            descripcion: "Normal 4h compensatoria",
+            esExtra: false,
+            esCompensatorio: true,
+            job: { codigo: "104" },
+            duracionHoras: 4,
+          },
+        ],
+      });
+      break;
+    case "2025-09-24":
+      // Caso compensatorio: 9h normales + 3h extras compensatorias
+      // Horario: 9h normales + 1h almuerzo = 10h (07:00-17:00 local = 13:00-23:00 UTC)
+      // Extras: 17:00-20:00 local = 23:00-02:00 UTC
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "23:00"),
+        esHoraCorrida: false,
+        esDiaLibre: false,
+        actividades: [
+          {
+            descripcion: "Normal 4h job 200",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "200" },
+            duracionHoras: 4,
+          },
+          {
+            descripcion: "Normal 5h job 300",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "300" },
+            duracionHoras: 5,
+          },
+          {
+            descripcion: "Extra 3h compensatoria",
+            esExtra: true,
+            esCompensatorio: true,
+            horaInicio: makeDateUTC(fecha, "23:00"),
+            horaFin: makeDateUTC("2025-09-25", "02:00"),
+            job: { codigo: "201" },
+          },
+        ],
+      });
+      break;
     default:
       throw new Error(`Fecha no soportada en fixtures: ${fecha}`);
   }
@@ -799,6 +891,61 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p50: 3,
       p75: 5,
       p100: 0,
+    });
+  });
+
+  // -------------------- Caso Compensatorio 1: Horas normales compensatorias (tomadas) --------------------
+  // Día normal: 5h normales job 203 + 4h normales compensatorias
+  // Las 4h compensatorias NO cuentan como horas normales, pasan a horasCompensatoriasTomadas
+  // Esperado: 1,5,0,0,0,0 + 4h compensatorias tomadas
+  it("23/09/2025: 5h normales + 4h normales compensatorias ⇒ 1/5/0/0/0/0 + comp_tomadas:4", async () => {
+    const fecha = "2025-09-23";
+    const p = new H1Test();
+
+    seedHistoricoHastaFecha(p, fecha);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 5,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      horasCompensatoriasTomadas: 4,
+      horasCompensatoriasPagadas: 0,
+    });
+  });
+
+  // -------------------- Caso Compensatorio 2: Horas extras compensatorias (pagadas al saldo) --------------------
+  // Día normal: 4h job 200 + 5h job 300 + 3h extras compensatorias
+  // Las 3h extras compensatorias NO cuentan como horas extras, pasan a horasCompensatoriasPagadas
+  // NO se aplica racha en horas compensatorias extras
+  // Esperado: 1,9,0,0,0,0 + 3h compensatorias pagadas
+  it("24/09/2025: 9h normales + 3h extras compensatorias ⇒ 1/9/0/0/0/0 + comp_pagadas:3", async () => {
+    const fecha = "2025-09-24";
+    const p = new H1Test();
+
+    seedHistoricoHastaFecha(p, fecha);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1"
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 9,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      horasCompensatoriasTomadas: 0,
+      horasCompensatoriasPagadas: 3,
     });
   });
 });

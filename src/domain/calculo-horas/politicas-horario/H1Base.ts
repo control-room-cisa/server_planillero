@@ -239,6 +239,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       permisoSinSueldoMin: 0,
       inasistenciasMin: 0,
       compensatorioMin: 0,
+      compNormalesMin: 0,
+      compExtrasMin: 0,
     };
 
     // Acumuladores de actividades sin hora
@@ -297,6 +299,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     );
 
     const segmentos = segmentosResult.segmentos;
+
+    // Extraer horas compensatorias calculadas por el segmentador
+    const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas;
+    const compExtrasArray = segmentosResult.horasCompensatoriasPagadas;
+
+    // Agregar horas compensatorias a los buckets (convertir de horas a minutos)
+    b.compNormalesMin += Math.round(compNormalesHoras * 60);
+    for (const comp of compExtrasArray) {
+      b.compExtrasMin += Math.round(comp.cantidadHoras * 60);
+    }
 
     // Determinar si necesitamos racha del día anterior
     let racha = PoliticaH1Base.nuevaRacha();
@@ -365,15 +377,23 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Procesar actividades sin hora (jobs especiales)
     // NOTA: E01 ya no se maneja aquí - la incapacidad se maneja con el campo esIncapacidad
+    // NOTA: Las horas compensatorias ya se procesaron en el segmentador
     try {
       if (registroDelDia?.actividades?.length) {
         for (const act of registroDelDia.actividades as any[]) {
+          // Ignorar actividades compensatorias (ya procesadas por el segmentador)
+          if (act?.esCompensatorio === true) continue;
+
+          // Si es extra, ya se procesó en segmentos, skip
           if (act?.esExtra) continue;
+
           const horas = Number(act?.duracionHoras ?? 0);
           if (!isFinite(horas) || horas <= 0) continue;
-          const codigo = act?.job?.codigo?.toUpperCase?.();
-          if (!codigo) continue;
           const min = Math.round(horas * 60);
+          const codigo = act?.job?.codigo?.toUpperCase?.();
+
+          // Actividades normales con jobs especiales
+          if (!codigo) continue;
           // E01 ya no se procesa - incapacidad se maneja con esIncapacidad del registro
           if (codigo === "E02") addVacacionesMin += min;
           else if (codigo === "E03") addPermisoCSMin += min;
@@ -587,6 +607,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       permisoSinSueldoMin: 0,
       inasistenciasMin: 0,
       compensatorioMin: 0,
+      compNormalesMin: 0,
+      compExtrasMin: 0,
     };
 
     let addVacacionesMin = 0;
@@ -611,6 +633,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       b.permisoSinSueldoMin += resultado.buckets.permisoSinSueldoMin;
       b.inasistenciasMin += resultado.buckets.inasistenciasMin;
       b.compensatorioMin += resultado.buckets.compensatorioMin;
+      b.compNormalesMin += resultado.buckets.compNormalesMin;
+      b.compExtrasMin += resultado.buckets.compExtrasMin;
 
       addVacacionesMin += resultado.addVacacionesMin;
       addPermisoCSMin += resultado.addPermisoCSMin;
@@ -649,6 +673,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       addPermisoSSMin +
       addCompensatorioMin;
 
+    // Las horas compensatorias NO se cuentan en normalMin (el segmentador las excluye)
+    // Ya están en sus buckets separados (compNormalesMin y compExtrasMin)
     const result: ConteoHorasTrabajadas = {
       fechaInicio,
       fechaFin,
@@ -682,6 +708,13 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         ),
         compensatorio: PoliticaH1Base.minutosAhoras(
           b.compensatorioMin + addCompensatorioMin
+        ),
+        // Horas compensatorias separadas por tipo (calculadas por el segmentador)
+        horasCompensatoriasTomadas: PoliticaH1Base.minutosAhoras(
+          b.compNormalesMin
+        ),
+        horasCompensatoriasPagadas: PoliticaH1Base.minutosAhoras(
+          b.compExtrasMin
         ),
       },
     };
@@ -1331,7 +1364,10 @@ type Buckets = {
   permisoConSueldoMin: number; // E03
   permisoSinSueldoMin: number; // E04
   inasistenciasMin: number; // E05
-  compensatorioMin: number; // E06, E07
+  compensatorioMin: number; // E06, E07 (deprecated - usar compNormalesMin/compExtrasMin)
+  // Horas compensatorias separadas por tipo
+  compNormalesMin: number; // Horas normales con esCompensatorio=true (se restan de normales)
+  compExtrasMin: number; // Horas extras con esCompensatorio=true (no se cuentan como extras)
 };
 
 const DUMMY_BUCKETS: Buckets = {
@@ -1349,4 +1385,6 @@ const DUMMY_BUCKETS: Buckets = {
   permisoSinSueldoMin: 0,
   inasistenciasMin: 0,
   compensatorioMin: 0,
+  compNormalesMin: 0,
+  compExtrasMin: 0,
 };

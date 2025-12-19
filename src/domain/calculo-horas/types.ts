@@ -50,6 +50,9 @@ export interface ConteoHorasTrabajadas {
     inasistencias?: number; // E05
     llegadasTarde?: number; // E05
     compensatorio?: number; // E06 y E07
+    // Horas compensatorias (actividades con esCompensatorio=true)
+    horasCompensatoriasTomadas?: number; // Horas normales compensatorias (no se cuentan como normales)
+    horasCompensatoriasPagadas?: number; // Horas extras compensatorias (no se cuentan como extras, se suman al saldo)
   };
 
   /**

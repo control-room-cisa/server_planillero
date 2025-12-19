@@ -112,6 +112,8 @@ model Empleado {
   nombreConyugue           String?       @map("nombre_conyugue") @db.VarChar(40)
   cargo                    String?       @db.VarChar(30)
   sueldoMensual            Float?
+  tiempoCompensatorioHoras Float?
+  tiempoVacacionesHoras    Float?
   tipoContrato             TipoContrato? @map("tipo_contrato")
   condicionSalud           String?       @map("condicion_salud") @db.VarChar(50)
   nombreContactoEmergencia String?       @map("nombre_contacto_emergencia") @db.VarChar(40)
@@ -286,6 +288,7 @@ model Actividad {
   horaFin          DateTime? @map("hora_fin")
   esCorrida        Boolean?  @map("es_corrida")
   esExtra          Boolean?  @map("es_extra")
+  esCompensatorio  Boolean?  @map("es_compensatorio")
   className        String?   @map("class") @db.VarChar(45)
   descripcion      String    @db.VarChar(250)
   createdAt        DateTime? @default(now()) @map("created_at")

@@ -85,6 +85,8 @@ export interface ActividadLike {
   horaInicio?: Date | null; // obligatorio para EXTRA
   horaFin?: Date | null; // obligatorio para EXTRA
   esExtra?: boolean | null;
+  esCompensatorio?: boolean | null;
+  duracionHoras?: number | null;
   descripcion: string | null;
   job?: { id: number; codigo?: string | null; nombre?: string | null } | null;
   jobId?: number | null;
@@ -112,6 +114,9 @@ export interface ResultadoSegmentacion {
     minutosExtra: number;
     minutosLibre: number;
   };
+  // Horas compensatorias (contadas por separado, segmentadas como LIBRE)
+  horasCompensatoriasTomadas: number; // Horas normales compensatorias
+  horasCompensatoriasPagadas: Array<{ codigoJob: string; cantidadHoras: number }>; // Horas extras compensatorias por job
 }
 
 // ----------------------- utilidades de tiempo -----------------------
@@ -255,7 +260,7 @@ export function segmentarRegistroDiario(
     ? []
     : rangoNormalDesdeEntradaSalida(entradaMin, salidaMin);
 
-  // Pinta NORMAL por defecto en RANGO NORMAL
+  // Pinta NORMAL por defecto en RANGO NORMAL (comportamiento original)
   for (const r of rangosNormal) {
     const [i0, i1] = indicesPorRango(r);
     for (let i = i0; i < i1; i++) slots[i].tipo = "NORMAL";
@@ -318,9 +323,12 @@ export function segmentarRegistroDiario(
   }
 
   // 4) ACTIVIDADES → pintan EXTRA (fuera de normal o esExtra=true) o NORMAL (dentro de normal)
+  // NOTA: Las actividades compensatorias NO se segmentan, se cuentan por separado
   const rangosExtraPintados: Rango[] = []; // para validar EXTRA dentro de NORMAL
 
   for (const act of actividades) {
+    // Ignorar actividades compensatorias (se cuentan por separado)
+    if (act.esCompensatorio) continue;
     if (!act.horaInicio || !act.horaFin) continue; // ignorar mal definidas (EXTRA debe traer horas)
 
     const start = minutesOfDayInTZ(act.horaInicio, tz);
@@ -397,6 +405,33 @@ export function segmentarRegistroDiario(
       const esExtraGlobal =
         !!act.esExtra || !rangoDentroDeAlguno(r, rangosNormal);
       if (esExtraGlobal) rangosExtraPintados.push(r);
+    }
+  }
+
+  // 4.5) Despintar slots compensatorios: convertir NORMAL→LIBRE desde el final del rango
+  // Las horas compensatorias normales sin horaInicio/horaFin se incluyen en el horario
+  // pero se pintan como LIBRE (despintando desde el final)
+  const horasCompensatoriasNormales = actividades
+    .filter((act) => act.esCompensatorio && !act.esExtra && !act.horaInicio && !act.horaFin)
+    .reduce((sum, act) => sum + (act.duracionHoras ?? 0), 0);
+  
+  const minutosCompensatorios = Math.round(horasCompensatoriasNormales * 60);
+  
+  if (minutosCompensatorios > 0) {
+    // Despintar desde el final del rango normal hacia atrás
+    let minutosDespintados = 0;
+    // Recorrer rangos en orden inverso
+    for (let rIdx = rangosNormal.length - 1; rIdx >= 0 && minutosDespintados < minutosCompensatorios; rIdx--) {
+      const r = rangosNormal[rIdx];
+      const [i0, i1] = indicesPorRango(r);
+      // Recorrer slots en orden inverso dentro del rango
+      for (let i = i1 - 1; i >= i0 && minutosDespintados < minutosCompensatorios; i--) {
+        // Solo despintar si es NORMAL (no almuerzo ni extra)
+        if (slots[i].tipo === "NORMAL") {
+          slots[i] = { tipo: "LIBRE" };
+          minutosDespintados += SLOT_MIN;
+        }
+      }
     }
   }
 
@@ -523,6 +558,40 @@ export function segmentarRegistroDiario(
     .filter((s) => s.tipo === "LIBRE")
     .reduce((acc, s) => acc + (hhmmToMin(s.fin) - hhmmToMin(s.inicio)), 0);
 
+  // Calcular horas compensatorias (actividades con esCompensatorio=true)
+  let horasCompensatoriasTomadas = 0; // Normales compensatorias
+  const horasCompensatoriasPagadasMap = new Map<string, number>(); // Extras compensatorias por job
+
+  for (const act of actividades) {
+    if (!act.esCompensatorio) continue;
+    
+    // Para extras, calcular duración desde horaInicio/horaFin si existen
+    let horas = 0;
+    if (act.esExtra && act.horaInicio && act.horaFin) {
+      const duracionMs = act.horaFin.getTime() - act.horaInicio.getTime();
+      horas = duracionMs / 3_600_000; // convertir a horas
+    } else {
+      horas = Number(act.duracionHoras ?? 0);
+    }
+    
+    if (!isFinite(horas) || horas <= 0) continue;
+
+    if (act.esExtra) {
+      // Horas EXTRAS compensatorias → agrupar por código de job
+      const codigoJob = act.job?.codigo ?? "SIN_CODIGO";
+      const actual = horasCompensatoriasPagadasMap.get(codigoJob) ?? 0;
+      horasCompensatoriasPagadasMap.set(codigoJob, actual + horas);
+    } else {
+      // Horas NORMALES compensatorias
+      horasCompensatoriasTomadas += horas;
+    }
+  }
+
+  // Convertir el mapa a array
+  const horasCompensatoriasPagadas = Array.from(
+    horasCompensatoriasPagadasMap.entries()
+  ).map(([codigoJob, cantidadHoras]) => ({ codigoJob, cantidadHoras }));
+
   return {
     segmentos: conCortes,
     errores,
@@ -533,5 +602,7 @@ export function segmentarRegistroDiario(
       minutosExtra,
       minutosLibre,
     },
+    horasCompensatoriasTomadas,
+    horasCompensatoriasPagadas,
   };
 }

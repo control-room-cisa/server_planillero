@@ -7,6 +7,7 @@ export type ActividadInput = {
   jobId: number;
   duracionHoras: number;
   esExtra?: boolean;
+  esCompensatorio?: boolean;
   className?: string;
   descripcion: string;
   horaInicio?: Date;
@@ -71,6 +72,7 @@ export class RegistroDiarioRepository {
         horaInicio: a.horaInicio ?? null,
         horaFin: a.horaFin ?? null,
         esExtra: a.esExtra ?? false,
+        esCompensatorio: a.esCompensatorio ?? false,
         className: a.className,
         descripcion: a.descripcion,
       })) ?? [];
