@@ -110,7 +110,7 @@ export class RegistroDiarioService {
 
   /**
    * Permite a un supervisor actualizar el job y descripción de una actividad específica
-   * de otro empleado. Solo disponible para supervisores (rolId = 2).
+   * de otro empleado. Solo disponible para supervisores (rolId = Roles.SUPERVISOR).
    */
   static async updateJobBySupervisor(
     supervisorId: number,

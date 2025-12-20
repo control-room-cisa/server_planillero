@@ -4,4 +4,6 @@ export enum Roles {
   SUPERVISOR = 2,
   RRHH = 3,
   CONTABILIDAD = 4,
+  GERENCIA = 5,
+  SISTEMAS = 6,
 }

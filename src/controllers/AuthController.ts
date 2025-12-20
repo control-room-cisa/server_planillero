@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/AuthService";
 import { ApiResponse } from "../dtos/ApiResponse";
+import { Roles } from "../enums/roles";
 
 export class AuthController {
   static async register(
@@ -23,7 +24,7 @@ export class AuthController {
         correoElectronico,
         contrasena,
         departamentoId,
-        1 //Establecer rol de Empleado
+        Roles.EMPLEADO // Establecer rol de Empleado
       );
 
       res.status(201).json({

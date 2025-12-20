@@ -1,6 +1,8 @@
 // src/routes/PlanillaAccesoRevisionRoutes.ts
 import { Router } from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware";
+import { authorizeRoles } from "../middlewares/authorizeRoles";
+import { Roles } from "../enums/roles";
 import {
   listPlanillaAccesoRevision,
   getPlanillaAccesoRevision,
@@ -14,20 +16,40 @@ const router = Router();
 // Protege todas las rutas con JWT
 router.use(authenticateJWT);
 
-// Listar todos los accesos de planilla
-router.get("/", listPlanillaAccesoRevision);
+// Listar todos los accesos de planilla (solo SUPERVISOR o RRHH)
+router.get(
+  "/",
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH),
+  listPlanillaAccesoRevision
+);
 
-// Obtener un acceso de planilla por ID
-router.get("/:id", getPlanillaAccesoRevision);
+// Obtener un acceso de planilla por ID (solo SUPERVISOR o RRHH)
+router.get(
+  "/:id",
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH),
+  getPlanillaAccesoRevision
+);
 
-// Crear un nuevo acceso de planilla
-router.post("/", createPlanillaAccesoRevision);
+// Crear un nuevo acceso de planilla (solo SUPERVISOR o RRHH)
+router.post(
+  "/",
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH),
+  createPlanillaAccesoRevision
+);
 
-// Actualizar un acceso de planilla existente
-router.put("/:id", updatePlanillaAccesoRevision);
+// Actualizar un acceso de planilla existente (solo SUPERVISOR o RRHH)
+router.put(
+  "/:id",
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH),
+  updatePlanillaAccesoRevision
+);
 
-// Eliminar (soft‐delete) un acceso de planilla
-router.delete("/:id", deletePlanillaAccesoRevision);
+// Eliminar (soft‐delete) un acceso de planilla (solo SUPERVISOR o RRHH)
+router.delete(
+  "/:id",
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH),
+  deletePlanillaAccesoRevision
+);
 
 export default router;
 

@@ -4,6 +4,7 @@ import { RegistroDiarioService } from "../services/RegistroDiarioService";
 import { EmpleadoService } from "../services/EmpleadoService";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { AuthRequest } from "../middlewares/authMiddleware";
+import { Roles } from "../enums/roles";
 import type {
   RegistroDiarioDetail,
   UpsertRegistroDiarioParams,
@@ -21,7 +22,7 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
  * Crea o actualiza un registro diario + actividades.
  * - Por defecto usa el empleado autenticado.
  * - Opcionalmente acepta ?idEmpleado=123 para actuar en nombre de otro empleado
- *   (requiere rol distinto de 1, según tu validación actual).
+ *   (requiere rol distinto de Roles.EMPLEADO, según tu validación actual).
  * Valida que `fecha` sea un string ISO date (YYYY-MM-DD).
  */
 export const upsertRegistroDiario: RequestHandler<
@@ -65,8 +66,8 @@ export const upsertRegistroDiario: RequestHandler<
       // Si intenta actuar sobre otro empleado, validar permisos por rol
       if (empleadoTargetId !== usuarioId) {
         const empleado = await EmpleadoService.getById(usuarioId);
-        // Mantengo tu convención: rolId === 1 no puede actuar sobre terceros
-        if (empleado?.rolId === 1) {
+        // Mantengo tu convención: rolId === EMPLEADO no puede actuar sobre terceros
+        if (empleado?.rolId === Roles.EMPLEADO) {
           return res.status(403).json({
             success: false,
             message:
@@ -129,7 +130,7 @@ export const getRegistroDiarioByDate: RequestHandler<
 
       const empleado = await EmpleadoService.getById(usuarioId);
       // Si intenta ver otro empleado, validar rol
-      if (empleadoIdNum !== usuarioId && empleado?.rolId === 1) {
+      if (empleadoIdNum !== usuarioId && empleado?.rolId === Roles.EMPLEADO) {
         return res.status(403).json({
           success: false,
           message: "No tienes permisos para ver registros de otros empleados",
@@ -223,7 +224,7 @@ export const aprobacionRrhh: RequestHandler<
 /**
  * PATCH /api/registrodiario/update-job-supervisor
  * Permite a un supervisor actualizar el job y descripción de una actividad específica
- * de otro empleado. Solo disponible para supervisores (rolId = 2).
+ * de otro empleado. Solo disponible para supervisores (rolId = Roles.SUPERVISOR).
  */
 export const updateJobBySupervisor: RequestHandler<
   {},

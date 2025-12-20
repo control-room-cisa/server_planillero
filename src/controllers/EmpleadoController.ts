@@ -2,6 +2,7 @@
 import type { RequestHandler } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
+import { Roles } from "../enums/roles";
 import {
   CreateEmpleadoDto,
   EmployeeDto,
@@ -183,14 +184,7 @@ export const listByDepartment: RequestHandler<
   try {
     const user = (req as AuthRequest).user;
 
-    if (user.rolId !== 2) {
-      return res.status(403).json({
-        success: false,
-        message: "Solo supervisores",
-        data: [],
-      } as ApiResponse<EmployeeDto[]>);
-    }
-
+    // Validación de roles movida a las rutas con authorizeRoles middleware
     const empleados = await EmpleadoService.getByDepartment(
       user.departamentoId,
       user.id // Pasar el ID del supervisor para incluir empleados de PlanillaAcceso
@@ -250,19 +244,7 @@ export const listByCompany: RequestHandler<
   { empresaId?: string } // query
 > = async (req, res, next) => {
   try {
-    const user = (req as AuthRequest).user;
-
-    // Pueden usar esta ruta: supervisores, rrhh, gerentes y contabilidad
-    const allowedRoles = [2, 3, 4, 5];
-
-    if (!allowedRoles.includes(user.rolId)) {
-      return res.status(403).json({
-        success: false,
-        message: "Solo personal de RRHH puede acceder a esta funcionalidad",
-        data: [],
-      } as ApiResponse<EmployeeDto[]>);
-    }
-
+    // Validación de roles movida a las rutas con authorizeRoles middleware
     // Si se proporciona un ID de empresa, usarlo; de lo contrario, obtener todos
     const empresaId = req.query.empresaId
       ? parseInt(req.query.empresaId, 10)

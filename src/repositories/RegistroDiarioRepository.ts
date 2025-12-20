@@ -1,6 +1,7 @@
 // src/repositories/RegistroDiarioRepository.ts
 import { prisma } from "../config/prisma";
 import type { RegistroDiario, Actividad, Job } from "@prisma/client";
+import { Roles } from "../enums/roles";
 
 /** DTO reutilizable para cada actividad */
 export type ActividadInput = {
@@ -290,14 +291,14 @@ export class RegistroDiarioRepository {
 
   /**
    * Permite a un supervisor actualizar el job y descripción de una actividad específica
-   * de otro empleado. Solo disponible para supervisores (rolId = 2).
+   * de otro empleado. Solo disponible para supervisores (rolId = Roles.SUPERVISOR).
    */
   static async updateJobBySupervisor(
     supervisorId: number,
     empleadoId: number,
     dto: { actividadId: number; nuevoJobId: number; descripcion?: string }
   ): Promise<RegistroDiarioDetail> {
-    // Verificar que el supervisor tenga rolId = 2
+    // Verificar que el supervisor tenga rolId = Roles.SUPERVISOR
     const supervisor = await prisma.empleado.findFirst({
       where: {
         id: supervisorId,
@@ -305,7 +306,7 @@ export class RegistroDiarioRepository {
       select: { rolId: true },
     });
 
-    if (!supervisor || supervisor.rolId !== 2) {
+    if (!supervisor || supervisor.rolId !== Roles.SUPERVISOR) {
       throw new Error(
         "Solo los supervisores pueden actualizar jobs de otros empleados"
       );

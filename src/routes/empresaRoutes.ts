@@ -1,6 +1,8 @@
 // src/routes/empresaRoutes.ts
 import { Router } from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware";
+import { authorizeRoles } from "../middlewares/authorizeRoles";
+import { Roles } from "../enums/roles";
 import {
   listEmpresasConDepartamentos,
   createEmpresa,
@@ -10,19 +12,29 @@ import {
 
 const router = Router();
 
-// Protegemos la ruta
-//router.use(authenticateJWT);
-
-// GET /empresas
+// GET /empresas - Público (sin autenticación)
 router.get("/", listEmpresasConDepartamentos);
 
-// POST /empresas
-router.post("/", createEmpresa);
+// Rutas protegidas: requieren autenticación y roles CONTABILIDAD o GERENCIA
+router.post(
+  "/",
+  authenticateJWT,
+  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  createEmpresa
+);
 
-// PATCH /empresas/:id
-router.patch("/:id", updateEmpresa);
+router.patch(
+  "/:id",
+  authenticateJWT,
+  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  updateEmpresa
+);
 
-// DELETE /empresas/:id
-router.delete("/:id", deleteEmpresa);
+router.delete(
+  "/:id",
+  authenticateJWT,
+  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  deleteEmpresa
+);
 
 export default router;
