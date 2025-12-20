@@ -72,4 +72,50 @@ export class AuthController {
       next(error);
     }
   }
+
+  static async changePassword(
+    req: Request,
+    res: Response<ApiResponse<any>>,
+    next: NextFunction
+  ) {
+    try {
+      const { usuario, correoElectronico, dni, contrasenaActual, nuevaContrasena } = req.body;
+      // Aceptar cualquiera de los tres: usuario, correoElectronico o dni
+      const identifier = usuario || correoElectronico || dni;
+
+      if (!identifier) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe proporcionar un usuario, correo electrónico o DNI",
+          data: null,
+        });
+      }
+
+      if (!contrasenaActual) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe proporcionar la contraseña actual",
+          data: null,
+        });
+      }
+
+      if (!nuevaContrasena) {
+        return res.status(400).json({
+          success: false,
+          message: "Debe proporcionar la nueva contraseña",
+          data: null,
+        });
+      }
+
+      await AuthService.changePassword(identifier, contrasenaActual, nuevaContrasena);
+      
+      res.json({
+        success: true,
+        message: "Contraseña actualizada exitosamente",
+        data: null,
+      });
+    } catch (error: any) {
+      next(error);
+    }
+  }
 }

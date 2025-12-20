@@ -98,4 +98,46 @@ export class AuthService {
       },
     };
   }
+
+  static async changePassword(
+    identifier: string,
+    contrasenaActual: string,
+    nuevaContrasena: string
+  ) {
+    // Buscar empleado por correo electrónico, DNI o nombre de usuario
+    const empleado = await EmpleadoRepository.findByEmailDniOrUsername(
+      identifier
+    );
+    if (!empleado) {
+      throw new Error("Usuario no encontrado");
+    }
+
+    // Validar que tenga contraseña configurada
+    if (!empleado.contrasena) {
+      throw new Error("El usuario no tiene contraseña configurada");
+    }
+
+    // Validar contraseña actual
+    const valid = await bcrypt.compare(contrasenaActual, empleado.contrasena);
+    if (!valid) {
+      throw new Error("Contraseña actual incorrecta");
+    }
+
+    // Validar que la nueva contraseña sea diferente
+    const mismaContrasena = await bcrypt.compare(
+      nuevaContrasena,
+      empleado.contrasena
+    );
+    if (mismaContrasena) {
+      throw new Error("La nueva contraseña debe ser diferente a la actual");
+    }
+
+    // Hashear nueva contraseña
+    const hash = await bcrypt.hash(nuevaContrasena, SALT_ROUNDS);
+
+    // Actualizar contraseña
+    await EmpleadoRepository.updatePassword(empleado.id, hash);
+
+    return { success: true };
+  }
 }

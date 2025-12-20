@@ -149,4 +149,12 @@ export class EmpleadoRepository {
       },
     });
   }
+
+  /** Actualiza la contraseña de un empleado */
+  static async updatePassword(id: number, contrasenaHash: string): Promise<Empleado> {
+    return prisma.empleado.update({
+      where: { id },
+      data: { contrasena: contrasenaHash },
+    });
+  }
 }

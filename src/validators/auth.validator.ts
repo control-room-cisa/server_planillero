@@ -30,3 +30,20 @@ export const loginSchema = z.object({
       path: ["usuario"], // Asigna el error al campo usuario
     }),
 });
+
+export const changePasswordSchema = z.object({
+  body: z
+    .object({
+      usuario: z.string().optional(),
+      correoElectronico: z.string().email("Correo inválido").optional(),
+      dni: z.string().optional(),
+      contrasenaActual: z.string().min(1, "La contraseña actual es obligatoria"),
+      nuevaContrasena: z
+        .string()
+        .min(6, "La nueva contraseña debe tener al menos 6 caracteres"),
+    })
+    .refine((data) => data.usuario || data.correoElectronico || data.dni, {
+      message: "Debe proporcionar usuario, correo electrónico o DNI",
+      path: ["usuario"],
+    }),
+});
