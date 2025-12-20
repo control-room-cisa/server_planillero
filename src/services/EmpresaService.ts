@@ -16,9 +16,19 @@ export class EmpresaService {
 
   static async create(data: CreateEmpresaDto): Promise<Empresa> {
     // Verificar que el nombre no se repita
-    const existingEmpresa = await EmpresaRepository.findByName(data.nombre);
-    if (existingEmpresa) {
+    const existingByName = await EmpresaRepository.findByName(data.nombre);
+    if (existingByName) {
       throw new Error("Ya existe una empresa con ese nombre");
+    }
+
+    // Verificar que el código sea único si se proporciona
+    if (data.codigo && data.codigo.trim()) {
+      const existingByCodigo = await EmpresaRepository.findByCodigo(
+        data.codigo
+      );
+      if (existingByCodigo) {
+        throw new Error("Ya existe una empresa con ese código");
+      }
     }
 
     return EmpresaRepository.create(data);
@@ -33,9 +43,23 @@ export class EmpresaService {
 
     // Si se está actualizando el nombre, verificar que no se repita
     if (data.nombre && data.nombre !== empresa.nombre) {
-      const existingEmpresa = await EmpresaRepository.findByName(data.nombre);
-      if (existingEmpresa && existingEmpresa.id !== id) {
+      const existingByName = await EmpresaRepository.findByName(data.nombre);
+      if (existingByName && existingByName.id !== id) {
         throw new Error("Ya existe una empresa con ese nombre");
+      }
+    }
+
+    // Si se está actualizando el código, verificar que sea único
+    if (data.codigo !== undefined) {
+      const codigoValue = data.codigo?.trim() || null;
+      // Solo validar si se está proporcionando un código y es diferente al actual
+      if (codigoValue && codigoValue !== empresa.codigo?.trim()) {
+        const existingByCodigo = await EmpresaRepository.findByCodigo(
+          codigoValue
+        );
+        if (existingByCodigo && existingByCodigo.id !== id) {
+          throw new Error("Ya existe una empresa con ese código");
+        }
       }
     }
 

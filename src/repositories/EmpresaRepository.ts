@@ -72,4 +72,15 @@ export class EmpresaRepository {
       },
     });
   }
+
+  static async findByCodigo(codigo: string): Promise<Empresa | null> {
+    return prisma.empresa.findFirst({
+      where: {
+        codigo: {
+          equals: codigo.trim(),
+        },
+        deletedAt: null,
+      },
+    });
+  }
 }
