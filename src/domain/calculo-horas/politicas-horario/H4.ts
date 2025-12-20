@@ -336,6 +336,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
       inasistencias: diasInasistencias,
+      incapacidadEmpresa: 0,
+      incapacidadIHSS: 0,
     };
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado

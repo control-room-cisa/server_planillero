@@ -34,4 +34,18 @@ export interface IPoliticaHorario {
     fechaFin: string,
     empleadoId: string
   ): Promise<ConteoHorasProrrateo>;
+
+  /**
+   * Calcula las deducciones de alimentación para un empleado en un período
+   */
+  calcularDeduccionesAlimentacion(
+    empleadoId: string,
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoPrecargado?: any
+  ): Promise<{
+    deduccionesAlimentacion: number;
+    detalle: any[];
+    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+  }>;
 }
