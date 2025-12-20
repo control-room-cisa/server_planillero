@@ -21,6 +21,7 @@ export class EmpleadoService {
       apellido: emp.apellido ?? undefined,
       codigo: emp.codigo ?? undefined,
       cargo: emp.cargo ?? undefined,
+      rolId: emp.rolId ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
         emp.urlFotoPerfil ?? undefined
@@ -135,6 +136,7 @@ export class EmpleadoService {
             ? { nombre: e.departamento.empresa.nombre }
             : undefined,
           cargo: e.cargo ?? undefined,
+          rolId: e.rolId ?? undefined,
           urlFotoPerfil: FileService.buildFotoUrl(
             e.id,
             e.urlFotoPerfil ?? undefined
@@ -172,6 +174,7 @@ export class EmpleadoService {
         ? { nombre: e.departamento.empresa.nombre }
         : undefined,
       cargo: e.cargo ?? undefined,
+      rolId: e.rolId ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined
