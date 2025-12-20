@@ -21,8 +21,24 @@ export class PlanillaAccesoRevisionRepository {
     return prisma.planillaAcceso.findMany({
       where,
       include: {
-        supervisor: true,
-        empleado: true,
+        supervisor: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
+        empleado: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
       },
       orderBy: [
         { supervisorId: "asc" },
@@ -37,8 +53,24 @@ export class PlanillaAccesoRevisionRepository {
     return prisma.planillaAcceso.findFirst({
       where: { id, deletedAt: null },
       include: {
-        supervisor: true,
-        empleado: true,
+        supervisor: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
+        empleado: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -55,8 +87,24 @@ export class PlanillaAccesoRevisionRepository {
         deletedAt: null,
       },
       include: {
-        supervisor: true,
-        empleado: true,
+        supervisor: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
+        empleado: {
+          include: {
+            departamento: {
+              include: {
+                empresa: true,
+              },
+            },
+          },
+        },
       },
     });
   }
@@ -65,7 +113,8 @@ export class PlanillaAccesoRevisionRepository {
   static async create(
     data: Prisma.PlanillaAccesoCreateInput
   ): Promise<PlanillaAcceso> {
-    return prisma.planillaAcceso.create({ data });
+    const created = await prisma.planillaAcceso.create({ data });
+    return this.findById(created.id) as Promise<PlanillaAcceso>;
   }
 
   /** Actualiza un acceso de planilla existente */
@@ -73,10 +122,11 @@ export class PlanillaAccesoRevisionRepository {
     id: number,
     data: Prisma.PlanillaAccesoUpdateInput
   ): Promise<PlanillaAcceso> {
-    return prisma.planillaAcceso.update({
+    await prisma.planillaAcceso.update({
       where: { id },
       data: { ...data, updatedAt: new Date() },
     });
+    return this.findById(id) as Promise<PlanillaAcceso>;
   }
 
   /** Soft‐delete: marca deletedAt */
