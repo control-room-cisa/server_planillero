@@ -282,7 +282,7 @@ model RegistroDiario {
 model Actividad {
   id               Int       @id @default(autoincrement()) @map("id")
   registroDiarioId Int       @map("registro_diario_id")
-  jobId            Int       @map("job_id")
+  jobId            Int?      @map("job_id")
   duracionHoras    Float     @map("duracion_horas")
   horaInicio       DateTime? @map("hora_inicio")
   horaFin          DateTime? @map("hora_fin")
@@ -296,7 +296,7 @@ model Actividad {
   deletedAt        DateTime? @map("deleted_at")
 
   registroDiario RegistroDiario @relation(fields: [registroDiarioId], references: [id])
-  job            Job            @relation(fields: [jobId], references: [id])
+  job            Job?           @relation(fields: [jobId], references: [id])
 
   @@map("actividades")
 }

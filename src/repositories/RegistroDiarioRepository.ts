@@ -5,7 +5,7 @@ import { Roles } from "../enums/roles";
 
 /** DTO reutilizable para cada actividad */
 export type ActividadInput = {
-  jobId: number;
+  jobId?: number | null; // Opcional: requerido excepto cuando esCompensatorio=true y esExtra=false
   duracionHoras: number;
   esExtra?: boolean;
   esCompensatorio?: boolean;
@@ -38,9 +38,9 @@ export type UpsertRegistroDiarioParams = {
   horasFeriado?: number;
 };
 
-/** Detalle con actividades y su job */
+/** Detalle con actividades y su job (job puede ser null cuando es compensatorio en hora normal) */
 export type RegistroDiarioDetail = RegistroDiario & {
-  actividades: Array<Actividad & { job: Job }>;
+  actividades: Array<Actividad & { job: Job | null }>;
 };
 
 /* sin recálculo de horas en backend: se respeta duracionHoras del frontend */
@@ -65,10 +65,25 @@ export class RegistroDiarioRepository {
       },
     });
 
-    // 2) Preparamos payload de actividades respetando duracionHoras del frontend
+    // 2) Validar y preparar payload de actividades respetando duracionHoras del frontend
+    // Validación: jobId es requerido EXCEPTO cuando esCompensatorio=true y esExtra=false
+    if (actividades) {
+      for (const act of actividades) {
+        const esCompensatorioHoraNormal =
+          act.esCompensatorio === true && act.esExtra === false;
+        
+        // Si no es compensatorio en hora normal, jobId es requerido
+        if (!esCompensatorioHoraNormal && (act.jobId === undefined || act.jobId === null)) {
+          throw new Error(
+            `El campo 'jobId' es obligatorio para todas las actividades, excepto cuando esCompensatorio=true y esExtra=false (hora libre compensatoria). Actividad: "${act.descripcion}"`
+          );
+        }
+      }
+    }
+
     const actPayload =
       actividades?.map((a) => ({
-        jobId: a.jobId,
+        jobId: a.jobId ?? null, // null cuando es compensatorio en hora normal
         duracionHoras: a.duracionHoras ?? 0,
         horaInicio: a.horaInicio ?? null,
         horaFin: a.horaFin ?? null,
