@@ -11,6 +11,7 @@ import calculoHorasTrabajoRoutes from "./routes/calculoHorasTrabajoRoutes";
 import feriadoRoutes from "./routes/FeriadoRoute";
 import nominaRoutes from "./routes/NominaRoutes";
 import planillaAccesoRevisionRoutes from "./routes/PlanillaAccesoRevisionRoutes";
+import deduccionAlimentacionRoutes from "./routes/deduccionAlimentacionRoutes";
 
 import path from "path";
 import { config } from "dotenv";
@@ -42,6 +43,7 @@ app.use("/api/calculo-horas", calculoHorasTrabajoRoutes);
 app.use("/api/feriados", feriadoRoutes);
 app.use("/api/nominas", nominaRoutes);
 app.use("/api/planilla-acceso-revision", planillaAccesoRevisionRoutes);
+app.use("/api/deduccion-alimentacion", deduccionAlimentacionRoutes);
 
 app.use(errorHandler);
 

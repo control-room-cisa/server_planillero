@@ -9,9 +9,7 @@ import { Roles } from "../enums/roles";
  * @param allowedRoles - Array de roles permitidos
  * @returns RequestHandler que valida si el usuario tiene uno de los roles permitidos
  */
-export const authorizeRoles = (
-  ...allowedRoles: Roles[]
-): RequestHandler => {
+export const authorizeRoles = (...allowedRoles: Roles[]): RequestHandler => {
   return (req, res, next) => {
     const authReq = req as AuthRequest;
     const user = authReq.user;
@@ -35,4 +33,3 @@ export const authorizeRoles = (
     next();
   };
 };
-
