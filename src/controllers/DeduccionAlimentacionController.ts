@@ -179,4 +179,3 @@ export const getDeduccionAlimentacion: RequestHandler<
     return res.status(st).json(body);
   }
 };
-

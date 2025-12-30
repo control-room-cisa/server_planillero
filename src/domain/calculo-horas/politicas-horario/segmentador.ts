@@ -116,7 +116,10 @@ export interface ResultadoSegmentacion {
   };
   // Horas compensatorias (contadas por separado, segmentadas como LIBRE)
   horasCompensatoriasTomadas: number; // Horas normales compensatorias
-  horasCompensatoriasPagadas: Array<{ codigoJob: string; cantidadHoras: number }>; // Horas extras compensatorias por job
+  horasCompensatoriasPagadas: Array<{
+    codigoJob: string;
+    cantidadHoras: number;
+  }>; // Horas extras compensatorias por job
 }
 
 // ----------------------- utilidades de tiempo -----------------------
@@ -412,20 +415,31 @@ export function segmentarRegistroDiario(
   // Las horas compensatorias normales sin horaInicio/horaFin se incluyen en el horario
   // pero se pintan como LIBRE (despintando desde el final)
   const horasCompensatoriasNormales = actividades
-    .filter((act) => act.esCompensatorio && !act.esExtra && !act.horaInicio && !act.horaFin)
+    .filter(
+      (act) =>
+        act.esCompensatorio && !act.esExtra && !act.horaInicio && !act.horaFin
+    )
     .reduce((sum, act) => sum + (act.duracionHoras ?? 0), 0);
-  
+
   const minutosCompensatorios = Math.round(horasCompensatoriasNormales * 60);
-  
+
   if (minutosCompensatorios > 0) {
     // Despintar desde el final del rango normal hacia atrás
     let minutosDespintados = 0;
     // Recorrer rangos en orden inverso
-    for (let rIdx = rangosNormal.length - 1; rIdx >= 0 && minutosDespintados < minutosCompensatorios; rIdx--) {
+    for (
+      let rIdx = rangosNormal.length - 1;
+      rIdx >= 0 && minutosDespintados < minutosCompensatorios;
+      rIdx--
+    ) {
       const r = rangosNormal[rIdx];
       const [i0, i1] = indicesPorRango(r);
       // Recorrer slots en orden inverso dentro del rango
-      for (let i = i1 - 1; i >= i0 && minutosDespintados < minutosCompensatorios; i--) {
+      for (
+        let i = i1 - 1;
+        i >= i0 && minutosDespintados < minutosCompensatorios;
+        i--
+      ) {
         // Solo despintar si es NORMAL (no almuerzo ni extra)
         if (slots[i].tipo === "NORMAL") {
           slots[i] = { tipo: "LIBRE" };
@@ -518,8 +532,9 @@ export function segmentarRegistroDiario(
     });
   }
 
-  // d) Invariante de cuadre: minutos(RANGO NORMAL) == minutos(NORMAL) + minutos(ALMUERZO dentro de NORMAL)
+  // d) Invariante de cuadre: minutos(RANGO NORMAL) == minutos(NORMAL) + minutos(ALMUERZO dentro de NORMAL) + minutos(COMPENSATORIAS TOMADAS)
   //    IMPORTANTE: Solo contar almuerzo si realmente se aplicó (esHoraCorrida = false)
+  //    IMPORTANTE: Las compensatorias tomadas se despintan a LIBRE, pero deben contarse en la validación
   const minutosRangoNormal = sumMinutes(rangosNormal);
   const minutosNormal = conCortes
     .filter((s) => s.tipo === "NORMAL")
@@ -533,15 +548,22 @@ export function segmentarRegistroDiario(
     ? sumMinutes(intersecciones([R_ALMUERZO], rangosNormal))
     : 0;
 
-  if (minutosRangoNormal !== minutosNormal + minutosAlmuerzoDentroNormal) {
+  // Calcular horas compensatorias tomadas despintadas (ya calculadas líneas arriba)
+  const minutosCompensatoriosTomados = minutosCompensatorios;
+
+  if (
+    minutosRangoNormal !==
+    minutosNormal + minutosAlmuerzoDentroNormal + minutosCompensatoriosTomados
+  ) {
     errores.push({
       code: "SUMA_NORMAL_MAS_ALMUERZO_NO_COINCIDE",
       message:
-        "La suma de minutos de NORMAL + ALMUERZO(en normal) no coincide con el rango NORMAL declarado (Entrada–Salida).",
+        "La suma de minutos de NORMAL + ALMUERZO(en normal) + COMPENSATORIAS TOMADAS no coincide con el rango NORMAL declarado (Entrada–Salida).",
       detalle: {
         minutosRangoNormal,
         minutosNormal,
         minutosAlmuerzoDentroNormal,
+        minutosCompensatoriosTomados,
         aplicaAlmuerzo,
         esHoraCorrida: registro.esHoraCorrida,
       },
@@ -564,7 +586,7 @@ export function segmentarRegistroDiario(
 
   for (const act of actividades) {
     if (!act.esCompensatorio) continue;
-    
+
     // Para extras, calcular duración desde horaInicio/horaFin si existen
     let horas = 0;
     if (act.esExtra && act.horaInicio && act.horaFin) {
@@ -573,7 +595,7 @@ export function segmentarRegistroDiario(
     } else {
       horas = Number(act.duracionHoras ?? 0);
     }
-    
+
     if (!isFinite(horas) || horas <= 0) continue;
 
     if (act.esExtra) {

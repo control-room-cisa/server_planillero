@@ -142,6 +142,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     let normalMin = 0;
     let p25Min = 0;
     let libreMin = 0;
+    let compNormalesMin = 0; // Horas compensatorias tomadas (normales)
+    let compExtrasMin = 0; // Horas compensatorias pagadas (extras)
     // H2 no usa estos:
     const p50Min = 0,
       p75Min = 0,
@@ -157,10 +159,23 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     // recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
-      const { segmentos, errores: segErrs } =
-        await this.generarSegmentosDeDiaConValidacion(f, empleadoId);
+      const segmentosResult = await this.generarSegmentosDeDiaConValidacion(
+        f,
+        empleadoId
+      );
+      const { segmentos, errores: segErrs } = segmentosResult;
       if (segErrs?.length)
         errores.push({ fecha: f, motivo: "segmentador", detalle: segErrs });
+
+      // Extraer horas compensatorias calculadas por el segmentador
+      const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas || 0;
+      const compExtrasArray = segmentosResult.horasCompensatoriasPagadas || [];
+
+      // Agregar horas compensatorias a los acumuladores (convertir de horas a minutos)
+      compNormalesMin += Math.round(compNormalesHoras * 60);
+      for (const comp of compExtrasArray) {
+        compExtrasMin += Math.round(comp.cantidadHoras * 60);
+      }
 
       const reg = await this.getRegistroDiario(empleadoId, f);
       const feriadoInfo = await this.esFeriado(f);
@@ -232,11 +247,17 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         const nocturno = PoliticaH2.esNocturno(e, s);
 
         // Esperado por día (sin almuerzo)
-        if (nocturno && dow === 2) {
-          // martes
+        // Si entrada == salida, no hay rango normal → esperadaNormalMin = 0
+        const rangoNormalMin = PoliticaH2.normalesDeclaradosMin(e, s);
+        if (rangoNormalMin === 0) {
+          // Sin rango normal declarado → no se esperan horas normales
+          esperadaNormalMin = 0;
+        } else if (nocturno && dow === 2) {
+          // Martes nocturno con rango normal → solo 6h normales (regla especial)
           esperadaNormalMin = 6 * 60;
         } else {
-          esperadaNormalMin = PoliticaH2.normalesDeclaradosMin(e, s);
+          // Otros días → usar rango normal completo
+          esperadaNormalMin = rangoNormalMin;
         }
 
         // 1) Almuerzo jamás permitido en H2 (y tu regla específica pide error si aparece en horas normales)
@@ -249,12 +270,19 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         }
 
         // 2) NORMAL debe coincidir exactamente con lo esperado (sin considerar almuerzo)
-        if (normalMinDia !== esperadaNormalMin) {
+        // IMPORTANTE: Las horas compensatorias tomadas se despintan a LIBRE por el segmentador,
+        // pero deben contarse en la validación como horas normales esperadas
+        const compNormalesMinDia = Math.round(compNormalesHoras * 60);
+        const normalMinDiaConCompensatorias = normalMinDia + compNormalesMinDia;
+
+        if (normalMinDiaConCompensatorias !== esperadaNormalMin) {
           errores.push({
             fecha: f,
             motivo: "NORMAL_NO_COINCIDE_CON_INTERVALO",
             detalle: {
               normalMinDia,
+              compNormalesMinDia,
+              normalMinDiaConCompensatorias,
               esperadaNormalMin,
               entrada: e.toTimeString().slice(0, 5),
               salida: s.toTimeString().slice(0, 5),
@@ -296,6 +324,9 @@ export class PoliticaH2 extends PoliticaHorarioBase {
 
     // Respuesta (horas a 2 decimales)
     const toHours = (m: number) => Math.round((m / 60) * 100) / 100;
+
+    // Las horas compensatorias NO se cuentan en normalMin (el segmentador las excluye)
+    // Ya están en sus buckets separados (compNormalesMin y compExtrasMin)
     const conteo: ConteoHorasTrabajadas = {
       fechaInicio,
       fechaFin,
@@ -308,6 +339,9 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         p100: 0,
         libre: toHours(libreMin),
         almuerzo: 0,
+        // Horas compensatorias separadas por tipo (calculadas por el segmentador)
+        horasCompensatoriasTomadas: toHours(compNormalesMin),
+        horasCompensatoriasPagadas: toHours(compExtrasMin),
       },
     };
 
