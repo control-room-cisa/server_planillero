@@ -89,6 +89,7 @@ export class AuthService {
       token,
       empleado: {
         id: empleado.id,
+        codigo: empleado.codigo,
         nombre: empleado.nombre,
         apellido: empleado.apellido,
         correoElectronico: empleado.correoElectronico,
