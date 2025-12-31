@@ -44,17 +44,17 @@ export interface EmployeeDetailDto {
   correoElectronico?: string;
   dni?: string;
   profesion?: string;
-  tipoHorario?: TipoHorario;
+  tipoHorario?: string; // Valor mapeado del enum (ej: "Normal - Lunes a Viernes (H1.1)")
   estadoCivil?: EstadoCivil;
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
-  tipoContrato?: TipoContrato;
+  tipoContrato?: string; // Valor mapeado del enum (ej: "7x7", "Indefinido Normal")
   condicionSalud?: string;
   nombreContactoEmergencia?: string;
   numeroContactoEmergencia?: string;
   banco?: string;
-  tipoCuenta?: TipoCuenta;
+  tipoCuenta?: string; // Valor mapeado del enum (ej: "Ahorros moneda nacional")
   numeroCuenta?: string;
   muerteBeneficiario?: string;
   nombreMadre?: string;
@@ -65,6 +65,8 @@ export interface EmployeeDetailDto {
   fechaInicioIngreso?: Date;
   rolId?: number;
   departamentoId?: number;
+  tiempoCompensatorioHoras?: number;
+  tiempoVacacionesHoras?: number;
 }
 
 /** Payload para crear un empleado */

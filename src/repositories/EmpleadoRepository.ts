@@ -8,6 +8,13 @@ export class EmpleadoRepository {
   static async findById(id: number): Promise<Empleado | null> {
     return prisma.empleado.findFirst({
       where: { id },
+      include: {
+        departamento: {
+          include: {
+            empresa: { select: { nombre: true } },
+          },
+        },
+      },
     });
   }
 

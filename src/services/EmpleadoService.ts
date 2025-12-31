@@ -10,6 +10,11 @@ import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { RegistroDiarioRepository } from "../repositories/RegistroDiarioRepository";
 import { PlanillaAccesoRevisionRepository } from "../repositories/PlanillaAccesoRevisionRepository";
 import { FileService } from "./FileService";
+import {
+  mapTipoHorario,
+  mapTipoContrato,
+  mapTipoCuenta,
+} from "../utils/prismaEnumMapper";
 
 const SALT_ROUNDS = 10;
 
@@ -30,12 +35,18 @@ export class EmpleadoService {
     };
   }
 
-  static toDtoDetail(emp: Empleado): EmployeeDetailDto {
+  static toDtoDetail(
+    emp: Empleado & {
+      departamento?: { nombre: string | null; empresaId: number } | null;
+    }
+  ): EmployeeDetailDto {
     return {
       id: emp.id,
       nombre: emp.nombre,
       apellido: emp.apellido ?? undefined,
       codigo: emp.codigo ?? undefined,
+      departamento: emp.departamento?.nombre ?? undefined,
+      empresaId: emp.departamento?.empresaId ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
         emp.urlFotoPerfil ?? undefined
@@ -45,17 +56,17 @@ export class EmpleadoService {
       correoElectronico: emp.correoElectronico ?? undefined,
       dni: emp.dni ?? undefined,
       profesion: emp.profesion ?? undefined,
-      tipoHorario: emp.tipoHorario ?? undefined,
+      tipoHorario: mapTipoHorario(emp.tipoHorario) as any,
       estadoCivil: emp.estadoCivil ?? undefined,
       nombreConyugue: emp.nombreConyugue ?? undefined,
       cargo: emp.cargo ?? undefined,
       sueldoMensual: emp.sueldoMensual ?? undefined,
-      tipoContrato: emp.tipoContrato ?? undefined,
+      tipoContrato: mapTipoContrato(emp.tipoContrato) as any,
       condicionSalud: emp.condicionSalud ?? undefined,
       nombreContactoEmergencia: emp.nombreContactoEmergencia ?? undefined,
       numeroContactoEmergencia: emp.numeroContactoEmergencia ?? undefined,
       banco: emp.banco ?? undefined,
-      tipoCuenta: emp.tipoCuenta ?? undefined,
+      tipoCuenta: mapTipoCuenta(emp.tipoCuenta) as any,
       numeroCuenta: emp.numeroCuenta ?? undefined,
       muerteBeneficiario: emp.muerteBeneficiario ?? undefined,
       nombreMadre: emp.nombreMadre ?? undefined,
@@ -66,6 +77,8 @@ export class EmpleadoService {
       fechaInicioIngreso: emp.fechaInicioIngreso ?? undefined,
       rolId: emp.rolId,
       departamentoId: emp.departamentoId,
+      tiempoCompensatorioHoras: emp.tiempoCompensatorioHoras ?? undefined,
+      tiempoVacacionesHoras: emp.tiempoVacacionesHoras ?? undefined,
     };
   }
 
@@ -85,8 +98,9 @@ export class EmpleadoService {
     supervisorId?: number
   ): Promise<EmployeeDto[]> {
     // 1. Obtener empleados del mismo departamento
-    const empleadosDepartamento =
-      await EmpleadoRepository.findByDepartment(departamentoId);
+    const empleadosDepartamento = await EmpleadoRepository.findByDepartment(
+      departamentoId
+    );
 
     // 2. Si hay supervisorId, obtener empleados de PlanillaAcceso
     let empleadosPlanillaAcceso: Empleado[] = [];
@@ -95,9 +109,7 @@ export class EmpleadoService {
         supervisorId,
       });
       // Extraer los empleados únicos de los accesos
-      const empleadoIds = new Set(
-        accesos.map((acceso) => acceso.empleadoId)
-      );
+      const empleadoIds = new Set(accesos.map((acceso) => acceso.empleadoId));
       if (empleadoIds.size > 0) {
         empleadosPlanillaAcceso = await EmpleadoRepository.findByIds(
           Array.from(empleadoIds)

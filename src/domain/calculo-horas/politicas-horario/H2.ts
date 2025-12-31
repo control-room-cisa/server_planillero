@@ -55,6 +55,37 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const d2 = Date.UTC(Y2, M2 - 1, D2);
     return Math.floor((d2 - d1) / 86400000) + 1;
   }
+
+  /**
+   * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
+   * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
+   * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
+   *
+   * @param fecha - Fecha del día actual en formato YYYY-MM-DD
+   * @param empleadoId - ID del empleado
+   * @returns true si los 3 días anteriores tienen esIncapacidad=true (consecutivos)
+   */
+  private async verificar3DiasAnterioresIncapacidad(
+    fecha: string,
+    empleadoId: string
+  ): Promise<boolean> {
+    // Verificar los 3 días anteriores
+    for (let i = 1; i <= 3; i++) {
+      const fechaAnterior = PoliticaH2.addDays(fecha, -i);
+      const registroAnterior = await this.getRegistroDiario(
+        empleadoId,
+        fechaAnterior
+      );
+
+      // Si algún día anterior no tiene incapacidad, los días de incapacidad son ≤3
+      if (!registroAnterior || registroAnterior.esIncapacidad !== true) {
+        return false;
+      }
+    }
+
+    // Los 3 días anteriores tienen incapacidad → este es el día 4+ → IHSS
+    return true;
+  }
   /** Minutos declarados como NORMAL por Entrada/Salida (sin almuerzo). */
   private static normalesDeclaradosMin(e: Date, s: Date): number {
     const em = this.minutesOfDayInTZ(e);
@@ -144,6 +175,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     let libreMin = 0;
     let compNormalesMin = 0; // Horas compensatorias tomadas (normales)
     let compExtrasMin = 0; // Horas compensatorias pagadas (extras)
+    let incapacidadEmpresaMin = 0; // Primeros 3 días consecutivos (24h por día)
+    let incapacidadIHSSMin = 0; // A partir del 4to día consecutivo (24h por día)
     // H2 no usa estos:
     const p50Min = 0,
       p75Min = 0,
@@ -159,6 +192,41 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     // recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
+      const reg = await this.getRegistroDiario(empleadoId, f);
+      const feriadoInfo = await this.esFeriado(f);
+      const esFestivo = feriadoInfo.esFeriado;
+      const esLibre = reg?.esDiaLibre ?? false;
+
+      // ==================== MANEJO DE INCAPACIDAD ====================
+      // Si el día está marcado como incapacidad, asignar 24h de incapacidad
+      // Se ignoran todas las actividades del día
+      if (reg?.esIncapacidad === true) {
+        const HORAS_INCAPACIDAD_MIN = 24 * 60; // 1440 minutos = 24 horas = 1 día literal
+
+        // Verificar si los 3 días anteriores también tienen incapacidad
+        const incapacidadMayorATresDias =
+          await this.verificar3DiasAnterioresIncapacidad(f, empleadoId);
+
+        if (incapacidadMayorATresDias) {
+          // A partir del 4to día consecutivo → IHSS
+          incapacidadIHSSMin += HORAS_INCAPACIDAD_MIN;
+        } else {
+          // Primeros 3 días consecutivos → Empresa
+          incapacidadEmpresaMin += HORAS_INCAPACIDAD_MIN;
+        }
+
+        console.log(
+          `[H2] ${f} - INCAPACIDAD: ${
+            incapacidadMayorATresDias ? "IHSS (>3 días)" : "Empresa (≤3 días)"
+          }`
+        );
+
+        // Avanzar al siguiente día sin procesar segmentos
+        f = PoliticaH2.addDays(f, 1);
+        continue;
+      }
+
+      // ==================== PROCESAMIENTO NORMAL (sin incapacidad) ====================
       const segmentosResult = await this.generarSegmentosDeDiaConValidacion(
         f,
         empleadoId
@@ -176,11 +244,6 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       for (const comp of compExtrasArray) {
         compExtrasMin += Math.round(comp.cantidadHoras * 60);
       }
-
-      const reg = await this.getRegistroDiario(empleadoId, f);
-      const feriadoInfo = await this.esFeriado(f);
-      const esFestivo = feriadoInfo.esFeriado;
-      const esLibre = reg?.esDiaLibre ?? false;
 
       // Tipo de día
       let tipoDia: "diurno" | "nocturno" | "libre" | "festivo";
@@ -305,7 +368,11 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const dias = PoliticaH2.dayCountInclusive(fechaInicio, fechaFin);
     const esperadoGlobalMin = dias * 24 * 60;
     const totalMin =
-      normalMin + p25Min + libreMin; /* + p50+p75+p100(0) + almuerzo(0) */
+      normalMin +
+      p25Min +
+      libreMin +
+      incapacidadEmpresaMin +
+      incapacidadIHSSMin; /* + p50+p75+p100(0) + almuerzo(0) */
 
     if (totalMin !== esperadoGlobalMin) {
       errores.push({
@@ -339,6 +406,9 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         p100: 0,
         libre: toHours(libreMin),
         almuerzo: 0,
+        // Incapacidades NO se reportan en horas (solo en días literales)
+        incapacidadEmpresa: 0,
+        incapacidadIHSS: 0,
         // Horas compensatorias separadas por tipo (calculadas por el segmentador)
         horasCompensatoriasTomadas: toHours(compNormalesMin),
         horasCompensatoriasPagadas: toHours(compExtrasMin),
@@ -356,8 +426,11 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
-    const diasIncapacidadEmpresa = 0; // H2 no maneja incapacidad
-    const diasIncapacidadIHSS = 0; // H2 no maneja incapacidad
+
+    // Incapacidades: conteo en DÍAS LITERALES (no basado en horas)
+    // Cada día con esIncapacidad=true cuenta como 1 día completo
+    const diasIncapacidadEmpresa = incapacidadEmpresaMin / (24 * 60); // minutos a días literales
+    const diasIncapacidadIHSS = incapacidadIHSSMin / (24 * 60); // minutos a días literales
 
     const diasNoLaborados =
       diasVacaciones +

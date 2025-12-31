@@ -200,13 +200,13 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
    *
    * REGLA DE INCAPACIDAD:
    * - Si esIncapacidad=true en el registro diario:
-   *   - Se asignan 8 horas (480 min) de incapacidad
-   *   - Se asignan 16 horas (960 min) de libre
+   *   - Se asignan 24 horas (1440 min) de incapacidad = 1 día literal
    *   - Se ignoran todas las actividades del día
    *   - Si los 3 días anteriores también tienen esIncapacidad=true:
-   *     → Las 8 horas van a incapacidadIHSS (a partir del 4to día)
+   *     → Las 24 horas van a incapacidadIHSS (a partir del 4to día)
    *   - Si alguno de los 3 días anteriores no tiene incapacidad:
-   *     → Las 8 horas van a incapacidadEmpresa (primeros 3 días)
+   *     → Las 24 horas van a incapacidadEmpresa (primeros 3 días)
+   *   - El conteo de días es LITERAL (1 día = 1 día, no basado en horas de 8 o 9)
    */
   private async procesarDiaCompletoOptimizado(
     fecha: string,
@@ -251,11 +251,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     let addCompensatorioMin = 0;
 
     // ==================== MANEJO DE INCAPACIDAD ====================
-    // Si el día está marcado como incapacidad, asignar 8h de incapacidad y 16h de libre.
+    // Si el día está marcado como incapacidad, asignar 24h de incapacidad (1 día literal).
     // Se ignoran todas las actividades del día.
     if (registroDelDia?.esIncapacidad === true) {
-      const HORAS_INCAPACIDAD_MIN = 8 * 60; // 480 minutos = 8 horas
-      const HORAS_LIBRE_MIN = 16 * 60; // 960 minutos = 16 horas
+      const HORAS_INCAPACIDAD_MIN = 24 * 60; // 1440 minutos = 24 horas = 1 día literal
 
       // Verificar si los 3 días anteriores también tienen incapacidad
       const incapacidadMayorATresDias =
@@ -268,8 +267,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         // Primeros 3 días consecutivos → Empresa
         b.incapacidadEmpresaMin = HORAS_INCAPACIDAD_MIN;
       }
-
-      b.libreMin = HORAS_LIBRE_MIN;
 
       console.log(
         `[H1Base] ${fecha} - INCAPACIDAD: ${
@@ -645,7 +642,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Validar cuadre (en minutos): debe ser 24h * número de días
     // NOTA: Las horas de incapacidad (empresa + IHSS) se incluyen en el cuadre porque
-    // cuando esIncapacidad=true se asignan 8h de incapacidad + 16h de libre = 24h
+    // cuando esIncapacidad=true se asignan 24h de incapacidad = 1 día literal completo
     const dias = PoliticaH1Base.daysInclusive(fechaInicio, fechaFin);
     const esperadoMin = dias * 24 * 60;
     const totalMin =
@@ -689,11 +686,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         p100: PoliticaH1Base.minutosAhoras(b.extraC4Min),
         libre: PoliticaH1Base.minutosAhoras(b.libreMin),
         almuerzo: PoliticaH1Base.minutosAhoras(b.almuerzoMin),
-        // Incapacidades separadas por tipo
-        incapacidadEmpresa: PoliticaH1Base.minutosAhoras(
-          b.incapacidadEmpresaMin
-        ),
-        incapacidadIHSS: PoliticaH1Base.minutosAhoras(b.incapacidadIHSSMin),
+        // Incapacidades NO se reportan en horas (solo en días literales)
+        incapacidadEmpresa: 0,
+        incapacidadIHSS: 0,
         vacaciones: PoliticaH1Base.minutosAhoras(
           b.vacacionesMin + addVacacionesMin
         ),
@@ -733,19 +728,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const horasInasistencias = PoliticaH1Base.minutosAhoras(
       b.inasistenciasMin + addInasistenciasMin
     );
-    const horasIncapacidadEmpresa = PoliticaH1Base.minutosAhoras(
-      b.incapacidadEmpresaMin
-    );
-    const horasIncapacidadIHSS = PoliticaH1Base.minutosAhoras(
-      b.incapacidadIHSSMin
-    );
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
-    const diasIncapacidadEmpresa = horasIncapacidadEmpresa / 8;
-    const diasIncapacidadIHSS = horasIncapacidadIHSS / 8;
+
+    // Incapacidades: conteo en DÍAS LITERALES (no basado en horas de 8 o 9)
+    // Cada día con esIncapacidad=true cuenta como 1 día completo (24h = 1 día literal)
+    const diasIncapacidadEmpresa = b.incapacidadEmpresaMin / (24 * 60); // minutos a días literales
+    const diasIncapacidadIHSS = b.incapacidadIHSSMin / (24 * 60); // minutos a días literales
 
     const diasNoLaboradosPorEspeciales =
       diasVacaciones +

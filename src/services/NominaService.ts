@@ -72,21 +72,57 @@ export class NominaService {
     if (!empleado?.departamentoId) {
       throw new AppError("Empleado sin departamento asociado", 400);
     }
-    const empleadoConDepto = await EmpleadoRepository.findById(
-      payload.empleadoId
-    );
-    // obtener empresaId vía prisma directamente para evitar múltiples consultas
-    const depto = await (async () => {
-      return await (
-        await import("../config/prisma")
-      ).prisma.departamento.findFirst({
-        where: { id: empleado.departamentoId },
-        select: { empresaId: true },
-      });
-    })();
-    const empresaId = depto?.empresaId;
+    
+    // El empleado ya viene con la relación departamento incluida (desde EmpleadoRepository.findById)
+    // Intentar obtener empresaId desde el departamento incluido primero
+    let empresaId = (empleado as any).departamento?.empresaId;
+    
+    // Fallback: si no viene en la relación, consultar directamente
+    // Esto puede pasar si el departamento está eliminado (soft delete) pero el empleado aún lo referencia
     if (!empresaId) {
-      throw new AppError("No se pudo resolver la empresa del empleado", 400);
+      console.log(
+        `[NominaService] Departamento no incluido en relación, consultando directamente. EmpleadoId: ${payload.empleadoId}, DepartamentoId: ${empleado.departamentoId}`
+      );
+      
+      const depto = await (async () => {
+        return await (
+          await import("../config/prisma")
+        ).prisma.departamento.findFirst({
+          where: { 
+            id: empleado.departamentoId,
+            deletedAt: null, // Incluir solo departamentos no eliminados
+          },
+          select: { empresaId: true },
+        });
+      })();
+      
+      console.log(
+        `[NominaService] Resultado consulta departamento:`,
+        depto ? { empresaId: depto.empresaId } : "null (no encontrado o eliminado)"
+      );
+      
+      empresaId = depto?.empresaId;
+      
+      if (!empresaId) {
+        // Consultar sin filtro de soft delete para diagnosticar
+        const deptoConDeleted = await (async () => {
+          return await (
+            await import("../config/prisma")
+          ).prisma.$queryRawUnsafe(
+            `SELECT id, empresa_id, deleted_at FROM departamentos WHERE id = ${empleado.departamentoId} LIMIT 1`
+          ) as any[];
+        })();
+        
+        console.log(
+          `[NominaService] Consulta sin filtro soft delete:`,
+          deptoConDeleted?.[0]
+        );
+        
+        throw new AppError(
+          `No se pudo resolver la empresa del empleado. EmpleadoId: ${payload.empleadoId}, DepartamentoId: ${empleado.departamentoId}. El departamento puede estar eliminado (soft delete) o no tener empresa asignada.`,
+          400
+        );
+      }
     }
 
     // Generar código de nómina
