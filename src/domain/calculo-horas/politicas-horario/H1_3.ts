@@ -4,10 +4,11 @@ import { HorarioTrabajo } from "../types";
 
 /**
  * Política de horario H1.3 - Subtipo 3 de H1
- * Hereda toda la lógica de cálculo de H1Base
- * Solo sobrescribe cómo se genera el horario de trabajo
- * 
- * TODO: Implementar la lógica específica de generación de horario para H1.3
+ * Implementa la misma lógica que H1:
+ * - Mie–Sáb: 07:00–17:00 (9h, incluye almuerzo)
+ * - Dom:     07:00–16:00 (8h, incluye almuerzo)
+ * - Lun:     07:00–07:00 (0h, sin almuerzo)
+ * - Mar:     07:00–07:00 (0h, sin almuerzo, día libre)
  */
 export class PoliticaH1_3 extends PoliticaH1 {
   async getHorarioTrabajoByDateAndEmpleado(
@@ -31,38 +32,41 @@ export class PoliticaH1_3 extends PoliticaH1 {
     let cantidadHorasLaborables = 0;
     let esDiaLibre = false;
 
-    // Los feriados y domingos marcan el día como "día libre"
+    // Los feriados marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
       esDiaLibre = true;
     } else {
-      // H1.3: Implementar lógica específica de generación de horario aquí
-      // Por ahora usa la misma lógica que H1 como placeholder
       switch (dia) {
-        case 0: // Domingo: 0h y día libre (no laborable)
+        case 0: // Domingo: 07:00-16:00 (8h, incluye almuerzo)
           inicio = "07:00";
-          fin = "07:00";
-          incluyeAlmuerzo = false;
-          cantidadHorasLaborables = 0;
-          esDiaLibre = true;
+          fin = "16:00";
+          incluyeAlmuerzo = true;
+          cantidadHorasLaborables = 8;
+          esDiaLibre = false;
           break;
-        case 6: // Sábado: 0h laborables pero NO día libre (es laborable)
+        case 1: // Lunes: 07:00-07:00 (0h, sin almuerzo)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;
           cantidadHorasLaborables = 0;
           esDiaLibre = false;
           break;
-        case 5:
+        case 2: // Martes: 07:00-07:00 (0h, sin almuerzo, día libre)
           inicio = "07:00";
-          fin = "16:00";
-          incluyeAlmuerzo = true;
-          cantidadHorasLaborables = 8;
+          fin = "07:00";
+          incluyeAlmuerzo = false;
+          cantidadHorasLaborables = 0;
+          esDiaLibre = true;
           break;
-        default:
+        case 3: // Miércoles: 07:00-17:00 (9h, incluye almuerzo)
+        case 4: // Jueves: 07:00-17:00 (9h, incluye almuerzo)
+        case 5: // Viernes: 07:00-17:00 (9h, incluye almuerzo)
+        case 6: // Sábado: 07:00-17:00 (9h, incluye almuerzo)
           inicio = "07:00";
           fin = "17:00";
           incluyeAlmuerzo = true;
           cantidadHorasLaborables = 9;
+          esDiaLibre = false;
           break;
       }
     }
@@ -80,4 +84,3 @@ export class PoliticaH1_3 extends PoliticaH1 {
     };
   }
 }
-
