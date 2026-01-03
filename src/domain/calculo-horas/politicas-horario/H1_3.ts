@@ -5,8 +5,10 @@ import { HorarioTrabajo } from "../types";
 /**
  * Política de horario H1.3 - Subtipo 3 de H1
  * Implementa la misma lógica que H1:
- * - Mie–Sáb: 07:00–17:00 (9h, incluye almuerzo)
- * - Dom:     07:00–16:00 (8h, incluye almuerzo)
+ * - Mie–Jue: 07:00–17:00 (9h, incluye almuerzo)
+ * - Vie:     07:00–16:00 (8h, incluye almuerzo)
+ * - Sáb:     07:00–17:00 (9h, incluye almuerzo)
+ * - Dom:     07:00–17:00 (9h, incluye almuerzo)
  * - Lun:     07:00–07:00 (0h, sin almuerzo)
  * - Mar:     07:00–07:00 (0h, sin almuerzo, día libre)
  */
@@ -37,11 +39,11 @@ export class PoliticaH1_3 extends PoliticaH1 {
       esDiaLibre = true;
     } else {
       switch (dia) {
-        case 0: // Domingo: 07:00-16:00 (8h, incluye almuerzo)
+        case 0: // Domingo: 07:00-17:00 (9h, incluye almuerzo)
           inicio = "07:00";
-          fin = "16:00";
+          fin = "17:00";
           incluyeAlmuerzo = true;
-          cantidadHorasLaborables = 8;
+          cantidadHorasLaborables = 9;
           esDiaLibre = false;
           break;
         case 1: // Lunes: 07:00-07:00 (0h, sin almuerzo)
@@ -58,9 +60,15 @@ export class PoliticaH1_3 extends PoliticaH1 {
           cantidadHorasLaborables = 0;
           esDiaLibre = true;
           break;
+        case 5: // Viernes: 07:00-16:00 (8h, incluye almuerzo)
+          inicio = "07:00";
+          fin = "16:00";
+          incluyeAlmuerzo = true;
+          cantidadHorasLaborables = 8;
+          esDiaLibre = false;
+          break;
         case 3: // Miércoles: 07:00-17:00 (9h, incluye almuerzo)
         case 4: // Jueves: 07:00-17:00 (9h, incluye almuerzo)
-        case 5: // Viernes: 07:00-17:00 (9h, incluye almuerzo)
         case 6: // Sábado: 07:00-17:00 (9h, incluye almuerzo)
           inicio = "07:00";
           fin = "17:00";

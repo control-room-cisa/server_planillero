@@ -5,8 +5,9 @@ import { HorarioTrabajo } from "../types";
 /**
  * Política de horario H1.2 - Subtipo 2 de H1
  * Funciona exactamente como H1_1 pero con un desfase de 1 día:
- * - Mar–Vie: 07:00–17:00 (9h, incluye almuerzo) - corresponde a Lun–Jue de H1_1
- * - Sáb:     07:00–16:00 (8h, incluye almuerzo) - corresponde a Vie de H1_1
+ * - Mar–Jue: 07:00–17:00 (9h, incluye almuerzo) - corresponde a Lun–Mié de H1_1
+ * - Vie:     07:00–16:00 (8h, incluye almuerzo) - corresponde a Jue de H1_1
+ * - Sáb:     07:00–17:00 (9h, incluye almuerzo) - corresponde a Vie de H1_1
  * - Lun:     07:00–07:00 (0h, sin almuerzo) - corresponde a Sáb de H1_1
  * - Dom:     07:00–07:00 (0h, sin almuerzo, día libre) - corresponde a Dom de H1_1
  */
@@ -41,8 +42,8 @@ export class PoliticaH1_2 extends PoliticaH1 {
       // Martes (2) → Lunes de H1_1: 07:00-17:00 (9h)
       // Miércoles (3) → Martes de H1_1: 07:00-17:00 (9h)
       // Jueves (4) → Miércoles de H1_1: 07:00-17:00 (9h)
-      // Viernes (5) → Jueves de H1_1: 07:00-17:00 (9h)
-      // Sábado (6) → Viernes de H1_1: 07:00-16:00 (8h)
+      // Viernes (5) → Jueves de H1_1: 07:00-16:00 (8h)
+      // Sábado (6) → Viernes de H1_1: 07:00-17:00 (9h)
       // Domingo (0) → Domingo de H1_1: 0h y día libre
       switch (dia) {
         case 1: // Lunes: 0h pero NO día libre (es laborable) - corresponde a Sáb de H1_1
@@ -52,11 +53,18 @@ export class PoliticaH1_2 extends PoliticaH1 {
           cantidadHorasLaborables = 0;
           esDiaLibre = false;
           break;
-        case 6: // Sábado: 07:00-16:00 (8h, incluye almuerzo) - corresponde a Vie de H1_1
+        case 5: // Viernes: 07:00-16:00 (8h, incluye almuerzo) - corresponde a Jue de H1_1
           inicio = "07:00";
           fin = "16:00";
           incluyeAlmuerzo = true;
           cantidadHorasLaborables = 8;
+          esDiaLibre = false;
+          break;
+        case 6: // Sábado: 07:00-17:00 (9h, incluye almuerzo) - corresponde a Vie de H1_1
+          inicio = "07:00";
+          fin = "17:00";
+          incluyeAlmuerzo = true;
+          cantidadHorasLaborables = 9;
           esDiaLibre = false;
           break;
         case 0: // Domingo: 0h y día libre (no laborable) - corresponde a Dom de H1_1
@@ -66,7 +74,7 @@ export class PoliticaH1_2 extends PoliticaH1 {
           cantidadHorasLaborables = 0;
           esDiaLibre = true;
           break;
-        default: // Martes a Viernes: 07:00-17:00 (9h, incluye almuerzo) - corresponde a Lun–Jue de H1_1
+        default: // Martes a Jueves: 07:00-17:00 (9h, incluye almuerzo) - corresponde a Lun–Mié de H1_1
           inicio = "07:00";
           fin = "17:00";
           incluyeAlmuerzo = true;
