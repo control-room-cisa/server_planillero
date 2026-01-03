@@ -20,10 +20,7 @@ function parseEnumMapping(
   const mapping: EnumMapping = {};
 
   // Buscar el enum en el schema
-  const enumRegex = new RegExp(
-    `enum\\s+${enumName}\\s*\\{[^}]*\\}`,
-    "s"
-  );
+  const enumRegex = new RegExp(`enum\\s+${enumName}\\s*\\{[^}]*\\}`, "s");
   const enumMatch = schemaContent.match(enumRegex);
 
   if (!enumMatch) {
@@ -38,7 +35,7 @@ function parseEnumMapping(
 
   for (const line of lines) {
     const trimmed = line.trim();
-    
+
     // Saltar líneas vacías, comentarios puros (sin enum), o llaves
     if (
       !trimmed ||
@@ -58,7 +55,9 @@ function parseEnumMapping(
     }
 
     // Buscar: VALOR //@map("valor") (comentado - usar el valor comentado)
-    const commentedMapMatch = trimmed.match(/^(\w+)\s*\/\/@map\(["']([^"']+)["']\)/);
+    const commentedMapMatch = trimmed.match(
+      /^(\w+)\s*\/\/@map\(["']([^"']+)["']\)/
+    );
     if (commentedMapMatch) {
       const [, enumValue, mappedValue] = commentedMapMatch;
       mapping[enumValue] = mappedValue;
@@ -96,19 +95,13 @@ function formatEnumValue(enumValue: string): string {
  * Lee el schema.prisma y retorna los mapeos de un enum
  */
 function getEnumMapping(enumName: string): EnumMapping {
-  const schemaPath = path.join(
-    __dirname,
-    "../../prisma/schema.prisma"
-  );
+  const schemaPath = path.join(__dirname, "../../prisma/schema.prisma");
 
   try {
     const schemaContent = fs.readFileSync(schemaPath, "utf-8");
     return parseEnumMapping(schemaContent, enumName);
   } catch (error) {
-    console.error(
-      `Error al leer schema.prisma para enum ${enumName}:`,
-      error
-    );
+    console.error(`Error al leer schema.prisma para enum ${enumName}:`, error);
     return {};
   }
 }
@@ -133,7 +126,9 @@ let tipoHorarioMapping: EnumMapping | null = null;
 let tipoContratoMapping: EnumMapping | null = null;
 let tipoCuentaMapping: EnumMapping | null = null;
 
-export function mapTipoHorario(tipoHorario: string | null | undefined): string | undefined {
+export function mapTipoHorario(
+  tipoHorario: string | null | undefined
+): string | undefined {
   if (!tipoHorario) return undefined;
   if (!tipoHorarioMapping) {
     tipoHorarioMapping = getEnumMapping("TipoHorario");
@@ -141,7 +136,9 @@ export function mapTipoHorario(tipoHorario: string | null | undefined): string |
   return tipoHorarioMapping[tipoHorario] || tipoHorario;
 }
 
-export function mapTipoContrato(tipoContrato: string | null | undefined): string | undefined {
+export function mapTipoContrato(
+  tipoContrato: string | null | undefined
+): string | undefined {
   if (!tipoContrato) return undefined;
   if (!tipoContratoMapping) {
     tipoContratoMapping = getEnumMapping("TipoContrato");
@@ -149,11 +146,12 @@ export function mapTipoContrato(tipoContrato: string | null | undefined): string
   return tipoContratoMapping[tipoContrato] || tipoContrato;
 }
 
-export function mapTipoCuenta(tipoCuenta: string | null | undefined): string | undefined {
+export function mapTipoCuenta(
+  tipoCuenta: string | null | undefined
+): string | undefined {
   if (!tipoCuenta) return undefined;
   if (!tipoCuentaMapping) {
     tipoCuentaMapping = getEnumMapping("TipoCuenta");
   }
   return tipoCuentaMapping[tipoCuenta] || tipoCuenta;
 }
-
