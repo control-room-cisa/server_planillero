@@ -1,4 +1,4 @@
-// src/domain/politicas-horario/H2.ts
+// src/domain/calculo-horas/politicas-horario/H2Base.ts
 import { PoliticaHorarioBase } from "./base";
 import type {
   HorarioTrabajo,
@@ -6,11 +6,13 @@ import type {
   ConteoHorasProrrateo,
   HorasPorJob,
 } from "../types";
-import { JobRepository } from "../../../repositories/JobRepository";
-import { SegmentadorTiempo } from "../segmentador-tiempo";
 
 /**
- * Política H2 — Turnos rotativos de 12h, sin almuerzo.
+ * Política H2Base — Base para turnos rotativos de 12h, sin almuerzo.
+ *
+ * Esta clase contiene toda la lógica de cálculo de horas para políticas H2.
+ * Los subtipos (H2_1, H2_2, etc.) solo necesitan implementar cómo se genera
+ * el horario de trabajo específico.
  *
  * Reglas:
  * - Entrada/Salida: mismo formato de retorno que H1; H2 SIEMPRE ignora almuerzo.
@@ -24,13 +26,16 @@ import { SegmentadorTiempo } from "../segmentador-tiempo";
  * - H2 NO usa p50/p75/p100 ni almuerzo (si aparece ALMUERZO → ERROR).
  * - Validación global: suma de horas por día = 24 h; en el rango = 24 h * #días.
  */
-export class PoliticaH2 extends PoliticaHorarioBase {
+export abstract class PoliticaH2Base extends PoliticaHorarioBase {
   // --------------------- utilidades locales mínimas ---------------------
-  private static hhmmToMin(hhmm: string): number {
+  protected static hhmmToMin(hhmm: string): number {
     const [h, m] = hhmm.split(":").map(Number);
     return h * 60 + m;
   }
-  private static minutesOfDayInTZ(d: Date, tz = "America/Tegucigalpa"): number {
+  protected static minutesOfDayInTZ(
+    d: Date,
+    tz = "America/Tegucigalpa"
+  ): number {
     const parts = new Intl.DateTimeFormat("en-GB", {
       hour: "2-digit",
       minute: "2-digit",
@@ -41,7 +46,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const mm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
     return hh * 60 + mm;
   }
-  private static addDays(iso: string, d: number): string {
+  protected static addDays(iso: string, d: number): string {
     const [Y, M, D] = iso.split("-").map(Number);
     const dt = new Date(Date.UTC(Y, M - 1, D));
     dt.setUTCDate(dt.getUTCDate() + d);
@@ -50,15 +55,46 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const day = `${dt.getUTCDate()}`.padStart(2, "0");
     return `${y}-${m}-${day}`;
   }
-  private static dayCountInclusive(a: string, b: string): number {
+  protected static dayCountInclusive(a: string, b: string): number {
     const [Y1, M1, D1] = a.split("-").map(Number);
     const [Y2, M2, D2] = b.split("-").map(Number);
     const d1 = Date.UTC(Y1, M1 - 1, D1);
     const d2 = Date.UTC(Y2, M2 - 1, D2);
     return Math.floor((d2 - d1) / 86400000) + 1;
   }
+
+  /**
+   * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
+   * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
+   * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
+   *
+   * @param fecha - Fecha del día actual en formato YYYY-MM-DD
+   * @param empleadoId - ID del empleado
+   * @returns true si los 3 días anteriores tienen esIncapacidad=true (consecutivos)
+   */
+  private async verificar3DiasAnterioresIncapacidad(
+    fecha: string,
+    empleadoId: string
+  ): Promise<boolean> {
+    // Verificar los 3 días anteriores
+    for (let i = 1; i <= 3; i++) {
+      const fechaAnterior = PoliticaH2Base.addDays(fecha, -i);
+      const registroAnterior = await this.getRegistroDiario(
+        empleadoId,
+        fechaAnterior
+      );
+
+      // Si algún día anterior no tiene incapacidad, los días de incapacidad son ≤3
+      if (!registroAnterior || registroAnterior.esIncapacidad !== true) {
+        return false;
+      }
+    }
+
+    // Los 3 días anteriores tienen incapacidad → este es el día 4+ → IHSS
+    return true;
+  }
   /** Minutos declarados como NORMAL por Entrada/Salida (sin almuerzo). */
-  private static normalesDeclaradosMin(e: Date, s: Date): number {
+  protected static normalesDeclaradosMin(e: Date, s: Date): number {
     const em = this.minutesOfDayInTZ(e);
     const sm = this.minutesOfDayInTZ(s);
     if (em === sm) return 0;
@@ -66,7 +102,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     return sm + (24 * 60 - em); // cruza medianoche
   }
   /** Nocturno para la regla del martes (sin cortes 05/19: solo 19–07). */
-  private static esNocturno(e: Date, s: Date): boolean {
+  protected static esNocturno(e: Date, s: Date): boolean {
     const em = this.minutesOfDayInTZ(e);
     const sm = this.minutesOfDayInTZ(s);
     if (em > sm) return true; // típico 19–07 (parte en 2 días)
@@ -75,51 +111,37 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     return enNocheA || enNocheB;
   }
 
-  // --------------------- plan diario (misma interfaz que H1) ---------------------
-  async getHorarioTrabajoByDateAndEmpleado(
+  // --------------------- plan diario (debe ser implementado por subtipos) ---------------------
+  abstract getHorarioTrabajoByDateAndEmpleado(
     fecha: string,
     empleadoId: string
-  ): Promise<HorarioTrabajo> {
-    if (!this.validarFormatoFecha(fecha)) {
-      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
+  ): Promise<HorarioTrabajo>;
+
+  // --------------------- conteo por rango (común para todos los H2) ---------------------
+  /**
+   * Implementación del método abstracto con typo heredado de base.ts
+   * Redirige al método con nombre correcto
+   */
+  async getConteoHorasTrabajajadasByDateAndEmpleado(
+    fechaInicio: string,
+    fechaFin: string,
+    empleadoId: string
+  ): Promise<
+    ConteoHorasTrabajadas & {
+      tiposDias: Array<{
+        fecha: string;
+        tipo: "diurno" | "nocturno" | "libre" | "festivo";
+      }>;
     }
-    const empleado = await this.getEmpleado(empleadoId);
-    if (!empleado)
-      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
-
-    const reg = await this.getRegistroDiario(empleadoId, fecha);
-    const feriadoInfo = await this.esFeriado(fecha);
-    const esDiaLibre = reg?.esDiaLibre || false;
-
-    let inicio = "07:00";
-    let fin = "19:00";
-    let cantidadHorasLaborables = 12;
-    const incluyeAlmuerzo = false; // H2 jamás almuerzo
-
-    if (reg) {
-      const e = new Date(reg.horaEntrada);
-      const s = new Date(reg.horaSalida);
-      const toHHMM = (d: Date) => d.toTimeString().slice(0, 5);
-      inicio = toHHMM(e);
-      fin = toHHMM(s);
-      cantidadHorasLaborables = PoliticaH2.normalesDeclaradosMin(e, s) / 60;
-    }
-
-    return {
-      tipoHorario: "H2",
-      fecha,
-      empleadoId,
-      horarioTrabajo: { inicio, fin },
-      incluyeAlmuerzo,
-      esDiaLibre,
-      esFestivo: feriadoInfo.esFeriado,
-      nombreDiaFestivo: feriadoInfo.nombre,
-      cantidadHorasLaborables,
-    };
+  > {
+    return this.getConteoHorasTrabajadasByDateAndEmpleado(
+      fechaInicio,
+      fechaFin,
+      empleadoId
+    );
   }
 
-  // --------------------- conteo por rango (simple) ---------------------
-  async getConteoHorasTrabajajadasByDateAndEmpleado(
+  async getConteoHorasTrabajadasByDateAndEmpleado(
     fechaInicio: string,
     fechaFin: string,
     empleadoId: string
@@ -144,6 +166,10 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     let normalMin = 0;
     let p25Min = 0;
     let libreMin = 0;
+    let compNormalesMin = 0; // Horas compensatorias tomadas (normales)
+    let compExtrasMin = 0; // Horas compensatorias pagadas (extras)
+    let incapacidadEmpresaMin = 0; // Primeros 3 días consecutivos (24h por día)
+    let incapacidadIHSSMin = 0; // A partir del 4to día consecutivo (24h por día)
     // H2 no usa estos:
     const p50Min = 0,
       p75Min = 0,
@@ -159,15 +185,58 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     // recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
-      const { segmentos, errores: segErrs } =
-        await this.generarSegmentosDeDiaConValidacion(f, empleadoId);
-      if (segErrs?.length)
-        errores.push({ fecha: f, motivo: "segmentador", detalle: segErrs });
-
       const reg = await this.getRegistroDiario(empleadoId, f);
       const feriadoInfo = await this.esFeriado(f);
       const esFestivo = feriadoInfo.esFeriado;
       const esLibre = reg?.esDiaLibre ?? false;
+
+      // ==================== MANEJO DE INCAPACIDAD ====================
+      // Si el día está marcado como incapacidad, asignar 24h de incapacidad
+      // Se ignoran todas las actividades del día
+      if (reg?.esIncapacidad === true) {
+        const HORAS_INCAPACIDAD_MIN = 24 * 60; // 1440 minutos = 24 horas = 1 día literal
+
+        // Verificar si los 3 días anteriores también tienen incapacidad
+        const incapacidadMayorATresDias =
+          await this.verificar3DiasAnterioresIncapacidad(f, empleadoId);
+
+        if (incapacidadMayorATresDias) {
+          // A partir del 4to día consecutivo → IHSS
+          incapacidadIHSSMin += HORAS_INCAPACIDAD_MIN;
+        } else {
+          // Primeros 3 días consecutivos → Empresa
+          incapacidadEmpresaMin += HORAS_INCAPACIDAD_MIN;
+        }
+
+        console.log(
+          `[H2] ${f} - INCAPACIDAD: ${
+            incapacidadMayorATresDias ? "IHSS (>3 días)" : "Empresa (≤3 días)"
+          }`
+        );
+
+        // Avanzar al siguiente día sin procesar segmentos
+        f = PoliticaH2Base.addDays(f, 1);
+        continue;
+      }
+
+      // ==================== PROCESAMIENTO NORMAL (sin incapacidad) ====================
+      const segmentosResult = await this.generarSegmentosDeDiaConValidacion(
+        f,
+        empleadoId
+      );
+      const { segmentos, errores: segErrs } = segmentosResult;
+      if (segErrs?.length)
+        errores.push({ fecha: f, motivo: "segmentador", detalle: segErrs });
+
+      // Extraer horas compensatorias calculadas por el segmentador
+      const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas || 0;
+      const compExtrasArray = segmentosResult.horasCompensatoriasPagadas || [];
+
+      // Agregar horas compensatorias a los acumuladores (convertir de horas a minutos)
+      compNormalesMin += Math.round(compNormalesHoras * 60);
+      for (const comp of compExtrasArray) {
+        compExtrasMin += Math.round(comp.cantidadHoras * 60);
+      }
 
       // Tipo de día
       let tipoDia: "diurno" | "nocturno" | "libre" | "festivo";
@@ -176,7 +245,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       else {
         const e = new Date(reg.horaEntrada);
         const s = new Date(reg.horaSalida);
-        tipoDia = PoliticaH2.esNocturno(e, s) ? "nocturno" : "diurno";
+        tipoDia = PoliticaH2Base.esNocturno(e, s) ? "nocturno" : "diurno";
       }
       tiposDias.push({ fecha: f, tipo: tipoDia });
 
@@ -187,8 +256,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       let almuerzoMinDia = 0;
 
       for (const seg of segmentos) {
-        const a = PoliticaH2.hhmmToMin(seg.inicio);
-        const b = PoliticaH2.hhmmToMin(seg.fin);
+        const a = PoliticaH2Base.hhmmToMin(seg.inicio);
+        const b = PoliticaH2Base.hhmmToMin(seg.fin);
         const dur = Math.max(0, b - a);
         if (dur === 0) continue;
 
@@ -231,14 +300,20 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       } else {
         const e = new Date(reg.horaEntrada);
         const s = new Date(reg.horaSalida);
-        const nocturno = PoliticaH2.esNocturno(e, s);
+        const nocturno = PoliticaH2Base.esNocturno(e, s);
 
         // Esperado por día (sin almuerzo)
-        if (nocturno && dow === 2) {
-          // martes
+        // Si entrada == salida, no hay rango normal → esperadaNormalMin = 0
+        const rangoNormalMin = PoliticaH2Base.normalesDeclaradosMin(e, s);
+        if (rangoNormalMin === 0) {
+          // Sin rango normal declarado → no se esperan horas normales
+          esperadaNormalMin = 0;
+        } else if (nocturno && dow === 2) {
+          // Martes nocturno con rango normal → solo 6h normales (regla especial)
           esperadaNormalMin = 6 * 60;
         } else {
-          esperadaNormalMin = PoliticaH2.normalesDeclaradosMin(e, s);
+          // Otros días → usar rango normal completo
+          esperadaNormalMin = rangoNormalMin;
         }
 
         // 1) Almuerzo jamás permitido en H2 (y tu regla específica pide error si aparece en horas normales)
@@ -251,12 +326,19 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         }
 
         // 2) NORMAL debe coincidir exactamente con lo esperado (sin considerar almuerzo)
-        if (normalMinDia !== esperadaNormalMin) {
+        // IMPORTANTE: Las horas compensatorias tomadas se despintan a LIBRE por el segmentador,
+        // pero deben contarse en la validación como horas normales esperadas
+        const compNormalesMinDia = Math.round(compNormalesHoras * 60);
+        const normalMinDiaConCompensatorias = normalMinDia + compNormalesMinDia;
+
+        if (normalMinDiaConCompensatorias !== esperadaNormalMin) {
           errores.push({
             fecha: f,
             motivo: "NORMAL_NO_COINCIDE_CON_INTERVALO",
             detalle: {
               normalMinDia,
+              compNormalesMinDia,
+              normalMinDiaConCompensatorias,
               esperadaNormalMin,
               entrada: e.toTimeString().slice(0, 5),
               salida: s.toTimeString().slice(0, 5),
@@ -272,14 +354,18 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       p25Min += extraMinDia; // todas extras a p25
       libreMin += libreMinDia;
 
-      f = PoliticaH2.addDays(f, 1);
+      f = PoliticaH2Base.addDays(f, 1);
     }
 
     // Cuadre global (24 h por día)
-    const dias = PoliticaH2.dayCountInclusive(fechaInicio, fechaFin);
+    const dias = PoliticaH2Base.dayCountInclusive(fechaInicio, fechaFin);
     const esperadoGlobalMin = dias * 24 * 60;
     const totalMin =
-      normalMin + p25Min + libreMin; /* + p50+p75+p100(0) + almuerzo(0) */
+      normalMin +
+      p25Min +
+      libreMin +
+      incapacidadEmpresaMin +
+      incapacidadIHSSMin; /* + p50+p75+p100(0) + almuerzo(0) */
 
     if (totalMin !== esperadoGlobalMin) {
       errores.push({
@@ -298,6 +384,9 @@ export class PoliticaH2 extends PoliticaHorarioBase {
 
     // Respuesta (horas a 2 decimales)
     const toHours = (m: number) => Math.round((m / 60) * 100) / 100;
+
+    // Las horas compensatorias NO se cuentan en normalMin (el segmentador las excluye)
+    // Ya están en sus buckets separados (compNormalesMin y compExtrasMin)
     const conteo: ConteoHorasTrabajadas = {
       fechaInicio,
       fechaFin,
@@ -310,6 +399,12 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         p100: 0,
         libre: toHours(libreMin),
         almuerzo: 0,
+        // Incapacidades NO se reportan en horas (solo en días literales)
+        incapacidadEmpresa: 0,
+        incapacidadIHSS: 0,
+        // Horas compensatorias separadas por tipo (calculadas por el segmentador)
+        horasCompensatoriasTomadas: toHours(compNormalesMin),
+        horasCompensatoriasPagadas: toHours(compExtrasMin),
       },
     };
 
@@ -325,8 +420,18 @@ export class PoliticaH2 extends PoliticaHorarioBase {
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
 
+    // Incapacidades: conteo en DÍAS LITERALES (no basado en horas)
+    // Cada día con esIncapacidad=true cuenta como 1 día completo
+    const diasIncapacidadEmpresa = incapacidadEmpresaMin / (24 * 60); // minutos a días literales
+    const diasIncapacidadIHSS = incapacidadIHSSMin / (24 * 60); // minutos a días literales
+
     const diasNoLaborados =
-      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
+      diasVacaciones +
+      diasPermisoCS +
+      diasPermisoSS +
+      diasInasistencias +
+      diasIncapacidadEmpresa +
+      diasIncapacidadIHSS;
     const diasLaborados = totalPeriodo - diasNoLaborados;
 
     conteo.conteoDias = {
@@ -336,8 +441,8 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       permisoConSueldo: diasPermisoCS,
       permisoSinSueldo: diasPermisoSS,
       inasistencias: diasInasistencias,
-      incapacidadEmpresa: 0,
-      incapacidadIHSS: 0,
+      incapacidadEmpresa: diasIncapacidadEmpresa,
+      incapacidadIHSS: diasIncapacidadIHSS,
     };
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado
@@ -406,7 +511,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       }
     >();
 
-    // Recorrer cada día del período y obtener los segmentos
+    // Recorrer cada día del período y procesar actividades
     let currentDate = fechaInicio;
     while (currentDate <= fechaFin) {
       try {
@@ -417,81 +522,109 @@ export class PoliticaH2 extends PoliticaHorarioBase {
         );
 
         if (!registroDiario) {
-          currentDate = PoliticaH2.addDays(currentDate, 1);
+          currentDate = PoliticaH2Base.addDays(currentDate, 1);
           continue;
         }
 
-        // Segmentar el día usando el registro diario
-        const lineaTiempo = SegmentadorTiempo.segmentarDia(registroDiario);
+        // Helper para agregar horas normales por job
+        const upsertNormal = (
+          jobId: number,
+          codigo: string,
+          nombre: string,
+          horas: number,
+          descripcion?: string | null
+        ) => {
+          if (horas <= 0) return;
+          const existing = horasPorJobNormal.get(jobId);
+          if (existing) {
+            existing.horas += horas;
+            if (descripcion && !existing.comentarios.includes(descripcion)) {
+              existing.comentarios.push(descripcion);
+            }
+          } else {
+            horasPorJobNormal.set(jobId, {
+              jobId,
+              codigoJob: codigo,
+              nombreJob: nombre,
+              horas,
+              comentarios: descripcion ? [descripcion] : [],
+            });
+          }
+        };
 
-        // Procesar cada intervalo del día
-        for (const intervalo of lineaTiempo.intervalos) {
-          // Solo procesar intervalos que tienen jobId (NORMAL y EXTRA)
-          if (!intervalo.jobId) continue;
+        // Helper para agregar horas extras (p25) por job
+        const upsertExtra = (
+          jobId: number,
+          codigo: string,
+          nombre: string,
+          horas: number,
+          descripcion?: string | null
+        ) => {
+          if (horas <= 0) return;
+          const existing = horasPorJobP25.get(jobId);
+          if (existing) {
+            existing.horas += horas;
+            if (descripcion && !existing.comentarios.includes(descripcion)) {
+              existing.comentarios.push(descripcion);
+            }
+          } else {
+            horasPorJobP25.set(jobId, {
+              jobId,
+              codigoJob: codigo,
+              nombreJob: nombre,
+              horas,
+              comentarios: descripcion ? [descripcion] : [],
+            });
+          }
+        };
 
-          // Calcular duración del intervalo en horas
-          const [horaInicio, minInicio] = intervalo.horaInicio
-            .split(":")
-            .map(Number);
-          const [horaFin, minFin] = intervalo.horaFin.split(":").map(Number);
-          const minutosInicio = horaInicio * 60 + minInicio;
-          const minutosFin = horaFin * 60 + minFin;
-          const duracionHoras = (minutosFin - minutosInicio) / 60;
+        // Procesar actividades directamente (sin depender del segmentador para jobId)
+        for (const act of (registroDiario as any).actividades ?? []) {
+          // Obtener código y nombre del job
+          const jobId = act?.jobId || act?.job?.id;
+          const codigo = act?.job?.codigo ?? act?.codigoJob ?? "";
+          const nombre = act?.job?.nombre ?? String(codigo);
+          const descripcion =
+            act?.descripcion ||
+            (registroDiario as any)?.comentarioEmpleado ||
+            null;
 
-          // Obtener información del job
-          const job = await JobRepository.findById(intervalo.jobId);
-          if (!job) continue;
+          if (!jobId && !codigo) continue;
 
-          const jobInfo = {
-            jobId: job.id,
-            codigoJob: job.codigo || "",
-            nombreJob: job.nombre || "",
-            horas: 0,
-            comentarios: [],
-          };
+          // Determinar si es actividad normal o extra
+          if (!act?.esExtra) {
+            // ACTIVIDAD NORMAL: usar duracionHoras directamente
+            const horas = Number(act?.duracionHoras ?? 0);
+            if (horas > 0) {
+              // Si tenemos jobId, usarlo; si no, buscar por código
+              const id = jobId || 0;
+              upsertNormal(id, codigo, nombre, horas, descripcion);
+            }
+          } else {
+            // ACTIVIDAD EXTRA: calcular horas desde horaInicio/horaFin o usar duracionHoras
+            let horas = 0;
 
-          // Clasificar el intervalo según el tipo
-          // H2 solo usa normal y p25 (extras al 25%)
-          if (intervalo.tipo === "NORMAL") {
-            const existing = horasPorJobNormal.get(job.id);
-            if (existing) {
-              existing.horas += duracionHoras;
+            if (act?.horaInicio && act?.horaFin) {
+              const start = new Date(act.horaInicio);
+              const end = new Date(act.horaFin);
+
+              // Recortar al día actual
+              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
+              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+              const s = new Date(Math.max(start.getTime(), dayStart.getTime()));
+              const e = new Date(Math.min(end.getTime(), dayEnd.getTime()));
+
+              if (e.getTime() > s.getTime()) {
+                horas = (e.getTime() - s.getTime()) / 3_600_000; // ms a horas
+              }
             } else {
-              horasPorJobNormal.set(job.id, {
-                ...jobInfo,
-                horas: duracionHoras,
-              });
+              // Sin horas explícitas, usar duracionHoras
+              horas = Number(act?.duracionHoras ?? 0);
             }
-            const desc =
-              (registroDiario as any)?.comentarioEmpleado ||
-              (intervalo as any)?.descripcion ||
-              (intervalo as any)?.comment ||
-              null;
-            if (desc) {
-              const target = horasPorJobNormal.get(job.id)!;
-              if (!target.comentarios.includes(desc))
-                target.comentarios.push(desc);
-            }
-          } else if (intervalo.tipo === "EXTRA") {
-            // En H2, todas las extras son p25
-            const existing = horasPorJobP25.get(job.id);
-            if (existing) {
-              existing.horas += duracionHoras;
-            } else {
-              horasPorJobP25.set(job.id, {
-                ...jobInfo,
-                horas: duracionHoras,
-              });
-            }
-            const desc =
-              (registroDiario as any)?.comentarioEmpleado ||
-              (intervalo as any)?.descripcion ||
-              (intervalo as any)?.comment ||
-              null;
-            if (desc) {
-              const target = horasPorJobP25.get(job.id)!;
-              if (!target.comentarios.includes(desc))
-                target.comentarios.push(desc);
+
+            if (horas > 0) {
+              const id = jobId || 0;
+              upsertExtra(id, codigo, nombre, horas, descripcion);
             }
           }
         }
@@ -500,7 +633,7 @@ export class PoliticaH2 extends PoliticaHorarioBase {
       }
 
       // Avanzar al siguiente día
-      currentDate = PoliticaH2.addDays(currentDate, 1);
+      currentDate = PoliticaH2Base.addDays(currentDate, 1);
     }
 
     // Convertir mapas a arrays

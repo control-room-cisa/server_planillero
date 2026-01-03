@@ -59,20 +59,15 @@ model Departamento {
 
 /// Turnos disponibles
 enum TipoHorario {
-  H1_1 @map("Lunes a Viernes (H1.1)")
-  H1_2 @map("Martes a Sábado (H1.2)")
-  H1_3 @map("Miércoles a Domingo (H1.3)")
-  H1_4 @map("Días alternos Cocina (H1.4)")
-  H1_5 @map("Días alternos Medio Ambiente (H1.5)")
-  H1_6 @map("Lunes a Sábado (H1.6)")
+  H1_1 @map("(H1.1) Lunes a Viernes")
+  H1_2 @map("(H1.2) Martes a Sábado")
+  H1_3 @map("(H1.3) Miércoles a Domingo")
+  H1_4 @map("(H1.4) Días alternos Cocina")
+  H1_5 @map("(H1.5) Días alternos Medio Ambiente")
+  H1_6 @map("(H1.6) Lunes a Sábado")
 
-  H2   @map("Turnos 7x7 Copenergy (H2.1)")
-  H2_2 @map("Lunes a Viernes Copenergy (H2.2)")
-  H3 //@map("Miércoles a Domingo")
-  H4 //@map("Turnos 7x7")
-  H5 //@map("")
-  H6 //@map("H6")
-  H7 //@map("H7")
+  H2_1 @map("(H2.1) Turnos 7x7 Copenergy")
+  H2_2 @map("(H2.2) Lunes a Viernes Copenergy")
 }
 
 /// Estado civil del empleado
