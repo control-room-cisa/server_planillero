@@ -64,6 +64,7 @@ enum TipoHorario {
   H1_3 @map("Miércoles a Domingo (H1.3)")
   H1_4 @map("Días alternos Cocina (H1.4)")
   H1_5 @map("Días alternos Medio Ambiente (H1.5)")
+  H1_6 @map("Lunes a Sábado (H1.6)")
 
   H2   @map("Turnos 7x7 Copenergy (H2.1)")
   H2_2 @map("Lunes a Viernes Copenergy (H2.2)")
