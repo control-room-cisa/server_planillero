@@ -10,11 +10,7 @@ import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { RegistroDiarioRepository } from "../repositories/RegistroDiarioRepository";
 import { PlanillaAccesoRevisionRepository } from "../repositories/PlanillaAccesoRevisionRepository";
 import { FileService } from "./FileService";
-import {
-  mapTipoHorario,
-  mapTipoContrato,
-  mapTipoCuenta,
-} from "../utils/prismaEnumMapper";
+import { mapTipoContrato, mapTipoCuenta } from "../utils/prismaEnumMapper";
 
 const SALT_ROUNDS = 10;
 
@@ -56,7 +52,8 @@ export class EmpleadoService {
       correoElectronico: emp.correoElectronico ?? undefined,
       dni: emp.dni ?? undefined,
       profesion: emp.profesion ?? undefined,
-      tipoHorario: mapTipoHorario(emp.tipoHorario) as any,
+      // En BD se guardan códigos (H1_1, H2_1, etc.). La etiqueta legible se resuelve en frontend.
+      tipoHorario: emp.tipoHorario ?? undefined,
       estadoCivil: emp.estadoCivil ?? undefined,
       nombreConyugue: emp.nombreConyugue ?? undefined,
       cargo: emp.cargo ?? undefined,

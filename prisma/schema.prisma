@@ -59,15 +59,17 @@ model Departamento {
 
 /// Turnos disponibles
 enum TipoHorario {
-  H1_1 @map("(H1.1) Lunes a Viernes")
-  H1_2 @map("(H1.2) Martes a Sábado")
-  H1_3 @map("(H1.3) Miércoles a Domingo")
-  H1_4 @map("(H1.4) Días alternos Cocina")
-  H1_5 @map("(H1.5) Días alternos Medio Ambiente")
-  H1_6 @map("(H1.6) Lunes a Sábado")
-
-  H2_1 @map("(H2.1) Turnos 7x7 Copenergy")
-  H2_2 @map("(H2.2) Lunes a Viernes Copenergy")
+  // NOTA:
+  // - Estos valores SON los que se guardan en base de datos (códigos estables).
+  // - Las descripciones legibles (ej. "(H1.1) Lunes a Viernes") se manejan SOLO en el frontend.
+  H1_1 // (H1.1) Lunes a Viernes
+  H1_2 // (H1.2) Martes a Sábado
+  H1_3 // (H1.3) Miércoles a Domingo
+  H1_4 // (H1.4) Días alternos Cocina
+  H1_5 // (H1.5) Días alternos Medio Ambiente
+  H1_6 // (H1.6) Lunes a Sábado
+  H2_1 // (H2.1) Turnos 7x7 Copenergy
+  H2_2 // (H2.2) Lunes a Viernes Copenergy
 }
 
 /// Estado civil del empleado

@@ -5,7 +5,11 @@ import { PoliticaH1 } from "./H1";
 import { PoliticaH1_1 } from "./H1_1";
 import { PoliticaH1_2 } from "./H1_2";
 import { PoliticaH1_3 } from "./H1_3";
-import { PoliticaH2 } from "./H2";
+import { PoliticaH1_4 } from "./H1_4";
+import { PoliticaH1_5 } from "./H1_5";
+import { PoliticaH1_6 } from "./H1_6";
+import { PoliticaH2_1 } from "./H2_1";
+import { PoliticaH2_2 } from "./H2_2";
 
 /**
  * Factory para crear instancias de políticas de horario
@@ -16,11 +20,6 @@ export class FabricaPoliticas {
    */
   static crearPolitica(tipoHorario: TipoHorario): IPoliticaHorario {
     switch (tipoHorario) {
-      case TipoHorario.H1:
-        throw new Error(
-          "H1 es una clase abstracta. Use H1_1, H1_2 o H1_3 en su lugar."
-        );
-
       case TipoHorario.H1_1:
         return new PoliticaH1_1();
 
@@ -30,17 +29,20 @@ export class FabricaPoliticas {
       case TipoHorario.H1_3:
         return new PoliticaH1_3();
 
-      case TipoHorario.H2:
-        return new PoliticaH2();
+      case TipoHorario.H1_4:
+        return new PoliticaH1_4();
 
-      case TipoHorario.H3:
-      case TipoHorario.H4:
-      case TipoHorario.H5:
-      case TipoHorario.H6:
-      case TipoHorario.H7:
-        throw new Error(
-          `Política de horario ${tipoHorario} no implementada aún`
-        );
+      case TipoHorario.H1_5:
+        return new PoliticaH1_5();
+
+      case TipoHorario.H1_6:
+        return new PoliticaH1_6();
+
+      case TipoHorario.H2_1:
+        return new PoliticaH2_1();
+
+      case TipoHorario.H2_2:
+        return new PoliticaH2_2();
 
       default:
         throw new Error(`Tipo de horario ${tipoHorario} no reconocido`);
@@ -55,7 +57,11 @@ export class FabricaPoliticas {
       TipoHorario.H1_1,
       TipoHorario.H1_2,
       TipoHorario.H1_3,
-      TipoHorario.H2,
+      TipoHorario.H1_4,
+      TipoHorario.H1_5,
+      TipoHorario.H1_6,
+      TipoHorario.H2_1,
+      TipoHorario.H2_2,
     ];
     return tiposSoportados.includes(tipoHorario);
   }
@@ -68,7 +74,11 @@ export class FabricaPoliticas {
       TipoHorario.H1_1,
       TipoHorario.H1_2,
       TipoHorario.H1_3,
-      TipoHorario.H2,
+      TipoHorario.H1_4,
+      TipoHorario.H1_5,
+      TipoHorario.H1_6,
+      TipoHorario.H2_1,
+      TipoHorario.H2_2,
     ];
   }
 
@@ -76,12 +86,6 @@ export class FabricaPoliticas {
    * Obtiene la lista de tipos de horario pendientes de implementación
    */
   static getTiposPendientes(): TipoHorario[] {
-    return [
-      TipoHorario.H3,
-      TipoHorario.H4,
-      TipoHorario.H5,
-      TipoHorario.H6,
-      TipoHorario.H7,
-    ];
+    return [];
   }
 }
