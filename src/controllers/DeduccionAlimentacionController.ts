@@ -5,18 +5,26 @@ import type { ApiResponse } from "../dtos/ApiResponse";
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+type ApiError = { field: string; message: string };
+
 function buildOk<T>(message: string, data: T): ApiResponse<T> {
   return { success: true, message, data };
 }
 
 function buildErr<T>(
   message: string,
-  errors: any[] = [],
+  errors: ApiError[] = [],
   status = 500
 ): { status: number; body: ApiResponse<T> } {
+  const normalized = Array.isArray(errors) ? errors : [];
   return {
     status,
-    body: { success: false, message, data: null as any, errors } as any,
+    body: {
+      success: false,
+      message,
+      data: null as any,
+      ...(normalized.length ? { errors: normalized } : {}),
+    } as any,
   };
 }
 
@@ -47,6 +55,38 @@ function normalizeThrownToErrors(err: any): any[] {
   }
 
   return [err?.message || "Error desconocido"];
+}
+
+function toApiErrors(items: any[]): ApiError[] {
+  const arr = Array.isArray(items) ? items : [];
+  return arr
+    .map((x) => {
+      if (!x) return { field: "general", message: "Error desconocido" };
+      if (typeof x === "string") return { field: "general", message: x };
+      if (typeof x === "object") {
+        const field = typeof x.field === "string" ? x.field : "general";
+        const message =
+          typeof x.message === "string"
+            ? x.message
+            : typeof (x as any).mensaje === "string"
+            ? (x as any).mensaje
+            : typeof (x as any).error === "string"
+            ? (x as any).error
+            : typeof (x as any).detalle === "string"
+            ? (x as any).detalle
+            : typeof (x as any).detalles === "string"
+            ? (x as any).detalles
+            : undefined;
+        if (message) return { field, message };
+        try {
+          return { field, message: JSON.stringify(x) };
+        } catch {
+          return { field, message: String(x) };
+        }
+      }
+      return { field: "general", message: String(x) };
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -97,7 +137,7 @@ export const getDeduccionAlimentacion: RequestHandler<
         fecha: string;
       }>;
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>("Parámetros inválidos", errors400, 400);
+    }>("Parámetros inválidos", toApiErrors(errors400), 400);
     return res.status(status).json(body);
   }
 
@@ -173,7 +213,7 @@ export const getDeduccionAlimentacion: RequestHandler<
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
     }>(
       err?.message || "Error obteniendo deducciones de alimentación",
-      errors,
+      toApiErrors(errors),
       status
     );
     return res.status(st).json(body);

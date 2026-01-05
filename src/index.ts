@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import { authRouter } from "./routes/authRoutes";
 import { errorHandler } from "./middlewares/errorHandler";
+import { requestContext } from "./middlewares/requestContext";
+import { httpLogger } from "./middlewares/httpLogger";
 import jobRoutes from "./routes/JobRoutes";
 import empresaRoutes from "./routes/empresaRoutes";
 import departamentoRoutes from "./routes/departamentoRoutes";
@@ -22,13 +24,24 @@ const ROOT = path.resolve(__dirname, "..");
 config({ path: path.join(ROOT, ".env") });
 
 app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+
+// Correlation id (X-Request-Id) and request logging (one line per request)
+app.use(requestContext);
+app.use(httpLogger);
+
 // Configurar CORS para permitir requests desde el frontend
 app.use(
   cors({
     origin: true, // Permitir todos los orígenes en desarrollo
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "X-Requested-With",
+      "X-Request-Id",
+    ],
+    exposedHeaders: ["X-Request-Id"],
   })
 );
 

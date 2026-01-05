@@ -10,17 +10,25 @@ import type {
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
+type ApiError = { field: string; message: string };
+
 function buildOk<T>(message: string, data: T): ApiResponse<T> {
   return { success: true, message, data };
 }
 function buildErr<T>(
   message: string,
-  errors: any[] = [],
+  errors: ApiError[] = [],
   status = 500
 ): { status: number; body: ApiResponse<T> } {
+  const normalized = Array.isArray(errors) ? errors : [];
   return {
     status,
-    body: { success: false, message, data: null as any, errors } as any,
+    body: {
+      success: false,
+      message,
+      data: null as any,
+      ...(normalized.length ? { errors: normalized } : {}),
+    } as any,
   };
 }
 function normalizeThrownToErrors(err: any): any[] {
@@ -53,6 +61,38 @@ function normalizeThrownToErrors(err: any): any[] {
   return [String(err ?? "Error desconocido")];
 }
 
+function toApiErrors(items: any[]): ApiError[] {
+  const arr = Array.isArray(items) ? items : [];
+  return arr
+    .map((x) => {
+      if (!x) return { field: "general", message: "Error desconocido" };
+      if (typeof x === "string") return { field: "general", message: x };
+      if (typeof x === "object") {
+        const field = typeof (x as any).field === "string" ? (x as any).field : "general";
+        const message =
+          typeof (x as any).message === "string"
+            ? (x as any).message
+            : typeof (x as any).mensaje === "string"
+            ? (x as any).mensaje
+            : typeof (x as any).error === "string"
+            ? (x as any).error
+            : typeof (x as any).detalle === "string"
+            ? (x as any).detalle
+            : typeof (x as any).detalles === "string"
+            ? (x as any).detalles
+            : undefined;
+        if (message) return { field, message };
+        try {
+          return { field, message: JSON.stringify(x) };
+        } catch {
+          return { field, message: String(x) };
+        }
+      }
+      return { field: "general", message: String(x) };
+    })
+    .filter(Boolean);
+}
+
 // -----------------------------------------------------------------------------
 // GET /api/horario-trabajo/:empleadoId/:fecha
 // -----------------------------------------------------------------------------
@@ -74,7 +114,7 @@ export const getHorarioTrabajo: RequestHandler<
   if (errors400.length) {
     const { status, body } = buildErr<HorarioTrabajo>(
       "Parámetros inválidos",
-      errors400,
+      toApiErrors(errors400),
       400
     );
     return res.status(status).json(body);
@@ -107,7 +147,7 @@ export const getHorarioTrabajo: RequestHandler<
     const errors = normalizeThrownToErrors(err);
     const { status: st, body } = buildErr<HorarioTrabajo>(
       err?.message || "Error obteniendo horario de trabajo",
-      errors,
+      toApiErrors(errors),
       status
     );
     return res.status(st).json(body);
@@ -142,7 +182,7 @@ export const getConteoHoras: RequestHandler<
   if (errors400.length) {
     const { status, body } = buildErr<ConteoHorasTrabajadas>(
       "Parámetros inválidos",
-      errors400,
+      toApiErrors(errors400),
       400
     );
     return res.status(status).json(body);
@@ -179,7 +219,7 @@ export const getConteoHoras: RequestHandler<
     const errors = normalizeThrownToErrors(err);
     const { status: st, body } = buildErr<ConteoHorasTrabajadas>(
       err?.message || "Error obteniendo conteo de horas",
-      errors,
+      toApiErrors(errors),
       status
     );
     return res.status(st).json(body);
@@ -214,7 +254,7 @@ export const getProrrateo: RequestHandler<
   if (errors400.length) {
     const { status, body } = buildErr<ConteoHorasProrrateo>(
       "Parámetros inválidos",
-      errors400,
+      toApiErrors(errors400),
       400
     );
     return res.status(status).json(body);
@@ -251,7 +291,7 @@ export const getProrrateo: RequestHandler<
     const errors = normalizeThrownToErrors(err);
     const { status: st, body } = buildErr<ConteoHorasProrrateo>(
       err?.message || "Error obteniendo prorrateo de horas",
-      errors,
+      toApiErrors(errors),
       status
     );
     return res.status(st).json(body);
@@ -300,7 +340,7 @@ export const getDeduccionesAlimentacion: RequestHandler<
         fecha: string;
       }>;
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>("Parámetros inválidos", errors400, 400);
+    }>("Parámetros inválidos", toApiErrors(errors400), 400);
     return res.status(status).json(body);
   }
 
@@ -338,7 +378,7 @@ export const getDeduccionesAlimentacion: RequestHandler<
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
     }>(
       err?.message || "Error obteniendo deducciones de alimentación",
-      errors,
+      toApiErrors(errors),
       status
     );
     return res.status(st).json(body);

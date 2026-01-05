@@ -8,6 +8,9 @@ export function errorHandler(
   res: Response<ApiResponse<null>>,
   next: NextFunction
 ) {
+  const requestId =
+    (res.locals as any)?.requestId || (req as any)?.requestId || undefined;
+
   // Determinar status code
   const statusCode =
     err instanceof AppError
@@ -53,6 +56,29 @@ export function errorHandler(
     errors: errors.length > 0 ? errors : undefined,
     validationErrors,
   };
+
+  // Ensure correlation id is returned even on error
+  if (requestId && !res.getHeader("X-Request-Id")) {
+    res.setHeader("X-Request-Id", requestId);
+  }
+
+  // Log error details for production debugging (do not leak stack to client)
+  // eslint-disable-next-line no-console
+  console.error(
+    JSON.stringify({
+      level: "error",
+      msg: "http_error",
+      requestId,
+      method: req.method,
+      path: req.originalUrl,
+      statusCode,
+      errorMessage: err?.message,
+      errorName: err?.name,
+      stack: err?.stack,
+      validationErrors,
+      errorsCount: Array.isArray(err?.errors) ? err.errors.length : undefined,
+    })
+  );
 
   res.status(statusCode).json(response);
 }
