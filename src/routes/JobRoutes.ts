@@ -22,24 +22,24 @@ router.get("/", listJobs);
 // Obtener un job por ID (todos los autenticados pueden ver)
 router.get("/:id", getJob);
 
-// Crear un nuevo job (solo CONTABILIDAD)
+// Crear un nuevo job (solo SUPERVISOR_CONTABILIDAD)
 router.post(
   "/",
-  authorizeRoles(Roles.CONTABILIDAD),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD),
   createJob
 );
 
-// Actualizar un job existente (solo CONTABILIDAD)
+// Actualizar un job existente (solo SUPERVISOR_CONTABILIDAD)
 router.put(
   "/:id",
-  authorizeRoles(Roles.CONTABILIDAD),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD),
   updateJob
 );
 
-// Eliminar (soft‐delete) un job (solo CONTABILIDAD)
+// Eliminar (soft‐delete) un job (solo SUPERVISOR_CONTABILIDAD)
 router.delete(
   "/:id",
-  authorizeRoles(Roles.CONTABILIDAD),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD),
   deleteJob
 );
 

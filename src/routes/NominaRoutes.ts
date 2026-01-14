@@ -17,7 +17,7 @@ const router = Router();
 router.use(authenticateJWT);
 
 // Autorización por rol:
-// - Lectura: RRHH o CONTABILIDAD
+// - Lectura: RRHH, SUPERVISOR_CONTABILIDAD o ASISTENTE_CONTABILIDAD
 // - Escritura/actualización: solo RRHH
 
 // GET /api/nominas (lectura)
@@ -27,7 +27,8 @@ router.get(
     const anyReq: any = req;
     if (
       anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.CONTABILIDAD
+      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
+      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
     ) {
       return res
         .status(403)
@@ -45,7 +46,8 @@ router.get(
     const anyReq: any = req;
     if (
       anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.CONTABILIDAD
+      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
+      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
     ) {
       return res
         .status(403)
@@ -63,7 +65,8 @@ router.get(
     const anyReq: any = req;
     if (
       anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.CONTABILIDAD
+      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
+      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
     ) {
       return res
         .status(403)

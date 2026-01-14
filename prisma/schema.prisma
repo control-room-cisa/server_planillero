@@ -8,6 +8,14 @@ datasource db {
 }
 
 // ---------- roles ----------
+// NOTA: Los roles se almacenan en la tabla 'roles' con los siguientes valores:
+// 1 = EMPLEADO
+// 2 = SUPERVISOR
+// 3 = RRHH
+// 4 = SUPERVISOR_CONTABILIDAD (anteriormente CONTABILIDAD)
+// 5 = GERENCIA
+// 6 = SISTEMAS
+// 7 = ASISTENTE_CONTABILIDAD (nuevo)
 model Rol {
   id        Int       @id // Manual según DDL
   nombre    String    @db.VarChar(45)

@@ -14,17 +14,17 @@ import { uploadEmpleado } from "../middlewares/upload";
 const router = Router();
 router.use(authenticateJWT);
 
-// GET /empleados/departamento - Solo SUPERVISOR
+// GET /empleados/departamento - SUPERVISOR y SUPERVISOR_CONTABILIDAD
 router.get(
   "/departamento",
-  authorizeRoles(Roles.SUPERVISOR),
+  authorizeRoles(Roles.SUPERVISOR, Roles.SUPERVISOR_CONTABILIDAD),
   listByDepartment
 );
 
-// GET /empleados/empresa - SUPERVISOR, RRHH, CONTABILIDAD, GERENCIA
+// GET /empleados/empresa - SUPERVISOR, RRHH, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD, GERENCIA
 router.get(
   "/empresa",
-  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH, Roles.CONTABILIDAD, Roles.GERENCIA),
+  authorizeRoles(Roles.SUPERVISOR, Roles.RRHH, Roles.SUPERVISOR_CONTABILIDAD, Roles.ASISTENTE_CONTABILIDAD, Roles.GERENCIA),
   listByCompany
 );
 

@@ -15,25 +15,25 @@ const router = Router();
 // GET /empresas - Público (sin autenticación)
 router.get("/", listEmpresasConDepartamentos);
 
-// Rutas protegidas: requieren autenticación y roles CONTABILIDAD o GERENCIA
+// Rutas protegidas: requieren autenticación y roles SUPERVISOR_CONTABILIDAD o GERENCIA
 router.post(
   "/",
   authenticateJWT,
-  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   createEmpresa
 );
 
 router.patch(
   "/:id",
   authenticateJWT,
-  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   updateEmpresa
 );
 
 router.delete(
   "/:id",
   authenticateJWT,
-  authorizeRoles(Roles.CONTABILIDAD, Roles.GERENCIA),
+  authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   deleteEmpresa
 );
 
