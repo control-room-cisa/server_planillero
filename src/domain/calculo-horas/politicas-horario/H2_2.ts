@@ -4,10 +4,11 @@ import { HorarioTrabajo } from "../types";
 
 /**
  * Política de horario H2.2 - Lunes a Viernes Copenergy
- * Horario fijo de lunes a viernes, sin almuerzo
+ * Horario fijo de lunes a viernes, con almuerzo (si NO es hora corrida)
  *
  * Horario:
- * - Lun–Vie: 07:00–19:00 (12h, sin almuerzo)
+ * - Lun–Jue: 07:00–17:00 (10h de rango; horas laborables = 9h si NO es hora corrida)
+ * - Vie:     07:00–16:00 (9h de rango;  horas laborables = 8h si NO es hora corrida)
  * - Sáb–Dom: Días libres
  */
 export class PoliticaH2_2 extends PoliticaH2 {
@@ -30,7 +31,10 @@ export class PoliticaH2_2 extends PoliticaH2 {
     let fin = "07:00";
     let cantidadHorasLaborables = 0;
     let esDiaLibre = false;
-    const incluyeAlmuerzo = false; // H2 jamás almuerzo
+    // H2_2: almuerzo aplica cuando NO es hora corrida (misma lógica que H1_1)
+    // Si no hay registro, por defecto NO es hora corrida (aplica almuerzo)
+    const esHoraCorrida = reg ? Boolean(reg?.esHoraCorrida) : false;
+    const incluyeAlmuerzo = !esHoraCorrida;
 
     // Los feriados marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
@@ -47,14 +51,27 @@ export class PoliticaH2_2 extends PoliticaH2 {
         inicio = toHHMM(e);
         fin = toHHMM(s);
 
-        // Usar método estático de la clase base para calcular horas normales
-        cantidadHorasLaborables =
+        // Calcular horas: (salida - entrada) - 1h almuerzo si NO es hora corrida.
+        const baseHoras =
           (PoliticaH2_2 as any).normalesDeclaradosMin(e, s) / 60;
+        cantidadHorasLaborables = Math.max(
+          0,
+          baseHoras - (esHoraCorrida ? 0 : 1)
+        );
       } else {
         // Lunes a Viernes sin registro: horario por defecto
         inicio = "07:00";
-        fin = "19:00";
-        cantidadHorasLaborables = 12;
+        if (dia === 5) {
+          // Viernes: 07:00 - 16:00
+          fin = "16:00";
+          // (9h rango) - 1h almuerzo cuando NO es hora corrida
+          cantidadHorasLaborables = Math.max(0, 9 - (esHoraCorrida ? 0 : 1));
+        } else {
+          // Lunes a Jueves: 07:00 - 17:00
+          fin = "17:00";
+          // (10h rango) - 1h almuerzo cuando NO es hora corrida
+          cantidadHorasLaborables = Math.max(0, 10 - (esHoraCorrida ? 0 : 1));
+        }
       }
     }
 
