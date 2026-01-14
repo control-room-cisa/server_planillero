@@ -39,3 +39,4 @@ export type CreateDepartamentoRequest = z.infer<
 export type UpdateDepartamentoRequest = z.infer<
   typeof updateDepartamentoSchema
 >;
+

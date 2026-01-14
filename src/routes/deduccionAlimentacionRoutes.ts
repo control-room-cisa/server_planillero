@@ -19,3 +19,4 @@ router.use(authenticateJWT);
 router.get("/", getDeduccionAlimentacion);
 
 export default router;
+
