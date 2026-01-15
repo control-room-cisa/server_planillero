@@ -2,6 +2,7 @@
 import type { RequestHandler } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
+import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { Roles } from "../enums/roles";
 import {
   CreateEmpleadoDto,
@@ -229,6 +230,41 @@ export const getById: RequestHandler<
       message: "Empleado obtenido exitosamente",
       data: dto,
     } as ApiResponse<EmployeeDetailDto>);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// CHECK USERNAME AVAILABILITY
+// -----------------------------------------------------------------------------
+export const checkUsername: RequestHandler<
+  { username: string }, // params
+  ApiResponse<{ available: boolean }>, // response
+  {},
+  {} // query
+> = async (req, res, next) => {
+  try {
+    const username = req.params.username?.toLowerCase().trim();
+    
+    if (!username) {
+      return res.status(400).json({
+        success: false,
+        message: "El nombre de usuario es requerido",
+        data: null,
+      });
+    }
+
+    const empleado = await EmpleadoRepository.findByUsername(username);
+    const available = !empleado;
+
+    return res.json({
+      success: true,
+      message: available
+        ? "Nombre de usuario disponible"
+        : "Nombre de usuario ya está en uso",
+      data: { available },
+    });
   } catch (err) {
     next(err);
   }

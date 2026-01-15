@@ -5,6 +5,7 @@ import {
   getById,
   createEmpleado,
   updateEmpleado,
+  checkUsername,
 } from "../controllers/EmpleadoController";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 import { authorizeRoles } from "../middlewares/authorizeRoles";
@@ -27,6 +28,9 @@ router.get(
   authorizeRoles(Roles.SUPERVISOR, Roles.RRHH, Roles.SUPERVISOR_CONTABILIDAD, Roles.ASISTENTE_CONTABILIDAD, Roles.GERENCIA),
   listByCompany
 );
+
+// GET /empleados/check-username/:username - Verificar disponibilidad de nombre de usuario
+router.get("/check-username/:username", checkUsername);
 
 // GET /empleados/:id - Todos los autenticados pueden ver
 router.get("/:id", getById);

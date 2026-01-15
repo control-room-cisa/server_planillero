@@ -41,11 +41,27 @@ export class EmpleadoRepository {
     });
   }
 
-  /** Busca un empleado por nombre de usuario */
+  /** Busca un empleado por nombre de usuario (case-insensitive) */
   static async findByUsername(nombreUsuario: string): Promise<Empleado | null> {
-    return prisma.empleado.findFirst({
-      where: { nombreUsuario },
+    // Normalizar a minúsculas para la búsqueda
+    const usernameLower = nombreUsuario.toLowerCase().trim();
+    
+    // Buscar todos los empleados activos y filtrar por comparación case-insensitive
+    // Nota: Prisma no soporta directamente búsqueda case-insensitive en MySQL sin raw queries
+    // Por eficiencia, buscamos todos y filtramos en memoria (alternativa: usar raw query con LOWER())
+    const empleados = await prisma.empleado.findMany({
+      where: {
+        deletedAt: null,
+        nombreUsuario: { not: null },
+      },
     });
+    
+    // Comparación case-insensitive
+    return (
+      empleados.find(
+        (e) => e.nombreUsuario?.toLowerCase() === usernameLower
+      ) || null
+    );
   }
 
   /** Busca un empleado por correo electrónico, DNI o nombre de usuario */
