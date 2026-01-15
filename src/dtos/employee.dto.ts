@@ -63,6 +63,7 @@ export interface EmployeeDetailDto {
   telefono?: string;
   direccion?: string;
   fechaInicioIngreso?: Date;
+  editTime?: Date | null;
   rolId?: number;
   departamentoId?: number;
   tiempoCompensatorioHoras?: number;
@@ -97,6 +98,7 @@ export interface CreateEmpleadoDto {
   telefono?: string;
   direccion?: string;
   fechaInicioIngreso?: Date;
+  editTime?: Date | null;
   contrasena?: string;
   urlFotoPerfil?: string | null;
   urlCv?: string | null;
@@ -133,6 +135,7 @@ export interface UpdateEmpleadoDto {
   telefono?: string;
   direccion?: string;
   fechaInicioIngreso?: Date;
+  editTime?: Date | null;
   contrasena?: string;
   urlFotoPerfil?: string | null;
   urlCv?: string | null;

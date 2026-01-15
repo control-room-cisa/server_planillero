@@ -72,6 +72,7 @@ export class EmpleadoService {
       telefono: emp.telefono ?? undefined,
       direccion: emp.direccion ?? undefined,
       fechaInicioIngreso: emp.fechaInicioIngreso ?? undefined,
+      editTime: emp.editTime ?? undefined,
       rolId: emp.rolId,
       departamentoId: emp.departamentoId,
       tiempoCompensatorioHoras: emp.tiempoCompensatorioHoras ?? undefined,

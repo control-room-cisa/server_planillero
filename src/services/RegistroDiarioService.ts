@@ -10,11 +10,13 @@ import {
 } from "../repositories/RegistroDiarioRepository";
 import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
 import { FeriadoRepository } from "../repositories/FeriadoRepository";
+import { AppError } from "../errors/AppError";
 
 export class RegistroDiarioService {
   /**
    * Crea o actualiza el registro diario + actividades.
    * El campo `fecha` se maneja siempre como string "YYYY-MM-DD".
+   * Valida que el registro no esté aprobado por supervisor antes de permitir la actualización.
    */
   static upsertRegistro(
     empleadoId: number,
@@ -22,6 +24,20 @@ export class RegistroDiarioService {
   ): Promise<RegistroDiarioDetail> {
     return (async () => {
       const fecha = dto.fecha;
+
+      // Validar que el registro no esté aprobado por supervisor
+      const registroExistente =
+        await RegistroDiarioRepository.findByEmpleadoAndDateWithActivities(
+          empleadoId,
+          fecha
+        );
+
+      if (registroExistente && registroExistente.aprobacionSupervisor === true) {
+        throw new AppError(
+          "No se puede modificar un registro diario que ya ha sido aprobado por el supervisor",
+          409 // Conflict - el recurso ya está en un estado que no permite la modificación
+        );
+      }
 
       // Si el frontend envía horasFeriado, usarlo; si no, calcularlo
       let horasFeriado: number = dto.horasFeriado ?? 0;

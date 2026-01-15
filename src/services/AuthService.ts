@@ -96,6 +96,7 @@ export class AuthService {
         departamentoId: empleado.departamentoId,
         rolId: empleado.rolId,
         tipoHorario: empleado.tipoHorario,
+        editTime: empleado.editTime,
       },
     };
   }

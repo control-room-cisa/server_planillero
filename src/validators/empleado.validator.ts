@@ -130,6 +130,15 @@ const empleadoFields = {
       })
       .optional()
   ),
+  editTime: z.preprocess(
+    (val) => (val ? new Date(val as string) : undefined),
+    z
+      .date({
+        invalid_type_error: "La fecha/hora límite de edición debe ser una fecha válida",
+      })
+      .nullable()
+      .optional()
+  ),
   contrasena: z
     .string({ required_error: "La contraseña es requerida" })
     .min(6, "La contraseña debe tener al menos 6 caracteres")
@@ -301,6 +310,17 @@ export const updateEmpleadoSchema = z.object({
         .date({
           invalid_type_error: "La fecha de ingreso debe ser una fecha válida",
         })
+        .optional()
+    )
+    .optional(),
+  editTime: z
+    .preprocess(
+      (val) => (val ? new Date(val as string) : undefined),
+      z
+        .date({
+          invalid_type_error: "La fecha/hora límite de edición debe ser una fecha válida",
+        })
+        .nullable()
         .optional()
     )
     .optional(),
