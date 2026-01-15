@@ -9,7 +9,11 @@ import { randomUUID } from "crypto";
  * - Stores it on req/res for downstream usage
  * - Returns it to the client via response header: X-Request-Id
  */
-export function requestContext(req: Request, res: Response, next: NextFunction) {
+export function requestContext(
+  req: Request,
+  res: Response,
+  next: NextFunction
+) {
   const incoming =
     (req.header("x-request-id") || req.header("X-Request-Id"))?.trim() || "";
   const requestId = incoming || randomUUID();
@@ -23,6 +27,3 @@ export function requestContext(req: Request, res: Response, next: NextFunction) 
 
   next();
 }
-
-
-

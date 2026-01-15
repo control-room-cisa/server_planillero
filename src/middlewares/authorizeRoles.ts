@@ -33,4 +33,3 @@ export const authorizeRoles = (...allowedRoles: Roles[]): RequestHandler => {
     next();
   };
 };
-
