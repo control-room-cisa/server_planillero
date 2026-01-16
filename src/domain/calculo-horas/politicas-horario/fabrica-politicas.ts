@@ -8,6 +8,7 @@ import { PoliticaH1_3 } from "./H1_3";
 import { PoliticaH1_4 } from "./H1_4";
 import { PoliticaH1_5 } from "./H1_5";
 import { PoliticaH1_6 } from "./H1_6";
+import { PoliticaH1_7 } from "./H1_7";
 import { PoliticaH2_1 } from "./H2_1";
 import { PoliticaH2_2 } from "./H2_2";
 
@@ -38,6 +39,9 @@ export class FabricaPoliticas {
       case TipoHorario.H1_6:
         return new PoliticaH1_6();
 
+      case TipoHorario.H1_7:
+        return new PoliticaH1_7();
+
       case TipoHorario.H2_1:
         return new PoliticaH2_1();
 
@@ -60,6 +64,7 @@ export class FabricaPoliticas {
       TipoHorario.H1_4,
       TipoHorario.H1_5,
       TipoHorario.H1_6,
+      TipoHorario.H1_7,
       TipoHorario.H2_1,
       TipoHorario.H2_2,
     ];
@@ -77,6 +82,7 @@ export class FabricaPoliticas {
       TipoHorario.H1_4,
       TipoHorario.H1_5,
       TipoHorario.H1_6,
+      TipoHorario.H1_7,
       TipoHorario.H2_1,
       TipoHorario.H2_2,
     ];

@@ -76,6 +76,8 @@ enum TipoHorario {
   H1_4 // (H1.4) Días alternos Cocina
   H1_5 // (H1.5) Días alternos Medio Ambiente
   H1_6 // (H1.6) Lunes a Sábado
+  H1_7 // (H1.7) Turnos rotativos 14x14
+  H1_8 // (H1.8) Lunes a viernes (Legal)
   H2_1 // (H2.1) Turnos 7x7 Copenergy
   H2_2 // (H2.2) Lunes a Viernes Copenergy
 }
