@@ -17,6 +17,7 @@ export interface EmployeeDto {
   activo?: boolean;
   cargo?: string;
   rolId?: number;
+  sueldoMensual?: number;
   urlFotoPerfil?: string;
   urlCv?: string;
   /**

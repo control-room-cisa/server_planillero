@@ -232,6 +232,43 @@ export class NominaService {
     const existing = await NominaRepository.findById(id);
     if (!existing) throw new AppError("Nómina no encontrada", 404);
 
+    // Validar solapamientos si se están actualizando las fechas o el empleado
+    const empleadoId = payload.empleadoId ?? existing.empleadoId;
+    const fechaInicio = payload.fechaInicio
+      ? payload.fechaInicio instanceof Date
+        ? payload.fechaInicio
+        : new Date(payload.fechaInicio)
+      : existing.fechaInicio instanceof Date
+      ? existing.fechaInicio
+      : new Date(existing.fechaInicio);
+    const fechaFin = payload.fechaFin
+      ? payload.fechaFin instanceof Date
+        ? payload.fechaFin
+        : new Date(payload.fechaFin)
+      : existing.fechaFin instanceof Date
+      ? existing.fechaFin
+      : new Date(existing.fechaFin);
+
+    // Solo validar si se están cambiando fechas o empleado
+    if (
+      payload.fechaInicio ||
+      payload.fechaFin ||
+      (payload.empleadoId && payload.empleadoId !== existing.empleadoId)
+    ) {
+      const overlapping = await NominaRepository.findOverlapping(
+        empleadoId,
+        fechaInicio,
+        fechaFin,
+        id // Excluir la nómina actual
+      );
+      if (overlapping.length > 0) {
+        throw new AppError(
+          "Ya existe una nómina activa que traslapa con el período seleccionado",
+          400
+        );
+      }
+    }
+
     // Prisma ignora automáticamente los campos undefined en las actualizaciones
     return NominaRepository.update(id, {
       ...payload,

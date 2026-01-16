@@ -23,6 +23,7 @@ export class EmpleadoService {
       codigo: emp.codigo ?? undefined,
       cargo: emp.cargo ?? undefined,
       rolId: emp.rolId ?? undefined,
+      sueldoMensual: emp.sueldoMensual ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
         emp.urlFotoPerfil ?? undefined
@@ -185,6 +186,7 @@ export class EmpleadoService {
         : undefined,
       cargo: e.cargo ?? undefined,
       rolId: e.rolId ?? undefined,
+      sueldoMensual: e.sueldoMensual ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
         e.urlFotoPerfil ?? undefined
