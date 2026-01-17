@@ -36,43 +36,40 @@ export class PoliticaH2_2 extends PoliticaH2 {
     const esHoraCorrida = reg ? Boolean(reg?.esHoraCorrida) : false;
     const incluyeAlmuerzo = !esHoraCorrida;
 
+    // H2_2: el horario del día SIEMPRE es el generado por política (fijo por día de semana),
+    // incluso si ya existe un registro diario guardado.
+    //
+    // Esto evita depender de horaEntrada/horaSalida guardadas en el registro para mostrar el form.
+    // El registro se utiliza únicamente para leer esHoraCorrida (para descuento de almuerzo).
+
     // Los feriados marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
       esDiaLibre = true;
-    } else {
-      // Sábado (6) y Domingo (0) son días libres
-      if (dia === 0 || dia === 6) {
-        esDiaLibre = true;
-      } else if (reg) {
-        // Lunes a Viernes: usar horario registrado
-        const e = new Date(reg.horaEntrada);
-        const s = new Date(reg.horaSalida);
-        const toHHMM = (d: Date) => d.toTimeString().slice(0, 5);
-        inicio = toHHMM(e);
-        fin = toHHMM(s);
+    }
 
-        // Calcular horas: (salida - entrada) - 1h almuerzo si NO es hora corrida.
-        const baseHoras =
-          (PoliticaH2_2 as any).normalesDeclaradosMin(e, s) / 60;
-        cantidadHorasLaborables = Math.max(
-          0,
-          baseHoras - (esHoraCorrida ? 0 : 1)
-        );
+    // Sábado (6) y Domingo (0) son días libres
+    if (dia === 0 || dia === 6) {
+      esDiaLibre = true;
+    }
+
+    if (!esDiaLibre) {
+      inicio = "07:00";
+      if (dia === 5) {
+        // Viernes: 07:00 - 16:00
+        fin = "16:00";
+        // (9h rango) - 1h almuerzo cuando NO es hora corrida
+        cantidadHorasLaborables = Math.max(0, 9 - (esHoraCorrida ? 0 : 1));
       } else {
-        // Lunes a Viernes sin registro: horario por defecto
-        inicio = "07:00";
-        if (dia === 5) {
-          // Viernes: 07:00 - 16:00
-          fin = "16:00";
-          // (9h rango) - 1h almuerzo cuando NO es hora corrida
-          cantidadHorasLaborables = Math.max(0, 9 - (esHoraCorrida ? 0 : 1));
-        } else {
-          // Lunes a Jueves: 07:00 - 17:00
-          fin = "17:00";
-          // (10h rango) - 1h almuerzo cuando NO es hora corrida
-          cantidadHorasLaborables = Math.max(0, 10 - (esHoraCorrida ? 0 : 1));
-        }
+        // Lunes a Jueves: 07:00 - 17:00
+        fin = "17:00";
+        // (10h rango) - 1h almuerzo cuando NO es hora corrida
+        cantidadHorasLaborables = Math.max(0, 10 - (esHoraCorrida ? 0 : 1));
       }
+    } else {
+      // Día libre/festivo: mantener 07:00-07:00 (0 horas)
+      inicio = "07:00";
+      fin = "07:00";
+      cantidadHorasLaborables = 0;
     }
 
     return {
