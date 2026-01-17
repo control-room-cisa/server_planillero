@@ -18,11 +18,8 @@ import type {
  * - Entrada/Salida: mismo formato de retorno que H1; H2 SIEMPRE ignora almuerzo.
  * - Feriado o día libre: NORMAL = 0; todo lo trabajado es EXTRA al 25% (p25). Sin excepciones.
  * - Turno diurno: 12 h normales por día (lo normal).
- * - Turno nocturno:
- *      * Martes: 6 h normales (cambio de turno).
- *      * Otros días: normales según intervalo declarado (típicamente 12 h).
- * - Las horas NORMALES deben coincidir con el intervalo Entrada/Salida del día,
- *   excepto la regla especial del martes nocturno (6 h).
+ * - Turno nocturno: normales según intervalo declarado (típicamente 12 h).
+ * - Las horas NORMALES deben coincidir con el intervalo Entrada/Salida del día.
  * - H2 NO usa p50/p75/p100 ni almuerzo (si aparece ALMUERZO → ERROR).
  * - Validación global: suma de horas por día = 24 h; en el rango = 24 h * #días.
  */
@@ -101,7 +98,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     if (em < sm) return sm - em;
     return sm + (24 * 60 - em); // cruza medianoche
   }
-  /** Nocturno para la regla del martes (sin cortes 05/19: solo 19–07). */
+  /** Determina si un intervalo Entrada/Salida corresponde a turno nocturno (cruza medianoche o cae en 19–07). */
   protected static esNocturno(e: Date, s: Date): boolean {
     const em = this.minutesOfDayInTZ(e);
     const sm = this.minutesOfDayInTZ(s);
@@ -308,11 +305,8 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         if (rangoNormalMin === 0) {
           // Sin rango normal declarado → no se esperan horas normales
           esperadaNormalMin = 0;
-        } else if (nocturno && dow === 2) {
-          // Martes nocturno con rango normal → solo 6h normales (regla especial)
-          esperadaNormalMin = 6 * 60;
         } else {
-          // Otros días → usar rango normal completo
+          // Usar rango normal completo
           esperadaNormalMin = rangoNormalMin;
         }
 

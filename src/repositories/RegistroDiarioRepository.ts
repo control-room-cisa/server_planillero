@@ -70,10 +70,17 @@ export class RegistroDiarioRepository {
     if (actividades) {
       for (const act of actividades) {
         const esCompensatorioHoraNormal =
-          act.esCompensatorio === true && act.esExtra === false;
-        
+          act.esCompensatorio === true &&
+          // Compat: si esExtra no viene (null/undefined) lo tratamos como false
+          (act.esExtra === false ||
+            act.esExtra === null ||
+            act.esExtra === undefined);
+
         // Si no es compensatorio en hora normal, jobId es requerido
-        if (!esCompensatorioHoraNormal && (act.jobId === undefined || act.jobId === null)) {
+        if (
+          !esCompensatorioHoraNormal &&
+          (act.jobId === undefined || act.jobId === null)
+        ) {
           throw new Error(
             `El campo 'jobId' es obligatorio para todas las actividades, excepto cuando esCompensatorio=true y esExtra=false (hora libre compensatoria). Actividad: "${act.descripcion}"`
           );

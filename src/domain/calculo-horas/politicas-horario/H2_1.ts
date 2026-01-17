@@ -9,7 +9,6 @@ import { HorarioTrabajo } from "../types";
  * Horario:
  * - Turno diurno: 07:00–19:00 (12h, sin almuerzo)
  * - Turno nocturno: 19:00–07:00 (12h, sin almuerzo)
- * - Regla especial: Martes nocturno tiene 6h normales (cambio de turno)
  */
 export class PoliticaH2_1 extends PoliticaH2 {
   async getHorarioTrabajoByDateAndEmpleado(
