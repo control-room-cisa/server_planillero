@@ -12,6 +12,11 @@ import { HorarioTrabajo } from "../types";
  * - Sáb–Dom: Días libres
  */
 export class PoliticaH2_2 extends PoliticaH2 {
+  /** H2_2 permite almuerzo (igual que H1_1); la validación ALMUERZO_NO_PERMITIDO solo aplica a H2_1. */
+  protected override permiteAlmuerzo(): boolean {
+    return true;
+  }
+
   async getHorarioTrabajoByDateAndEmpleado(
     fecha: string,
     empleadoId: string

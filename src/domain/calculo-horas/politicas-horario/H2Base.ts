@@ -61,6 +61,14 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
   }
 
   /**
+   * Si false, se aplica validación ALMUERZO_NO_PERMITIDO_EN_H2 (ej. H2_1).
+   * Si true, el almuerzo se permite como en H1_1 (ej. H2_2).
+   */
+  protected permiteAlmuerzo(): boolean {
+    return false;
+  }
+
+  /**
    * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
    * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
    * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
@@ -159,6 +167,14 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     if (fechaFin < fechaInicio)
       throw new Error("El rango de fechas es inválido (fin < inicio).");
 
+    const diasEnRango = PoliticaH2Base.dayCountInclusive(fechaInicio, fechaFin);
+    console.log("[H2] getConteoHorasTrabajadasByDateAndEmpleado INICIO", {
+      empleadoId,
+      fechaInicio,
+      fechaFin,
+      diasEnRango,
+    });
+
     // acumuladores en minutos
     let normalMin = 0;
     let p25Min = 0;
@@ -167,11 +183,16 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     let compExtrasMin = 0; // Horas compensatorias pagadas (extras)
     let incapacidadEmpresaMin = 0; // Primeros 3 días consecutivos (24h por día)
     let incapacidadIHSSMin = 0; // A partir del 4to día consecutivo (24h por día)
+    let almuerzoMin = 0; // H2_1: siempre 0; H2_2: se acumula cuando hay almuerzo
+    // Actividades sin hora (jobs especiales E02-E05)
+    let addVacacionesMin = 0;
+    let addPermisoCSMin = 0;
+    let addPermisoSSMin = 0;
+    let addInasistenciasMin = 0;
     // H2 no usa estos:
     const p50Min = 0,
       p75Min = 0,
-      p100Min = 0,
-      almuerzoMin = 0;
+      p100Min = 0;
 
     const tiposDias: Array<{
       fecha: string;
@@ -278,6 +299,15 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       let esperadaNormalMin = 0;
 
       if (esFestivo || esLibre || !reg) {
+        console.log("[H2] día", f, "→ festivo/libre/sin registro", {
+          esFestivo,
+          esLibre,
+          tieneRegistro: !!reg,
+          normalMinDia,
+          almuerzoMinDia,
+          segmentosCount: segmentos.length,
+          segmentosTipos: segmentos.map((s) => s.tipo),
+        });
         // Feriado/Libre: NORMAL debe ser 0; todo lo demás es EXTRA
         esperadaNormalMin = 0;
         if (normalMinDia > 0) {
@@ -287,7 +317,8 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
             detalle: { normalMinDia },
           });
         }
-        if (almuerzoMinDia > 0) {
+        if (!this.permiteAlmuerzo() && almuerzoMinDia > 0) {
+          console.log("[H2] ERROR agregado:", f, "ALMUERZO_NO_PERMITIDO_EN_H2 (festivo/libre)", { almuerzoMinDia });
           errores.push({
             fecha: f,
             motivo: "ALMUERZO_NO_PERMITIDO_EN_H2",
@@ -299,19 +330,31 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         const s = new Date(reg.horaSalida);
         const nocturno = PoliticaH2Base.esNocturno(e, s);
 
-        // Esperado por día (sin almuerzo)
-        // Si entrada == salida, no hay rango normal → esperadaNormalMin = 0
+        // Esperado por día: H2_1 sin almuerzo (rango completo); H2_2 con almuerzo (rango - almuerzo, como H1_1)
         const rangoNormalMin = PoliticaH2Base.normalesDeclaradosMin(e, s);
         if (rangoNormalMin === 0) {
-          // Sin rango normal declarado → no se esperan horas normales
           esperadaNormalMin = 0;
         } else {
-          // Usar rango normal completo
           esperadaNormalMin = rangoNormalMin;
+          if (this.permiteAlmuerzo() && almuerzoMinDia > 0) {
+            esperadaNormalMin = Math.max(0, rangoNormalMin - almuerzoMinDia);
+          }
         }
 
-        // 1) Almuerzo jamás permitido en H2 (y tu regla específica pide error si aparece en horas normales)
-        if (almuerzoMinDia > 0) {
+        console.log("[H2] día", f, "→ laboral", {
+          horaEntrada: reg.horaEntrada,
+          horaSalida: reg.horaSalida,
+          normalMinDia,
+          almuerzoMinDia,
+          esperadaNormalMin,
+          compNormalesHoras,
+          segmentosCount: segmentos.length,
+          segmentosTipos: segmentos.map((s) => s.tipo),
+        });
+
+        // 1) Almuerzo: en H2_1 no permitido; en H2_2 permitido (como H1_1)
+        if (!this.permiteAlmuerzo() && almuerzoMinDia > 0) {
+          console.log("[H2] ERROR agregado:", f, "ALMUERZO_NO_PERMITIDO_EN_H2", { almuerzoMinDia });
           errores.push({
             fecha: f,
             motivo: "ALMUERZO_NO_PERMITIDO_EN_H2",
@@ -326,6 +369,14 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         const normalMinDiaConCompensatorias = normalMinDia + compNormalesMinDia;
 
         if (normalMinDiaConCompensatorias !== esperadaNormalMin) {
+          console.log("[H2] ERROR agregado:", f, "NORMAL_NO_COINCIDE_CON_INTERVALO", {
+            normalMinDia,
+            compNormalesMinDia,
+            normalMinDiaConCompensatorias,
+            esperadaNormalMin,
+            entrada: e.toTimeString().slice(0, 5),
+            salida: s.toTimeString().slice(0, 5),
+          });
           errores.push({
             fecha: f,
             motivo: "NORMAL_NO_COINCIDE_CON_INTERVALO",
@@ -343,10 +394,46 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         }
       }
 
+      // Procesar actividades sin hora (jobs especiales) - copiado de H1Base
+      // Las horas compensatorias ya se procesaron en el segmentador
+      let addVacacionesMinDia = 0;
+      let addPermisoCSMinDia = 0;
+      let addPermisoSSMinDia = 0;
+      let addInasistenciasMinDia = 0;
+      
+      try {
+        if (reg?.actividades?.length) {
+          for (const act of reg.actividades as any[]) {
+            // Ignorar actividades compensatorias (ya procesadas por el segmentador)
+            if (act?.esCompensatorio === true) continue;
+            
+            // Si es extra, ya se procesó en segmentos, skip
+            if (act?.esExtra) continue;
+            
+            const horas = Number(act?.duracionHoras ?? 0);
+            if (horas <= 0) continue;
+            const min = Math.round(horas * 60);
+            
+            const codigo = String(act?.job?.codigo ?? "").trim().toUpperCase();
+            if (codigo === "E02") addVacacionesMinDia += min;
+            else if (codigo === "E03") addPermisoCSMinDia += min;
+            else if (codigo === "E04") addPermisoSSMinDia += min;
+            else if (codigo === "E05") addInasistenciasMinDia += min;
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+
       // Acumular totales
       normalMin += normalMinDia;
       p25Min += extraMinDia; // todas extras a p25
       libreMin += libreMinDia;
+      almuerzoMin += almuerzoMinDia; // H2_2: se acumula; H2_1: siempre 0
+      addVacacionesMin += addVacacionesMinDia;
+      addPermisoCSMin += addPermisoCSMinDia;
+      addPermisoSSMin += addPermisoSSMinDia;
+      addInasistenciasMin += addInasistenciasMinDia;
 
       f = PoliticaH2Base.addDays(f, 1);
     }
@@ -359,9 +446,11 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       p25Min +
       libreMin +
       incapacidadEmpresaMin +
-      incapacidadIHSSMin; /* + p50+p75+p100(0) + almuerzo(0) */
+      incapacidadIHSSMin +
+      almuerzoMin; // H2_2 incluye almuerzo; H2_1 es 0
 
     if (totalMin !== esperadoGlobalMin) {
+      console.log("[H2] ERROR agregado: CUADRE_GLOBAL_INVALIDO", { totalMin, esperadoGlobalMin, dias });
       errores.push({
         fecha: `${fechaInicio}..${fechaFin}`,
         motivo: "CUADRE_GLOBAL_INVALIDO",
@@ -371,6 +460,14 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     // Lanzar si hay cualquier error (incluye almuerzo no permitido)
     if (errores.length > 0) {
+      console.log("[H2] getConteoHorasTrabajadasByDateAndEmpleado FALLO", {
+        empleadoId,
+        fechaInicio,
+        fechaFin,
+        totalErrores: errores.length,
+        motivos: errores.map((e) => e.motivo),
+        fechasConError: [...new Set(errores.map((e) => e.fecha))],
+      });
       throw new Error(
         `[H2] Validaciones fallidas: ${JSON.stringify(errores, null, 2)}`
       );
@@ -378,6 +475,12 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     // Respuesta (horas a 2 decimales)
     const toHours = (m: number) => Math.round((m / 60) * 100) / 100;
+
+    // Calcular horas de actividades sin hora (antes de crear el objeto conteo)
+    const horasVacaciones = toHours(addVacacionesMin);
+    const horasPermisoCS = toHours(addPermisoCSMin);
+    const horasPermisoSS = toHours(addPermisoSSMin);
+    const horasInasistencias = toHours(addInasistenciasMin);
 
     // Las horas compensatorias NO se cuentan en normalMin (el segmentador las excluye)
     // Ya están en sus buckets separados (compNormalesMin y compExtrasMin)
@@ -396,6 +499,11 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         // Incapacidades NO se reportan en horas (solo en días literales)
         incapacidadEmpresa: 0,
         incapacidadIHSS: 0,
+        // Actividades sin hora (jobs especiales)
+        vacaciones: horasVacaciones,
+        permisoConSueldo: horasPermisoCS,
+        permisoSinSueldo: horasPermisoSS,
+        inasistencias: horasInasistencias,
         // Horas compensatorias separadas por tipo (calculadas por el segmentador)
         horasCompensatoriasTomadas: toHours(compNormalesMin),
         horasCompensatoriasPagadas: toHours(compExtrasMin),
@@ -404,10 +512,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     // ---------------- Conteo en días (base 15) ----------------
     const totalPeriodo = 15;
-    const horasVacaciones = 0;
-    const horasPermisoCS = 0;
-    const horasPermisoSS = 0;
-    const horasInasistencias = 0;
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
