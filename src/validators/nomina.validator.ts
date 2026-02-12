@@ -41,6 +41,10 @@ export const crearNominaSchema = z.object({
     .number({ invalid_type_error: "Los días de incapacidad deben ser un número válido" })
     .nonnegative("Los días de incapacidad no pueden ser negativos")
     .default(0),
+  horasCompensatorias: z
+    .number({ invalid_type_error: "Las horas compensatorias deben ser un número válido" })
+    .optional()
+    .nullable(),
 
   subtotalQuincena: z
     .number({ invalid_type_error: "El subtotal de quincena debe ser un número válido" })

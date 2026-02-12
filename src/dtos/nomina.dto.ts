@@ -11,6 +11,7 @@ export interface NominaDto {
   diasLaborados?: number | null;
   diasVacaciones?: number | null;
   diasIncapacidad?: number | null;
+  horasCompensatorias?: number | null;
 
   subtotalQuincena?: number | null;
   montoVacaciones?: number | null;

@@ -149,11 +149,24 @@ export class NominaService {
       );
     }
 
+    // Actualizar tiempoCompensatorioHoras del empleado
+    if (payload.horasCompensatorias && payload.horasCompensatorias !== 0) {
+      const empleado = await EmpleadoRepository.findById(payload.empleadoId);
+      if (empleado) {
+        const tiempoCompensatorioActual = empleado.tiempoCompensatorioHoras ?? 0;
+        const nuevoTiempoCompensatorio = tiempoCompensatorioActual + payload.horasCompensatorias;
+        await EmpleadoRepository.update(payload.empleadoId, {
+          tiempoCompensatorioHoras: nuevoTiempoCompensatorio,
+        });
+      }
+    }
+
     // Prisma types: map DTO to create input usando spread para reducir código
     const camposOpcionales = {
       diasLaborados: payload.diasLaborados ?? null,
       diasVacaciones: payload.diasVacaciones ?? null,
       diasIncapacidad: payload.diasIncapacidad ?? null,
+      horasCompensatorias: payload.horasCompensatorias ?? null,
       subtotalQuincena: payload.subtotalQuincena ?? null,
       montoVacaciones: payload.montoVacaciones ?? null,
       montoDiasLaborados: payload.montoDiasLaborados ?? null,
