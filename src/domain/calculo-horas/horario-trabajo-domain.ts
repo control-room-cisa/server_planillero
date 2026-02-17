@@ -266,10 +266,16 @@ export class HorarioTrabajoDomain {
       empleadoId
     );
 
-    // Agregar información de validación al resultado
+    // Preservar validationErrors del resultado (incl. E01 fechasConJobDesconocido)
     resultado.validationErrors = {
-      fechasNoAprobadas: [],
-      fechasSinRegistro: [],
+      fechasNoAprobadas: resultado.validationErrors?.fechasNoAprobadas ?? [],
+      fechasSinRegistro: resultado.validationErrors?.fechasSinRegistro ?? [],
+      ...(resultado.validationErrors?.fechasConJobDesconocido?.length
+        ? {
+            fechasConJobDesconocido:
+              resultado.validationErrors.fechasConJobDesconocido,
+          }
+        : {}),
     };
 
     return resultado;

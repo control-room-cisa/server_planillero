@@ -26,10 +26,16 @@ export function errorHandler(
         fechasSinRegistro: Array.isArray(err.validationErrors.fechasSinRegistro)
           ? err.validationErrors.fechasSinRegistro
           : undefined,
+        fechasConJobDesconocido: Array.isArray(
+          err.validationErrors.fechasConJobDesconocido
+        )
+          ? err.validationErrors.fechasConJobDesconocido
+          : undefined,
         ...Object.keys(err.validationErrors).reduce((acc, key) => {
           if (
             key !== "fechasNoAprobadas" &&
             key !== "fechasSinRegistro" &&
+            key !== "fechasConJobDesconocido" &&
             Array.isArray(err.validationErrors[key])
           ) {
             acc[key] = err.validationErrors[key];

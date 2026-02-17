@@ -45,11 +45,23 @@ function normalizeErrors(err: any): { field: string; message: string }[] {
       });
     }
 
+    // E01 Job Desconocido: un solo error con mensaje y array de fechas
+    if (
+      Array.isArray(validationErrors.fechasConJobDesconocido) &&
+      validationErrors.fechasConJobDesconocido.length > 0
+    ) {
+      errors.push({
+        field: "fechasConJobDesconocido",
+        message: `No se pueden realizar cálculos con Job desconocidos. Fechas: ${validationErrors.fechasConJobDesconocido.join(", ")}`,
+      });
+    }
+
     // Agregar otros campos de validación si existen
     Object.keys(validationErrors).forEach((key) => {
       if (
         key !== "fechasNoAprobadas" &&
         key !== "fechasSinRegistro" &&
+        key !== "fechasConJobDesconocido" &&
         Array.isArray(validationErrors[key])
       ) {
         validationErrors[key].forEach((msg: string) => {
@@ -82,10 +94,16 @@ function extractValidationErrors(
       fechasSinRegistro: Array.isArray(err.validationErrors.fechasSinRegistro)
         ? err.validationErrors.fechasSinRegistro
         : undefined,
+      fechasConJobDesconocido: Array.isArray(
+        err.validationErrors.fechasConJobDesconocido
+      )
+        ? err.validationErrors.fechasConJobDesconocido
+        : undefined,
       ...Object.keys(err.validationErrors).reduce((acc, key) => {
         if (
           key !== "fechasNoAprobadas" &&
           key !== "fechasSinRegistro" &&
+          key !== "fechasConJobDesconocido" &&
           Array.isArray(err.validationErrors[key])
         ) {
           acc[key] = err.validationErrors[key];

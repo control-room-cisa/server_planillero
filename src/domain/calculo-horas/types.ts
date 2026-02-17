@@ -24,6 +24,8 @@ export interface HorarioTrabajo {
 export interface ConteoHorasValidationError {
   fechasNoAprobadas: string[]; // Fechas que no han sido aprobadas por supervisor
   fechasSinRegistro: string[]; // Fechas que no tienen registro diario creado
+  /** E01 Job Desconocido: fechas con actividades cuyo job no está registrado. No se lanza excepción; se notifica en validationErrors. */
+  fechasConJobDesconocido?: string[];
 }
 
 /**

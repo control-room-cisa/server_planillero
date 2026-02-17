@@ -870,6 +870,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     const baseKey = 0; // tests esperan jobId 0
 
+    // E01 Job Desconocido: fechas con actividades que tienen codigo/jobCodigo pero job no resuelto
+    const fechasConJobDesconocido = new Set<string>();
+
     // Recorrer cada día del período y procesar actividades directamente
     let totalHorasFeriado = 0;
     let currentDate = fechaInicio;
@@ -883,6 +886,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         if (!registroDiario) {
           currentDate = PoliticaH1Base.addDays(currentDate, 1);
           continue;
+        }
+
+        // E01 Job Desconocido: actividad con codigoJob/jobCodigo pero sin job resuelto
+        for (const act of (registroDiario as any).actividades ?? []) {
+          if ((act?.codigoJob || act?.jobCodigo) && !act?.job) {
+            fechasConJobDesconocido.add(currentDate);
+            break; // una fecha solo se marca una vez
+          }
         }
 
         // Proporciones de extras según conteo (para el rango; en pruebas es por día)
@@ -1320,6 +1331,11 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       validationErrors: {
         fechasNoAprobadas: [],
         fechasSinRegistro: [],
+        // E01 Job Desconocido: notificar en stack sin lanzar; mensaje: "No se pueden realizar cálculos con Job desconocidos"
+        fechasConJobDesconocido:
+          fechasConJobDesconocido.size > 0
+            ? Array.from(fechasConJobDesconocido).sort()
+            : undefined,
       },
     };
 
