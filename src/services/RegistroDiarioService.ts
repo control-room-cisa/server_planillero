@@ -16,7 +16,9 @@ export class RegistroDiarioService {
   /**
    * Crea o actualiza el registro diario + actividades.
    * El campo `fecha` se maneja siempre como string "YYYY-MM-DD".
-   * Valida que el registro no esté aprobado por supervisor antes de permitir la actualización.
+   * Permite modificación en las mismas condiciones que el front:
+   * - Bloquea si aprobacionSupervisor === true Y aprobacionRrhh !== false.
+   * - Permite si aprobacionRrhh === false (rechazado por RRHH, puede corregir) aunque supervisor esté aprobado.
    */
   static upsertRegistro(
     empleadoId: number,
@@ -25,14 +27,19 @@ export class RegistroDiarioService {
     return (async () => {
       const fecha = dto.fecha;
 
-      // Validar que el registro no esté aprobado por supervisor
       const registroExistente =
         await RegistroDiarioRepository.findByEmpleadoAndDateWithActivities(
           empleadoId,
           fecha
         );
 
-      if (registroExistente && registroExistente.aprobacionSupervisor === true) {
+      // Bloquear solo cuando supervisor aprobó Y RRHH no rechazó (alineado con tabla de verdad del front)
+      const bloqueado =
+        registroExistente &&
+        registroExistente.aprobacionSupervisor === true &&
+        registroExistente.aprobacionRrhh !== false;
+
+      if (bloqueado) {
         throw new AppError(
           "No se puede modificar un registro diario que ya ha sido aprobado por el supervisor",
           409 // Conflict - el recurso ya está en un estado que no permite la modificación
