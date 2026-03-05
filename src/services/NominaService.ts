@@ -155,7 +155,7 @@ export class NominaService {
       if (empleado) {
         const tiempoCompensatorioActual = empleado.tiempoCompensatorioHoras ?? 0;
         const nuevoTiempoCompensatorio = tiempoCompensatorioActual + payload.horasCompensatorias;
-        await EmpleadoRepository.update(payload.empleadoId, {
+        await EmpleadoRepository.updateEmpleado(payload.empleadoId, {
           tiempoCompensatorioHoras: nuevoTiempoCompensatorio,
         });
       }

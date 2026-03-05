@@ -6,7 +6,8 @@ import { HorarioTrabajo } from "../types";
  * Política de horario H1.7 - Subtipo 7 de H1
  * Horario extendido:
  * - Todos los días: 07:00–19:00 (12h, incluye almuerzo)
- * - Domingo: día libre (07:00–07:00, 0h)
+ * - Domingo: día libre (07:00–19:00, 12h normales laborables)
+ * - Dia no laborable seleccionable por el usuario
  */
 export class PoliticaH1_7 extends PoliticaH1 {
   async getHorarioTrabajoByDateAndEmpleado(
@@ -35,17 +36,17 @@ export class PoliticaH1_7 extends PoliticaH1 {
       esDiaLibre = true;
     } else {
       switch (dia) {
-        case 0: // Domingo: 0h y día libre (no laborable)
+        case 0: // Domingo: 7:00-19:00 y día libre horas extras pagadas al 100% extra, normales se pagan igual que el resto de los días laborables.
           inicio = "07:00";
-          fin = "07:00";
+          fin = "19:00";
           incluyeAlmuerzo = false;
-          cantidadHorasLaborables = 0;
+          cantidadHorasLaborables = 12;
           esDiaLibre = true;
           break;
         default: // Lunes a Sábado: 07:00-19:00 (12h, incluye almuerzo)
           inicio = "07:00";
           fin = "19:00";
-          incluyeAlmuerzo = true;
+          incluyeAlmuerzo = false;
           cantidadHorasLaborables = 12;
           esDiaLibre = false;
           break;
