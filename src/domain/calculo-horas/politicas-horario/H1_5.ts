@@ -6,7 +6,7 @@ import { HorarioTrabajo } from "../types";
  * Política de horario H1.5 - Subtipo 5 de H1
  * Horario específico:
  * - Lun–Jue: 07:00–17:00 (9h, incluye almuerzo)
- * - Vie:     07:00–14:00 (6h, incluye almuerzo)
+ * - Vie:     07:00–16:00 (8h, incluye almuerzo)
  * - Sáb:     07:00–17:00 (9h, incluye almuerzo)
  * - Dom:     07:00–07:00 (0h, sin almuerzo, día libre)
  */
@@ -56,7 +56,7 @@ export class PoliticaH1_5 extends PoliticaH1 {
           break;
         case 5: // Viernes: 07:00-14:00 (6h, incluye almuerzo)
           inicio = "07:00";
-          fin = "14:00";
+          fin = "16:00";
           incluyeAlmuerzo = true;
           cantidadHorasLaborables = 6;
           esDiaLibre = false;
