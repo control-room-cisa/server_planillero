@@ -69,6 +69,64 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
   }
 
   /**
+   * Agrupa días consecutivos del mismo tipo de incapacidad en intervalos.
+   * Retorna un array con el número de días de cada intervalo.
+   */
+  private static groupIncapIntervals(
+    tipos: ("empresa" | "ihss" | null)[],
+    tipo: "empresa" | "ihss"
+  ): number[] {
+    const intervals: number[] = [];
+    let count = 0;
+    for (const t of tipos) {
+      if (t === tipo) {
+        count++;
+      } else if (count > 0) {
+        intervals.push(count);
+        count = 0;
+      }
+    }
+    if (count > 0) intervals.push(count);
+    return intervals;
+  }
+
+  /**
+   * Método de Restos Mayores (Largest Remainder Method).
+   * Convierte días de incapacidad reales a días en base `baseDays` (= 15),
+   * distribuyendo el redondeo a los intervalos con mayor parte decimal.
+   *
+   * @param intervalDays - Días de cada intervalo de incapacidad
+   * @param quincenahDays - Días reales de la quincena (13, 14, 15 o 16)
+   * @param baseDays - Base de cálculo (siempre 15)
+   */
+  private static lrmProportional(
+    intervalDays: number[],
+    quincenahDays: number,
+    baseDays: number
+  ): number {
+    if (intervalDays.length === 0) return 0;
+    if (quincenahDays === baseDays)
+      return intervalDays.reduce((a, b) => a + b, 0);
+
+    const raws = intervalDays.map((d) => (d / quincenahDays) * baseDays);
+    const floors = raws.map((r) => Math.floor(r));
+    const fracs = raws.map((r, i) => r - floors[i]);
+
+    const target = Math.round(raws.reduce((a, b) => a + b, 0));
+    const sumFloors = floors.reduce((a, b) => a + b, 0);
+    const extra = Math.max(0, target - sumFloors);
+
+    const indices = fracs
+      .map((_, i) => i)
+      .sort((a, b) => fracs[b] - fracs[a]);
+    for (let i = 0; i < extra; i++) {
+      floors[indices[i]]++;
+    }
+
+    return floors.reduce((a, b) => a + b, 0);
+  }
+
+  /**
    * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
    * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
    * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
@@ -194,6 +252,9 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     }> = [];
     const errores: Array<{ fecha: string; motivo: string; detalle?: any }> = [];
 
+    // Recolecta el tipo de incapacidad por día (en orden) para LRM
+    const tiposIncapPorDia: ("empresa" | "ihss" | null)[] = [];
+
     // recorrer días
     let f = fechaInicio;
     while (f <= fechaFin) {
@@ -215,16 +276,20 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         if (incapacidadMayorATresDias) {
           // A partir del 4to día consecutivo → IHSS
           incapacidadIHSSMin += HORAS_INCAPACIDAD_MIN;
+          tiposIncapPorDia.push("ihss");
         } else {
           // Primeros 3 días consecutivos → Empresa
           incapacidadEmpresaMin += HORAS_INCAPACIDAD_MIN;
+          tiposIncapPorDia.push("empresa");
         }
-
 
         // Avanzar al siguiente día sin procesar segmentos
         f = PoliticaH2Base.addDays(f, 1);
         continue;
       }
+
+      // Día normal: no es incapacidad
+      tiposIncapPorDia.push(null);
 
       // ==================== PROCESAMIENTO NORMAL (sin incapacidad) ====================
       const segmentosResult = await this.generarSegmentosDeDiaConValidacion(
@@ -462,26 +527,49 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     };
 
     // ---------------- Conteo en días (base 15) ----------------
+    // totalPeriodo = 15 siempre (es la base proporcional de la quincena).
+    // quincenahDays = días reales del rango consultado (puede ser 13, 14, 15 o 16).
     const totalPeriodo = 15;
+    const quincenahDays = PoliticaH2Base.dayCountInclusive(fechaInicio, fechaFin);
 
     const diasVacaciones = horasVacaciones / 8;
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
 
-    // Incapacidades: conteo en DÍAS LITERALES (no basado en horas)
-    // Cada día con esIncapacidad=true cuenta como 1 día completo
-    const diasIncapacidadEmpresa = incapacidadEmpresaMin / (24 * 60); // minutos a días literales
-    const diasIncapacidadIHSS = incapacidadIHSSMin / (24 * 60); // minutos a días literales
+    // Incapacidades: Método de Restos Mayores (LRM) en base 15.
+    // Los días reales de cada intervalo se convierten a días en base 15,
+    // distribuyendo el redondeo a los intervalos con mayor parte decimal.
+    const intervalosEmpresa = PoliticaH2Base.groupIncapIntervals(
+      tiposIncapPorDia,
+      "empresa"
+    );
+    const intervalosIHSS = PoliticaH2Base.groupIncapIntervals(
+      tiposIncapPorDia,
+      "ihss"
+    );
+    const diasIncapacidadEmpresa = PoliticaH2Base.lrmProportional(
+      intervalosEmpresa,
+      quincenahDays,
+      totalPeriodo
+    );
+    const diasIncapacidadIHSS = PoliticaH2Base.lrmProportional(
+      intervalosIHSS,
+      quincenahDays,
+      totalPeriodo
+    );
 
-    const diasNoLaborados =
+    // diasDespuesIncapacidad: días del período base que quedan disponibles
+    // tras descontar los días de incapacidad (en base 15).
+    const totalIncapacidad = diasIncapacidadEmpresa + diasIncapacidadIHSS;
+    const diasDespuesIncapacidad = totalPeriodo - totalIncapacidad;
+
+    const diasNoLaboradosPorEspeciales =
       diasVacaciones +
       diasPermisoCS +
       diasPermisoSS +
-      diasInasistencias +
-      diasIncapacidadEmpresa +
-      diasIncapacidadIHSS;
-    const diasLaborados = totalPeriodo - diasNoLaborados;
+      diasInasistencias;
+    const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
 
     conteo.conteoDias = {
       totalPeriodo,

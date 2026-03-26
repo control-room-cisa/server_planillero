@@ -188,7 +188,69 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     addPermisoSSMin: number;
     addInasistenciasMin: number;
     addCompensatorioMin: number;
+    /** null = día normal; 'empresa' = incapacidad cubierta por empresa; 'ihss' = cubierta por IHSS */
+    incapacidadDia: "empresa" | "ihss" | null;
   };
+
+  /**
+   * Agrupa días consecutivos del mismo tipo de incapacidad en intervalos.
+   * Retorna un array con el número de días de cada intervalo.
+   * Ejemplo: [null,'empresa','empresa',null,'empresa'] → [2, 1]
+   */
+  private static groupIncapIntervals(
+    tipos: ("empresa" | "ihss" | null)[],
+    tipo: "empresa" | "ihss"
+  ): number[] {
+    const intervals: number[] = [];
+    let count = 0;
+    for (const t of tipos) {
+      if (t === tipo) {
+        count++;
+      } else if (count > 0) {
+        intervals.push(count);
+        count = 0;
+      }
+    }
+    if (count > 0) intervals.push(count);
+    return intervals;
+  }
+
+  /**
+   * Método de Restos Mayores (Largest Remainder Method).
+   * Convierte días de incapacidad reales a días en base `baseDays` (= 15),
+   * distribuyendo el redondeo a los intervalos con mayor parte decimal.
+   *
+   * @param intervalDays - Días de cada intervalo de incapacidad
+   * @param quincenahDays - Días reales de la quincena (13, 14, 15 o 16)
+   * @param baseDays - Base de cálculo (siempre 15)
+   * @returns Total de días de incapacidad en base `baseDays`
+   */
+  private static lrmProportional(
+    intervalDays: number[],
+    quincenahDays: number,
+    baseDays: number
+  ): number {
+    if (intervalDays.length === 0) return 0;
+    if (quincenahDays === baseDays) return intervalDays.reduce((a, b) => a + b, 0);
+
+    const raws = intervalDays.map((d) => (d / quincenahDays) * baseDays);
+    const floors = raws.map((r) => Math.floor(r));
+    const fracs = raws.map((r, i) => r - floors[i]);
+
+    const target = Math.round(raws.reduce((a, b) => a + b, 0));
+    const sumFloors = floors.reduce((a, b) => a + b, 0);
+    const extra = Math.max(0, target - sumFloors);
+
+    // Asignar los días extra a los intervalos con mayor parte decimal
+    const indices = fracs
+      .map((_, i) => i)
+      .sort((a, b) => fracs[b] - fracs[a]);
+    for (let i = 0; i < extra; i++) {
+      floors[indices[i]]++;
+    }
+
+    return floors.reduce((a, b) => a + b, 0);
+  }
 
   /**
    * Procesa un día completo de forma independiente.
@@ -265,7 +327,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         b.incapacidadEmpresaMin = HORAS_INCAPACIDAD_MIN;
       }
 
-
       return {
         buckets: b,
         addVacacionesMin: 0,
@@ -273,6 +334,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         addPermisoSSMin: 0,
         addInasistenciasMin: 0,
         addCompensatorioMin: 0,
+        incapacidadDia: incapacidadMayorATresDias ? "ihss" : "empresa",
       };
     }
 
@@ -417,6 +479,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       addPermisoSSMin,
       addInasistenciasMin,
       addCompensatorioMin,
+      incapacidadDia: null,
     };
   }
 
@@ -610,7 +673,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     let addInasistenciasMin = 0;
     let addCompensatorioMin = 0;
 
-    // Sumar todos los buckets de cada día
+    // Sumar todos los buckets de cada día y recolectar tipos de incapacidad
+    const tiposIncapPorDia = resultadosPorDia.map((r) => r.incapacidadDia);
+
     for (const resultado of resultadosPorDia) {
       b.normalMin += resultado.buckets.normalMin;
       b.almuerzoMin += resultado.buckets.almuerzoMin;
@@ -711,7 +776,11 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     };
 
     // ---------------- Conteo en días (base 15) ----------------
+    // totalPeriodo = 15 siempre (es la base proporcional de la quincena).
+    // quincenahDays = días reales del rango consultado (puede ser 13, 14, 15 o 16).
     const totalPeriodo = 15;
+    const quincenahDays = fechas.length;
+
     const horasVacaciones = PoliticaH1Base.minutosAhoras(
       b.vacacionesMin + addVacacionesMin
     );
@@ -730,19 +799,39 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
 
-    // Incapacidades: conteo en DÍAS LITERALES (no basado en horas de 8 o 9)
-    // Cada día con esIncapacidad=true cuenta como 1 día completo (24h = 1 día literal)
-    const diasIncapacidadEmpresa = b.incapacidadEmpresaMin / (24 * 60); // minutos a días literales
-    const diasIncapacidadIHSS = b.incapacidadIHSSMin / (24 * 60); // minutos a días literales
+    // Incapacidades: Método de Restos Mayores (LRM) en base 15.
+    // Los días reales de cada intervalo se convierten a días en base 15,
+    // distribuyendo el redondeo a los intervalos con mayor parte decimal.
+    const intervalosEmpresa = PoliticaH1Base.groupIncapIntervals(
+      tiposIncapPorDia,
+      "empresa"
+    );
+    const intervalosIHSS = PoliticaH1Base.groupIncapIntervals(
+      tiposIncapPorDia,
+      "ihss"
+    );
+    const diasIncapacidadEmpresa = PoliticaH1Base.lrmProportional(
+      intervalosEmpresa,
+      quincenahDays,
+      totalPeriodo
+    );
+    const diasIncapacidadIHSS = PoliticaH1Base.lrmProportional(
+      intervalosIHSS,
+      quincenahDays,
+      totalPeriodo
+    );
+
+    // diasDespuesIncapacidad: días del período base que quedan disponibles
+    // tras descontar los días de incapacidad (en base 15).
+    const totalIncapacidad = diasIncapacidadEmpresa + diasIncapacidadIHSS;
+    const diasDespuesIncapacidad = totalPeriodo - totalIncapacidad;
 
     const diasNoLaboradosPorEspeciales =
       diasVacaciones +
       diasPermisoCS +
       diasPermisoSS +
-      diasInasistencias +
-      diasIncapacidadEmpresa +
-      diasIncapacidadIHSS;
-    const diasLaborados = totalPeriodo - diasNoLaboradosPorEspeciales;
+      diasInasistencias;
+    const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
 
     result.conteoDias = {
       totalPeriodo,
