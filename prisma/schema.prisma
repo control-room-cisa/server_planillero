@@ -351,3 +351,19 @@ model Feriado {
 
   @@map("feriados")
 }
+
+/// ─── Configuración global (key/value) ────────────────────────────────────────
+/// Tabla sin FKs para parámetros editables del sistema.
+model GlobalConfig {
+  /// Clave única (ej: "PISO_IHSS", "DEDUCCION_IHSS_FIJA")
+  key String @id @db.VarChar(100)
+  /// Valor en texto (se parsea según el uso: number, boolean, json, etc.)
+  value String @db.VarChar(255)
+  /// Descripción opcional para UI/admin
+  description String? @db.VarChar(255)
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  @@map("global_config")
+}
