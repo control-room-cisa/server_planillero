@@ -28,6 +28,9 @@ export interface EmployeeDto {
     aprobacionSupervisor?: boolean | null;
     aprobacionRrhh?: boolean | null;
   }>;
+  /** Saldo en Empleado (misma fuente que el detalle del empleado) */
+  tiempoCompensatorioHoras?: number | null;
+  tiempoVacacionesHoras?: number | null;
 }
 
 /** Lo que devuelve el controlador al cliente (versión completa para detalles) */

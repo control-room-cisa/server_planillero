@@ -159,6 +159,8 @@ export class EmpleadoService {
             aprobacionSupervisor: a.aprobacionSupervisor ?? null,
             aprobacionRrhh: a.aprobacionRrhh ?? null,
           })),
+          tiempoCompensatorioHoras: e.tiempoCompensatorioHoras ?? null,
+          tiempoVacacionesHoras: e.tiempoVacacionesHoras ?? null,
         } as EmployeeDto;
       })
     );
