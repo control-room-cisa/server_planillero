@@ -290,6 +290,8 @@ function logProrrateoAndAssert(
     p100: HorasPorJob[];
     totalHorasLaborables: number;
     horasFeriado?: number;
+    vacacionesHoras?: number;
+    incapacidadHoras?: number;
   }
 ) {
   // Verificar si hay diferencias antes de imprimir
@@ -306,10 +308,8 @@ function logProrrateoAndAssert(
     exp
   );
 
-  const shouldLogDetails = hasDiff || (exp.horasFeriado ?? 0) > 0;
-
-  // Solo imprimir si hay diferencias o queremos revisar feriados
-  if (shouldLogDetails) {
+  // Solo imprimir si hay diferencias
+  if (hasDiff) {
     // 1) Tabla ancha, una fila por job del día (aunque tenga 0s en alguna banda)
     const wide = rowsWideByJob(
       {
@@ -367,6 +367,16 @@ function logProrrateoAndAssert(
         "✓": Number((exp.horasFeriado ?? 0).toFixed(4)),
         "✗": formatValue(got.horasFeriado ?? 0, exp.horasFeriado ?? 0),
       },
+      {
+        métrica: "Vac",
+        "✓": Number((exp.vacacionesHoras ?? 0).toFixed(4)),
+        "✗": formatValue(got.vacacionesHoras ?? 0, exp.vacacionesHoras ?? 0),
+      },
+      {
+        métrica: "Incap",
+        "✓": Number((exp.incapacidadHoras ?? 0).toFixed(4)),
+        "✗": formatValue(got.incapacidadHoras ?? 0, exp.incapacidadHoras ?? 0),
+      },
     ]);
   }
 
@@ -415,7 +425,8 @@ function logProrrateoAndAssert(
   expect(got.totalHorasLaborables).toBeCloseTo(exp.totalHorasLaborables, 6);
 
   expect(got.horasFeriado ?? 0).toBe(exp.horasFeriado ?? 0);
-  expect(got.vacacionesHoras).toBe(0);
+  expect(got.vacacionesHoras).toBe(exp.vacacionesHoras ?? 0);
+  expect(got.incapacidadHoras ?? 0).toBe(exp.incapacidadHoras ?? 0);
   expect(got.permisoConSueldoHoras).toBe(0);
   expect(got.permisoSinSueldoHoras).toBe(0);
   expect(got.inasistenciasHoras).toBe(0);

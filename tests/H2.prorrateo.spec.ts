@@ -225,6 +225,8 @@ function logProrrateoAndAssert(
     normal: HorasPorJob[];
     p25: HorasPorJob[];
     totalHorasLaborables: number;
+    vacacionesHoras?: number;
+    incapacidadHoras?: number;
   }
 ) {
   // Verificar si hay diferencias antes de imprimir
@@ -276,6 +278,16 @@ function logProrrateoAndAssert(
           exp.totalHorasLaborables
         ),
       },
+      {
+        métrica: "Vac",
+        "✓": Number((exp.vacacionesHoras ?? 0).toFixed(4)),
+        "✗": formatValue(got.vacacionesHoras ?? 0, exp.vacacionesHoras ?? 0),
+      },
+      {
+        métrica: "Incap",
+        "✓": Number((exp.incapacidadHoras ?? 0).toFixed(4)),
+        "✗": formatValue(got.incapacidadHoras ?? 0, exp.incapacidadHoras ?? 0),
+      },
     ]);
   }
 
@@ -310,7 +322,8 @@ function logProrrateoAndAssert(
   );
   expect(got.totalHorasLaborables).toBeCloseTo(exp.totalHorasLaborables, 6);
 
-  expect(got.vacacionesHoras).toBe(0);
+  expect(got.vacacionesHoras).toBe(exp.vacacionesHoras ?? 0);
+  expect(got.incapacidadHoras ?? 0).toBe(exp.incapacidadHoras ?? 0);
   expect(got.permisoConSueldoHoras).toBe(0);
   expect(got.permisoSinSueldoHoras).toBe(0);
   expect(got.inasistenciasHoras).toBe(0);

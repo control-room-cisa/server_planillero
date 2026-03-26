@@ -30,7 +30,7 @@ class H1Test extends PoliticaH1_1 {
       incluyeAlmuerzo: boolean;
       cantidadHorasLaborables: number;
       esDiaLibre: boolean;
-    }
+    },
   ) {
     this.horarios[fecha] = data;
   }
@@ -48,7 +48,7 @@ class H1Test extends PoliticaH1_1 {
   }
   async getHorarioTrabajoByDateAndEmpleado(
     fecha: string,
-    empleadoId: string
+    empleadoId: string,
   ): Promise<HorarioTrabajo> {
     const personalizado = this.horarios[fecha];
     if (personalizado) {
@@ -89,13 +89,24 @@ type Horas = {
   horasFeriado?: number;
   horasCompensatoriasTomadas?: number;
   horasCompensatoriasPagadas?: number;
+  vacaciones?: number;
+  incapacidad?: number; // incapacidadEmpresa + incapacidadIHSS
 };
 type HorasExt = Horas & { libre?: number; horasFeriado?: number };
 
 const RED = (s: string) => `\x1b[31m${s}\x1b[0m`;
 
 function sumHoras(h: Horas) {
-  return h.almuerzo + h.normal + h.p25 + h.p50 + h.p75 + h.p100;
+  return (
+    h.almuerzo +
+    h.normal +
+    h.p25 +
+    h.p50 +
+    h.p75 +
+    h.p100 +
+    (h.vacaciones ?? 0) +
+    (h.incapacidad ?? 0)
+  );
 }
 
 function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
@@ -116,9 +127,17 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   const gotCompPagadas = Array.isArray(gotCompPagadasArray)
     ? gotCompPagadasArray.reduce(
         (sum, item) => sum + (item.cantidadHoras ?? 0),
-        0
+        0,
       )
-    : got.horasCompensatoriasPagadas ?? 0;
+    : (got.horasCompensatoriasPagadas ?? 0);
+
+  const expVacaciones = exp.vacaciones ?? 0;
+  const gotVacaciones = (got as any).vacaciones ?? 0;
+
+  const expIncapacidad = exp.incapacidad ?? 0;
+  const gotIncapacidadEmpresa = (got as any).incapacidadEmpresa ?? 0;
+  const gotIncapacidadIHSS = (got as any).incapacidadIHSS ?? 0;
+  const gotIncapacidad = gotIncapacidadEmpresa + gotIncapacidadIHSS;
 
   const rows = [
     { métrica: "almuerzo", esperado: exp.almuerzo, obtenido: got.almuerzo },
@@ -138,6 +157,12 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
       esperado: expCompPagadas,
       obtenido: gotCompPagadas,
     },
+    { métrica: "vacaciones", esperado: expVacaciones, obtenido: gotVacaciones },
+    {
+      métrica: "incapacidad",
+      esperado: expIncapacidad,
+      obtenido: gotIncapacidad,
+    },
     { métrica: "libre", esperado: expLibre, obtenido: gotLibre },
     {
       métrica: "TOTAL",
@@ -154,10 +179,13 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
     };
   });
 
-  // eslint-disable-next-line no-console
-  console.log(`\n▶️ ${fecha} — Esperado vs Obtenido`);
-  // eslint-disable-next-line no-console
-  console.table(rows);
+  const hayFallo = rows.some((r) => !r.ok);
+  if (hayFallo) {
+    // eslint-disable-next-line no-console
+    console.log(`\n▶️ ${fecha} — Esperado vs Obtenido`);
+    // eslint-disable-next-line no-console
+    console.table(rows);
+  }
 
   // Asserts por campo
   expect(got.almuerzo).toBe(exp.almuerzo);
@@ -169,6 +197,8 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   expect(gotFeriado).toBe(expFeriado);
   expect(gotCompTomadas).toBe(expCompTomadas);
   expect(gotCompPagadas).toBe(expCompPagadas);
+  expect(gotVacaciones).toBe(expVacaciones);
+  expect(gotIncapacidad).toBe(expIncapacidad);
 
   // Assert de libre y de identidad TOTAL+libre = 24
   expect(gotLibre).toBe(expLibre);
@@ -190,6 +220,8 @@ const fechasSecuencia = [
   "2025-09-22",
   "2025-09-23",
   "2025-09-24",
+  "2026-02-02",
+  "2026-02-03",
 ];
 
 function seedDataForDate(p: H1Test, fecha: string) {
@@ -600,6 +632,51 @@ function seedDataForDate(p: H1Test, fecha: string) {
         ],
       });
       break;
+    case "2026-02-02":
+      // Vacaciones: 1 actividad E02 de 9h en día normal 07:00-17:00 local
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "23:00"),
+        esHoraCorrida: false,
+        esDiaLibre: false,
+        actividades: [
+          {
+            descripcion: "Vacaciones 9h",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "E02" },
+            duracionHoras: 9,
+          },
+        ],
+      });
+      break;
+    case "2026-02-03":
+      // Vacaciones + job normal: E02 6h + job 100 2h, en día normal 07:00-17:00 local
+      p.seedRegistro(fecha, {
+        fecha,
+        horaEntrada: makeDateUTC(fecha, "13:00"),
+        horaSalida: makeDateUTC(fecha, "23:00"),
+        esHoraCorrida: false,
+        esDiaLibre: false,
+        actividades: [
+          {
+            descripcion: "Vacaciones 6h",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "E02" },
+            duracionHoras: 6,
+          },
+          {
+            descripcion: "Job 100 2h",
+            esExtra: false,
+            esCompensatorio: false,
+            job: { codigo: "100" },
+            duracionHoras: 3,
+          },
+        ],
+      });
+      break;
     default:
       throw new Error(`Fecha no soportada en fixtures: ${fecha}`);
   }
@@ -609,7 +686,7 @@ function seedHistoricoHastaFecha(p: H1Test, fecha: string) {
   const idx = fechasSecuencia.indexOf(fecha);
   if (idx === -1) {
     throw new Error(
-      `Fecha ${fecha} no está contemplada en la secuencia de pruebas`
+      `Fecha ${fecha} no está contemplada en la secuencia de pruebas`,
     );
   }
   for (let i = 0; i <= idx; i++) {
@@ -629,7 +706,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -652,7 +729,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -675,7 +752,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -698,7 +775,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -721,7 +798,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -744,7 +821,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -767,7 +844,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -790,7 +867,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -813,7 +890,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -836,7 +913,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -859,7 +936,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -882,7 +959,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 0,
@@ -907,7 +984,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -935,7 +1012,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
       fecha,
       fecha,
-      "1"
+      "1",
     );
     logAndAssert(fecha, res.cantidadHoras as HorasExt, {
       almuerzo: 1,
@@ -946,6 +1023,56 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p100: 0,
       horasCompensatoriasTomadas: 0,
       horasCompensatoriasPagadas: 3,
+    });
+  });
+
+  // -------------------- Calculo vacaciones 1 (02/02/2026, lunes) --------------------
+  // Lunes 07:00–17:00, 1 actividad E02 9h
+  // Esperado: 1h almuerzo, 8h vacaciones, 15h libre (= 24 - 1 - 8)
+  it("Calculo vacaciones 1: lunes 07–17 con 1 actividad E02 (9h) ⇒ 8h vacaciones", async () => {
+    const fecha = "2026-02-02";
+    const p = new H1Test();
+
+    seedHistoricoHastaFecha(p, fecha);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1",
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      vacaciones: 8,
+    });
+  });
+
+  // -------------------- Calculo vacaciones 2 (03/02/2026, martes) --------------------
+  // Martes 07:00–17:00, E02 6h + job 100 2h
+  // Esperado: 1h almuerzo, 3h normal, 6h vacaciones, 14h libre (= 24 - 1 - 3 - 6)
+  it("Calculo vacaciones 2: martes 07–17 con E02 (6h) + job 100 (2h) ⇒ 6h vacaciones, 3h normal", async () => {
+    const fecha = "2026-02-03";
+    const p = new H1Test();
+
+    seedHistoricoHastaFecha(p, fecha);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1",
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 3,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      vacaciones: 6,
     });
   });
 });

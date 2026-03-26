@@ -168,12 +168,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       throw new Error("El rango de fechas es inválido (fin < inicio).");
 
     const diasEnRango = PoliticaH2Base.dayCountInclusive(fechaInicio, fechaFin);
-    console.log("[H2] getConteoHorasTrabajadasByDateAndEmpleado INICIO", {
-      empleadoId,
-      fechaInicio,
-      fechaFin,
-      diasEnRango,
-    });
 
     // acumuladores en minutos
     let normalMin = 0;
@@ -226,11 +220,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           incapacidadEmpresaMin += HORAS_INCAPACIDAD_MIN;
         }
 
-        console.log(
-          `[H2] ${f} - INCAPACIDAD: ${
-            incapacidadMayorATresDias ? "IHSS (>3 días)" : "Empresa (≤3 días)"
-          }`
-        );
 
         // Avanzar al siguiente día sin procesar segmentos
         f = PoliticaH2Base.addDays(f, 1);
@@ -299,15 +288,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       let esperadaNormalMin = 0;
 
       if (esFestivo || esLibre || !reg) {
-        console.log("[H2] día", f, "→ festivo/libre/sin registro", {
-          esFestivo,
-          esLibre,
-          tieneRegistro: !!reg,
-          normalMinDia,
-          almuerzoMinDia,
-          segmentosCount: segmentos.length,
-          segmentosTipos: segmentos.map((s) => s.tipo),
-        });
         // Feriado/Libre: NORMAL debe ser 0; todo lo demás es EXTRA
         esperadaNormalMin = 0;
         if (normalMinDia > 0) {
@@ -318,7 +298,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           });
         }
         if (!this.permiteAlmuerzo() && almuerzoMinDia > 0) {
-          console.log("[H2] ERROR agregado:", f, "ALMUERZO_NO_PERMITIDO_EN_H2 (festivo/libre)", { almuerzoMinDia });
           errores.push({
             fecha: f,
             motivo: "ALMUERZO_NO_PERMITIDO_EN_H2",
@@ -341,20 +320,9 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           }
         }
 
-        console.log("[H2] día", f, "→ laboral", {
-          horaEntrada: reg.horaEntrada,
-          horaSalida: reg.horaSalida,
-          normalMinDia,
-          almuerzoMinDia,
-          esperadaNormalMin,
-          compNormalesHoras,
-          segmentosCount: segmentos.length,
-          segmentosTipos: segmentos.map((s) => s.tipo),
-        });
 
         // 1) Almuerzo: en H2_1 no permitido; en H2_2 permitido (como H1_1)
         if (!this.permiteAlmuerzo() && almuerzoMinDia > 0) {
-          console.log("[H2] ERROR agregado:", f, "ALMUERZO_NO_PERMITIDO_EN_H2", { almuerzoMinDia });
           errores.push({
             fecha: f,
             motivo: "ALMUERZO_NO_PERMITIDO_EN_H2",
@@ -369,14 +337,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         const normalMinDiaConCompensatorias = normalMinDia + compNormalesMinDia;
 
         if (normalMinDiaConCompensatorias !== esperadaNormalMin) {
-          console.log("[H2] ERROR agregado:", f, "NORMAL_NO_COINCIDE_CON_INTERVALO", {
-            normalMinDia,
-            compNormalesMinDia,
-            normalMinDiaConCompensatorias,
-            esperadaNormalMin,
-            entrada: e.toTimeString().slice(0, 5),
-            salida: s.toTimeString().slice(0, 5),
-          });
           errores.push({
             fecha: f,
             motivo: "NORMAL_NO_COINCIDE_CON_INTERVALO",
@@ -450,7 +410,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       almuerzoMin; // H2_2 incluye almuerzo; H2_1 es 0
 
     if (totalMin !== esperadoGlobalMin) {
-      console.log("[H2] ERROR agregado: CUADRE_GLOBAL_INVALIDO", { totalMin, esperadoGlobalMin, dias });
       errores.push({
         fecha: `${fechaInicio}..${fechaFin}`,
         motivo: "CUADRE_GLOBAL_INVALIDO",
@@ -460,14 +419,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     // Lanzar si hay cualquier error (incluye almuerzo no permitido)
     if (errores.length > 0) {
-      console.log("[H2] getConteoHorasTrabajadasByDateAndEmpleado FALLO", {
-        empleadoId,
-        fechaInicio,
-        fechaFin,
-        totalErrores: errores.length,
-        motivos: errores.map((e) => e.motivo),
-        fechasConError: [...new Set(errores.map((e) => e.fecha))],
-      });
       throw new Error(
         `[H2] Validaciones fallidas: ${JSON.stringify(errores, null, 2)}`
       );

@@ -213,15 +213,12 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     empleadoId: string,
     empleado: any
   ): Promise<typeof PoliticaH1Base.DayResultType> {
-    const tDia = Date.now();
-
     // Solo 2 consultas por día: registro y feriado
     const [registroDelDia, feriadoInfo] = await Promise.all([
       this.getRegistroDiario(empleadoId, fecha),
       this.esFeriado(fecha),
     ]);
 
-    console.log(`[H1Base] ${fecha} - carga datos: ${Date.now() - tDia}ms`);
 
     // Buckets para este día
     const b: Buckets = {
@@ -268,11 +265,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         b.incapacidadEmpresaMin = HORAS_INCAPACIDAD_MIN;
       }
 
-      console.log(
-        `[H1Base] ${fecha} - INCAPACIDAD: ${
-          incapacidadMayorATresDias ? "IHSS (>3 días)" : "Empresa (≤3 días)"
-        }`
-      );
 
       return {
         buckets: b,
@@ -402,6 +394,20 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       }
     } catch {
       /* ignore */
+    }
+
+    // Regla: si la totalidad de horas normales del día son de vacaciones (E02),
+    // se limita a 8h (jornada legal ordinaria). El exceso se transfiere a libre
+    // para mantener el cuadre de 24h.
+    const totalVacActivMin = b.vacacionesMin + addVacacionesMin;
+    if (totalVacActivMin > 0 && b.normalMin > 0 && totalVacActivMin >= b.normalMin) {
+      const capMin = Math.min(b.normalMin, 8 * 60);
+      const excessMin = b.normalMin - capMin;
+      if (excessMin > 0) {
+        b.normalMin = capMin;
+        b.libreMin += excessMin;
+      }
+      addVacacionesMin = Math.max(0, capMin - b.vacacionesMin);
     }
 
     return {
@@ -548,8 +554,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     fechaFin: string,
     empleadoId: string
   ): Promise<ConteoHorasTrabajadas> {
-    const t0 = Date.now();
-
     if (
       !this.validarFormatoFecha(fechaInicio) ||
       !this.validarFormatoFecha(fechaFin)
@@ -568,16 +572,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       f = PoliticaH1Base.addDays(f, 1);
     }
 
-    console.log(`[H1Base] Procesando ${fechas.length} días en paralelo...`);
-    const t1 = Date.now();
-
     // Pre-cargar datos compartidos UNA SOLA VEZ (empleado es el mismo para todos los días)
     const empleado = await this.getEmpleado(empleadoId);
     if (!empleado)
       throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
-
-    console.log(`[H1Base] Empleado cargado en ${Date.now() - t1}ms`);
-    const t2 = Date.now();
 
     // Procesar TODOS los días en paralelo (sin deducciones de alimentación)
     const resultadosPorDia = await Promise.all(
@@ -585,8 +583,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         this.procesarDiaCompletoOptimizado(fecha, empleadoId, empleado)
       )
     );
-
-    console.log(`[H1Base] Días procesados en ${Date.now() - t2}ms`);
 
     // ==================== AGREGAR RESULTADOS ====================
     const b: Buckets = {
@@ -765,7 +761,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     result.deduccionesAlimentacionDetalle = [];
     result.errorAlimentacion = undefined;
 
-    console.log(`[H1Base] TOTAL getConteoHoras: ${Date.now() - t0}ms`);
     return result;
   }
 
@@ -981,31 +976,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         );
 
         if (horasFeriadoDia > 0) {
-          // eslint-disable-next-line no-console
-          console.log(
-            `[PoliticaH1Base][Prorrateo] ${currentDate} horasFeriadoDia=${horasFeriadoDia}`
-          );
           totalHorasFeriado += horasFeriadoDia;
           upsertNormal("00", "Feriados", horasFeriadoDia);
-          let feriadoEntry: {
-            jobId: number;
-            codigoJob: string;
-            nombreJob: string;
-            horas: number;
-            comentarios: string[];
-          } | null = null;
-          for (const v of horasPorJobNormal.values()) {
-            if (v.codigoJob === "00") {
-              feriadoEntry = v;
-              break;
-            }
-          }
-          // eslint-disable-next-line no-console
-          console.log(
-            `[PoliticaH1Base][Prorrateo] ${currentDate} job Feriados horas acumuladas=${
-              feriadoEntry?.horas ?? 0
-            } totalHorasFeriado=${totalHorasFeriado}`
-          );
         }
 
         for (const act of (registroDiario as any).actividades ?? []) {
@@ -1259,17 +1231,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           break;
         }
       }
-      if (feriadoEntry) {
-        const diff = Math.abs(feriadoEntry.horas - totalHorasFeriado);
-        // eslint-disable-next-line no-console
-        console.log(
-          `[PoliticaH1Base][Prorrateo] totalHorasFeriado=${totalHorasFeriado} horasJobFeriados=${feriadoEntry.horas} diff=${diff}`
-        );
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[PoliticaH1Base][Prorrateo] totalHorasFeriado=${totalHorasFeriado} pero no se encontró job Feriados. Creando fallback.`
-        );
+      if (!feriadoEntry) {
         horasPorJobNormal.set(`${baseKey}:00` as unknown as number, {
           jobId: baseKey,
           codigoJob: "00",
