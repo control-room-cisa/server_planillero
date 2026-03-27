@@ -37,9 +37,19 @@ export const crearNominaSchema = z.object({
     .number({ invalid_type_error: "Los días de vacaciones deben ser un número válido" })
     .nonnegative("Los días de vacaciones no pueden ser negativos")
     .default(0),
-  diasIncapacidad: z
-    .number({ invalid_type_error: "Los días de incapacidad deben ser un número válido" })
-    .nonnegative("Los días de incapacidad no pueden ser negativos")
+  diasIncapacidadEmpresa: z
+    .number({
+      invalid_type_error:
+        "Los días de incapacidad (empresa) deben ser un número válido",
+    })
+    .nonnegative("Los días de incapacidad empresa no pueden ser negativos")
+    .default(0),
+  diasIncapacidadIHSS: z
+    .number({
+      invalid_type_error:
+        "Los días de incapacidad (IHSS) deben ser un número válido",
+    })
+    .nonnegative("Los días de incapacidad IHSS no pueden ser negativos")
     .default(0),
   horasCompensatorias: z
     .number({ invalid_type_error: "Las horas compensatorias deben ser un número válido" })

@@ -47,6 +47,36 @@ function generarCodigoNomina(fechaInicio: Date, fechaFin: Date): string {
 }
 
 export class NominaService {
+  private static horasVacacionesFromDias(diasVacaciones?: number | null): number {
+    return Number(diasVacaciones ?? 0) * 8;
+  }
+
+  /**
+   * Ajusta saldos acumulados en Empleado:
+   * - tiempoCompensatorioHoras: suma deltaComp
+   * - tiempoVacacionesHoras:    suma deltaVacHoras (negativo para descontar)
+   */
+  private static async ajustarSaldosEmpleado(
+    empleadoId: number,
+    deltaComp: number,
+    deltaVacHoras: number
+  ): Promise<void> {
+    const dComp = Number(deltaComp || 0);
+    const dVac = Number(deltaVacHoras || 0);
+    if (dComp === 0 && dVac === 0) return;
+
+    const empleado = await EmpleadoRepository.findById(empleadoId);
+    if (!empleado) return;
+
+    const compActual = empleado.tiempoCompensatorioHoras ?? 0;
+    const vacActual = empleado.tiempoVacacionesHoras ?? 0;
+
+    await EmpleadoRepository.updateEmpleado(empleadoId, {
+      tiempoCompensatorioHoras: compActual + dComp,
+      tiempoVacacionesHoras: vacActual + dVac,
+    });
+  }
+
   static async getById(id: number): Promise<Nomina> {
     const found = await NominaRepository.findById(id);
     if (!found) throw new AppError("Nómina no encontrada", 404);
@@ -149,23 +179,12 @@ export class NominaService {
       );
     }
 
-    // Actualizar tiempoCompensatorioHoras del empleado
-    if (payload.horasCompensatorias && payload.horasCompensatorias !== 0) {
-      const empleado = await EmpleadoRepository.findById(payload.empleadoId);
-      if (empleado) {
-        const tiempoCompensatorioActual = empleado.tiempoCompensatorioHoras ?? 0;
-        const nuevoTiempoCompensatorio = tiempoCompensatorioActual + payload.horasCompensatorias;
-        await EmpleadoRepository.updateEmpleado(payload.empleadoId, {
-          tiempoCompensatorioHoras: nuevoTiempoCompensatorio,
-        });
-      }
-    }
-
     // Prisma types: map DTO to create input usando spread para reducir código
     const camposOpcionales = {
       diasLaborados: payload.diasLaborados ?? null,
       diasVacaciones: payload.diasVacaciones ?? null,
-      diasIncapacidad: payload.diasIncapacidad ?? null,
+      diasIncapacidadEmpresa: payload.diasIncapacidadEmpresa ?? null,
+      diasIncapacidadIHSS: payload.diasIncapacidadIHSS ?? null,
       horasCompensatorias: payload.horasCompensatorias ?? null,
       subtotalQuincena: payload.subtotalQuincena ?? null,
       montoVacaciones: payload.montoVacaciones ?? null,
@@ -205,6 +224,17 @@ export class NominaService {
         : {}),
       ...camposOpcionales,
     });
+
+    // Ajustar acumulados en Empleado al crear nómina:
+    // - Compensatorio: sumar horas de la nómina
+    // - Vacaciones: descontar horas (diasVacaciones * 8)
+    const compAplicado = Number(payload.horasCompensatorias ?? 0);
+    const vacHorasAplicadas = this.horasVacacionesFromDias(payload.diasVacaciones);
+    await this.ajustarSaldosEmpleado(
+      payload.empleadoId,
+      compAplicado,
+      -vacHorasAplicadas
+    );
 
     // Actualizar aprobacionRrhh a true para todos los registros diarios
     // del empleado en el rango de fechas de la nómina
@@ -283,7 +313,7 @@ export class NominaService {
     }
 
     // Prisma ignora automáticamente los campos undefined en las actualizaciones
-    return NominaRepository.update(id, {
+    const updated = await NominaRepository.update(id, {
       ...payload,
       ...(updatedBy
         ? { updatedByEmpleado: { connect: { id: updatedBy } } }
@@ -293,6 +323,35 @@ export class NominaService {
         ? { empleado: { connect: { id: payload.empleadoId } } }
         : {}),
     });
+
+    // Recalcular y ajustar saldos en Empleado para mantener consistencia.
+    const oldEmpleadoId = existing.empleadoId;
+    const newEmpleadoId = payload.empleadoId ?? existing.empleadoId;
+
+    const oldComp = Number(existing.horasCompensatorias ?? 0);
+    const newComp = Number(payload.horasCompensatorias ?? existing.horasCompensatorias ?? 0);
+
+    const oldVacHoras = this.horasVacacionesFromDias(existing.diasVacaciones);
+    const newVacHoras = this.horasVacacionesFromDias(
+      payload.diasVacaciones ?? existing.diasVacaciones
+    );
+
+    if (oldEmpleadoId === newEmpleadoId) {
+      // Mismo empleado: aplicar solo delta
+      const deltaComp = newComp - oldComp;
+      // Vacaciones se descuentan del saldo, por eso el delta es old - new
+      const deltaVac = oldVacHoras - newVacHoras;
+      await this.ajustarSaldosEmpleado(newEmpleadoId, deltaComp, deltaVac);
+    } else {
+      // Caso raro: el registro de nómina pasaría a otro empleadoId (API permite
+      // empleadoId en el body; el modal RRHH no reasigna colaborador al editar).
+      // Si ocurriera: deshacer saldos en el colaborador que tenía la nómina y
+      // aplicarlos al nuevo — no es “transferir” datos de nómina, solo corregir acumulados.
+      await this.ajustarSaldosEmpleado(oldEmpleadoId, -oldComp, oldVacHoras);
+      await this.ajustarSaldosEmpleado(newEmpleadoId, newComp, -newVacHoras);
+    }
+
+    return updated;
   }
 
   static async delete(id: number, deletedBy?: number | null): Promise<Nomina> {
@@ -333,7 +392,18 @@ export class NominaService {
       );
     }
 
-    // Eliminación lógica con auditoría
-    return NominaRepository.delete(id, deletedBy);
+    // Eliminar lógicamente la nómina
+    const deleted = await NominaRepository.delete(id, deletedBy);
+
+    // Revertir el efecto que tuvo la creación de esta nómina en saldos del empleado
+    const compAplicado = Number(existing.horasCompensatorias ?? 0);
+    const vacHorasAplicadas = this.horasVacacionesFromDias(existing.diasVacaciones);
+    await this.ajustarSaldosEmpleado(
+      existing.empleadoId,
+      -compAplicado,
+      vacHorasAplicadas
+    );
+
+    return deleted;
   }
 }

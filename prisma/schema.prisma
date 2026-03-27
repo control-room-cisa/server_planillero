@@ -186,7 +186,8 @@ model Nomina {
   sueldoMensual   Float  @map("sueldo_mensual")
   diasLaborados   Float? @map("dias_laborados")
   diasVacaciones  Float? @map("dias_vacaciones")
-  diasIncapacidad Float? @map("dias_incapacidad")
+  diasIncapacidadEmpresa Float? @map("dias_incapacidad_empresa")
+  diasIncapacidadIHSS    Float? @map("dias_incapacidad_ihss")
   horasCompensatorias Float? @map("horas_compensatorias")
 
   // Subtotales y montos
