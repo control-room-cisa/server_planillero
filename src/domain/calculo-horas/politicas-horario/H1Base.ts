@@ -172,6 +172,53 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     else r.vistoNocturna = true;
   }
 
+  /**
+   * Igual que `aplicarExtraSlot` para la racha (piso, minutosP50Acum, flags),
+   * pero sin sumar minutos a buckets p25–p100: las compensatorias devueltas
+   * no son extras remuneradas; van en `compExtrasMin` / `horasCompensatoriasDevueltas`.
+   */
+  protected static aplicarExtraSlotCompensatorioDevuelto(
+    esLibreOFest: boolean,
+    esDiurna: boolean,
+    r: ExtraStreak
+  ) {
+    const arrastraC4 = esLibreOFest;
+    if (arrastraC4) {
+      r.domOFestActivo = true;
+      r.minutosExtraAcum += 15;
+      const base = esDiurna ? 1.25 : 1.5;
+      if (r.piso < base) r.piso = base;
+      if (esDiurna) r.existeDiurnaExtra = true;
+      if (r.piso >= 1.5) r.minutosP50Acum += 15;
+      if (esDiurna) r.vistoDiurna = true;
+      else r.vistoNocturna = true;
+      return;
+    }
+
+    const base = esDiurna ? 1.25 : 1.5;
+    if (r.piso < base) r.piso = base;
+    if (esDiurna) r.existeDiurnaExtra = true;
+
+    let aplicarP75 = false;
+    if (!r.bloquearMixta && r.minutosP50Acum >= 180 && r.existeDiurnaExtra) {
+      aplicarP75 = true;
+    }
+
+    const mult = aplicarP75 ? 1.75 : r.piso;
+
+    if (mult >= 1.75) {
+      /* sin bucket p75 */
+    } else if (mult >= 1.5) {
+      r.minutosP50Acum += 15;
+    } else {
+      /* sin bucket p25 */
+    }
+
+    r.minutosExtraAcum += 15;
+    if (esDiurna) r.vistoDiurna = true;
+    else r.vistoNocturna = true;
+  }
+
   protected static minutosAhoras(min: number): number {
     return Math.round((min / 60) * 100) / 100;
   }
@@ -353,7 +400,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Extraer horas compensatorias calculadas por el segmentador
     const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas;
-    const compExtrasArray = segmentosResult.horasCompensatoriasPagadas;
+    const compExtrasArray = segmentosResult.horasCompensatoriasDevueltas;
 
     // Agregar horas compensatorias a los buckets (convertir de horas a minutos)
     b.compNormalesMin += Math.round(compNormalesHoras * 60);
@@ -418,8 +465,22 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         case "EXTRA": {
           const slots = dur / 15;
           const esDiurna = PoliticaH1Base.isDiurna(seg);
+          const esCompDev = seg.esCompensatorio === true;
           for (let i = 0; i < slots; i++) {
-            PoliticaH1Base.aplicarExtraSlot(esLibreOFest, esDiurna, racha, b);
+            if (esCompDev) {
+              PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+                esLibreOFest,
+                esDiurna,
+                racha
+              );
+            } else {
+              PoliticaH1Base.aplicarExtraSlot(
+                esLibreOFest,
+                esDiurna,
+                racha,
+                b
+              );
+            }
           }
           break;
         }
@@ -596,13 +657,22 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         huboExtra = true;
         const slots = dur / 15;
         const esDiurna = PoliticaH1Base.isDiurna(seg);
+        const esCompDev = seg.esCompensatorio === true;
         for (let i = 0; i < slots; i++) {
-          PoliticaH1Base.aplicarExtraSlot(
-            esLibreOFestAnterior,
-            esDiurna,
-            r,
-            DUMMY_BUCKETS
-          );
+          if (esCompDev) {
+            PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+              esLibreOFestAnterior,
+              esDiurna,
+              r
+            );
+          } else {
+            PoliticaH1Base.aplicarExtraSlot(
+              esLibreOFestAnterior,
+              esDiurna,
+              r,
+              DUMMY_BUCKETS
+            );
+          }
         }
       }
 
@@ -706,16 +776,23 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     // cuando esIncapacidad=true se asignan 24h de incapacidad = 1 día literal completo
     const dias = PoliticaH1Base.daysInclusive(fechaInicio, fechaFin);
     const esperadoMin = dias * 24 * 60;
+    // Cuadre 24h: las compensatorias tomadas vienen como LIBRE en el segmentador (mismo tiempo
+    // que compNormalesMin). Se descompone libre = (libre − tomadas) + tomadas para que totalMin
+    // refleje explícitamente la suma de compensatorias tomadas sin duplicar minutos.
+    const libreSinCompTomadas = Math.max(0, b.libreMin - b.compNormalesMin);
     const totalMin =
       b.normalMin +
       b.almuerzoMin +
-      b.libreMin +
+      libreSinCompTomadas +
       b.extraC1Min +
       b.extraC2Min +
       b.extraC3Min +
       b.extraC4Min +
       b.incapacidadEmpresaMin +
-      b.incapacidadIHSSMin;
+      b.incapacidadIHSSMin +
+      // Extras compensatorias devueltas no van a p25–p100; minutos solo en compExtrasMin
+      b.compExtrasMin +
+      b.compNormalesMin;
 
     if (totalMin !== esperadoMin) {
       throw new Error(
@@ -769,7 +846,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         horasCompensatoriasTomadas: PoliticaH1Base.minutosAhoras(
           b.compNormalesMin
         ),
-        horasCompensatoriasPagadas: PoliticaH1Base.minutosAhoras(
+        horasCompensatoriasDevueltas: PoliticaH1Base.minutosAhoras(
           b.compExtrasMin
         ),
       },
@@ -798,6 +875,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const diasPermisoCS = horasPermisoCS / 8;
     const diasPermisoSS = horasPermisoSS / 8;
     const diasInasistencias = horasInasistencias / 8;
+    const horasCompTomadas = PoliticaH1Base.minutosAhoras(b.compNormalesMin);
+    const diasCompensatoriasTomadas = horasCompTomadas / 8;
 
     // Incapacidades: Método de Restos Mayores (LRM) en base 15.
     // Los días reales de cada intervalo se convierten a días en base 15,
@@ -830,7 +909,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       diasVacaciones +
       diasPermisoCS +
       diasPermisoSS +
-      diasInasistencias;
+      diasInasistencias +
+      diasCompensatoriasTomadas;
     const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
 
     result.conteoDias = {
@@ -842,6 +922,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       inasistencias: diasInasistencias,
       incapacidadEmpresa: diasIncapacidadEmpresa,
       incapacidadIHSS: diasIncapacidadIHSS,
+      compensatoriasTomadas: diasCompensatoriasTomadas,
     };
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado
@@ -951,6 +1032,17 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         comentarios: string[];
       }
     >();
+    /** Extras compensatorias devueltas: tarifa normal, no entran en p25–p100 */
+    const horasPorJobCompDevueltas = new Map<
+      number,
+      {
+        jobId: number;
+        codigoJob: string;
+        nombreJob: string;
+        horas: number;
+        comentarios: string[];
+      }
+    >();
 
     const baseKey = 0; // tests esperan jobId 0
 
@@ -1044,6 +1136,36 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           }
         };
 
+        const upsertCompDevueltas = (
+          codigo: string,
+          nombre: string,
+          horas: number
+        ) => {
+          if (horas <= 0) return;
+          let foundKey: number | null = null;
+          for (const [k, v] of horasPorJobCompDevueltas) {
+            if (v.codigoJob === codigo) {
+              v.horas += horas;
+              if (!v.nombreJob || v.nombreJob === String(codigo))
+                v.nombreJob = nombre;
+              foundKey = k;
+              break;
+            }
+          }
+          if (foundKey === null) {
+            horasPorJobCompDevueltas.set(
+              `${baseKey}:${codigo}` as unknown as number,
+              {
+                jobId: baseKey,
+                codigoJob: codigo,
+                nombreJob: nombre,
+                horas,
+                comentarios: [],
+              }
+            );
+          }
+        };
+
         const addExtra = (
           codigo: string,
           diurnaH: number,
@@ -1077,6 +1199,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           if (!codigoANombre.has(codigo)) codigoANombre.set(codigo, nombreReal);
 
           if (!act?.esExtra) {
+            // Compensatorias tomadas: fuera del prorrateo "normal" por job (como jobs especiales)
+            if (act?.esCompensatorio === true) continue;
+
             const horas = Number(act?.duracionHoras ?? 0);
             if (horas > 0) upsertNormal(codigo, nombreReal, horas);
             const desc =
@@ -1107,6 +1232,61 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
               const target = horasPorJobNormal.get(existingKey)!;
               if (!target.comentarios.includes(desc))
                 target.comentarios.push(desc);
+            }
+            continue;
+          }
+
+          // Extras compensatorias devueltas: conjunto propio (tarifa normal), no p25–p100
+          if (act?.esCompensatorio === true) {
+            const startC: Date | null = act?.horaInicio
+              ? new Date(act.horaInicio)
+              : null;
+            const endC: Date | null = act?.horaFin
+              ? new Date(act.horaFin)
+              : null;
+            if (!startC || !endC) {
+              const horas = Number(act?.duracionHoras ?? 0);
+              if (horas > 0) upsertCompDevueltas(codigo, nombreReal, horas);
+            } else {
+              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
+              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+              const s = new Date(
+                Math.max(startC.getTime(), dayStart.getTime())
+              );
+              const e = new Date(Math.min(endC.getTime(), dayEnd.getTime()));
+              if (e.getTime() > s.getTime()) {
+                const toMin = (d: Date) =>
+                  (d.getTime() - dayStart.getTime()) / 60000;
+                const totalH = (toMin(e) - toMin(s)) / 60;
+                if (totalH > 0) upsertCompDevueltas(codigo, nombreReal, totalH);
+              }
+            }
+            const descC =
+              act?.descripcion ||
+              act?.comentario ||
+              (registroDiario as any)?.comentarioEmpleado ||
+              null;
+            if (descC) {
+              let ek: number | null = null;
+              for (const [k, v] of horasPorJobCompDevueltas) {
+                if (v.codigoJob === codigo) {
+                  ek = k;
+                  break;
+                }
+              }
+              if (ek == null) {
+                const key = `${baseKey}:${codigo}` as unknown as number;
+                horasPorJobCompDevueltas.set(key, {
+                  jobId: baseKey,
+                  codigoJob: codigo,
+                  nombreJob: nombreReal,
+                  horas: 0,
+                  comentarios: [],
+                });
+                ek = key;
+              }
+              const tc = horasPorJobCompDevueltas.get(ek)!;
+              if (!tc.comentarios.includes(descC)) tc.comentarios.push(descC);
             }
             continue;
           }
@@ -1371,6 +1551,11 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         permisoSinSueldoHoras: conteoHoras.cantidadHoras.permisoSinSueldo || 0,
         inasistenciasHoras: conteoHoras.cantidadHoras.inasistencias || 0,
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
+        horasCompensatoriasTomadas:
+          conteoHoras.cantidadHoras.horasCompensatoriasTomadas,
+        horasCompensatoriasDevueltasPorJob: convertMapToArray(
+          horasPorJobCompDevueltas
+        ),
         horasFeriado: totalHorasFeriado,
         deduccionesISR: 0,
         deduccionesRAP: 0,

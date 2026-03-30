@@ -88,7 +88,7 @@ type Horas = {
   p100: number;
   horasFeriado?: number;
   horasCompensatoriasTomadas?: number;
-  horasCompensatoriasPagadas?: number;
+  horasCompensatoriasDevueltas?: number;
   vacaciones?: number;
   incapacidad?: number; // incapacidadEmpresa + incapacidadIHSS
 };
@@ -110,26 +110,32 @@ function sumHoras(h: Horas) {
 }
 
 function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
-  // Cálculos de libre (si la app no lo entrega, lo derivamos)
-  const expLibre = 24 - sumHoras(exp);
-  const gotTotal = sumHoras(got);
-  const gotLibre = got.libre ?? 24 - gotTotal;
-
   const expFeriado = exp.horasFeriado ?? 0;
   const gotFeriado = got.horasFeriado ?? 0;
 
   const expCompTomadas = exp.horasCompensatoriasTomadas ?? 0;
   const gotCompTomadas = got.horasCompensatoriasTomadas ?? 0;
 
-  const expCompPagadas = exp.horasCompensatoriasPagadas ?? 0;
-  // horasCompensatoriasPagadas es un array, sumar todas las horas
-  const gotCompPagadasArray = (got as any).horasCompensatoriasPagadas;
-  const gotCompPagadas = Array.isArray(gotCompPagadasArray)
-    ? gotCompPagadasArray.reduce(
+  const expCompDevueltas = exp.horasCompensatoriasDevueltas ?? 0;
+  // horasCompensatoriasDevueltas es un array, sumar todas las horas
+  const gotCompDevueltasArray = (got as any).horasCompensatoriasDevueltas;
+  const gotCompDevueltas = Array.isArray(gotCompDevueltasArray)
+    ? gotCompDevueltasArray.reduce(
         (sum, item) => sum + (item.cantidadHoras ?? 0),
         0,
       )
-    : (got.horasCompensatoriasPagadas ?? 0);
+    : (got.horasCompensatoriasDevueltas ?? 0);
+
+  // Partición 24h: tomadas cuentan aparte (en segmentador van como LIBRE);
+  // devueltas no van a p25–p100 (van a compExtrasMin).
+  const expLibre =
+    24 -
+    sumHoras(exp) -
+    expCompTomadas -
+    expCompDevueltas;
+  const gotTotal =
+    sumHoras(got) + gotCompTomadas + gotCompDevueltas;
+  const gotLibre = 24 - gotTotal;
 
   const expVacaciones = exp.vacaciones ?? 0;
   const gotVacaciones = (got as any).vacaciones ?? 0;
@@ -153,9 +159,9 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
       obtenido: gotCompTomadas,
     },
     {
-      métrica: "comp_pagadas",
-      esperado: expCompPagadas,
-      obtenido: gotCompPagadas,
+      métrica: "comp_devueltas",
+      esperado: expCompDevueltas,
+      obtenido: gotCompDevueltas,
     },
     { métrica: "vacaciones", esperado: expVacaciones, obtenido: gotVacaciones },
     {
@@ -196,7 +202,7 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   expect(got.p100).toBe(exp.p100);
   expect(gotFeriado).toBe(expFeriado);
   expect(gotCompTomadas).toBe(expCompTomadas);
-  expect(gotCompPagadas).toBe(expCompPagadas);
+  expect(gotCompDevueltas).toBe(expCompDevueltas);
   expect(gotVacaciones).toBe(expVacaciones);
   expect(gotIncapacidad).toBe(expIncapacidad);
 
@@ -994,16 +1000,16 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p75: 0,
       p100: 0,
       horasCompensatoriasTomadas: 4,
-      horasCompensatoriasPagadas: 0,
+      horasCompensatoriasDevueltas: 0,
     });
   });
 
-  // -------------------- Caso Compensatorio 2: Horas extras compensatorias (pagadas al saldo) --------------------
+  // -------------------- Caso Compensatorio 2: Horas extras compensatorias (devueltas al banco) --------------------
   // Día normal: 4h job 200 + 5h job 300 + 3h extras compensatorias
-  // Las 3h extras compensatorias NO cuentan como horas extras, pasan a horasCompensatoriasPagadas
+  // Las 3h extras compensatorias NO cuentan como horas extras, pasan a horasCompensatoriasDevueltas
   // NO se aplica racha en horas compensatorias extras
-  // Esperado: 1,9,0,0,0,0 + 3h compensatorias pagadas
-  it("24/09/2025: 9h normales + 3h extras compensatorias ⇒ 1/9/0/0/0/0 + comp_pagadas:3", async () => {
+  // Esperado: 1,9,0,0,0,0 + 3h compensatorias devueltas
+  it("24/09/2025: 9h normales + 3h extras compensatorias ⇒ 1/9/0/0/0/0 + comp_devueltas:3", async () => {
     const fecha = "2025-09-24";
     const p = new H1Test();
 
@@ -1022,7 +1028,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p75: 0,
       p100: 0,
       horasCompensatoriasTomadas: 0,
-      horasCompensatoriasPagadas: 3,
+      horasCompensatoriasDevueltas: 3,
     });
   });
 

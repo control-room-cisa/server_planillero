@@ -54,12 +54,14 @@ export interface ConteoHorasTrabajadas {
     compensatorio?: number; // E06 y E07
     // Horas compensatorias (actividades con esCompensatorio=true)
     horasCompensatoriasTomadas?: number; // Horas normales compensatorias (no se cuentan como normales)
-    horasCompensatoriasPagadas?: number; // Horas extras compensatorias (no se cuentan como extras, se suman al saldo)
+    /** Extras compensatorias devueltas: fuera de p25–p100; remuneración = tarifa hora normal. */
+    horasCompensatoriasDevueltas?: number;
   };
 
   /**
    * Conteo agregado en días para el período. Base 15 días por período.
-   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo + incapacidadEmpresa + incapacidadIHSS + inasistencias
+   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo +
+   * incapacidadEmpresa + incapacidadIHSS + inasistencias + compensatoriasTomadas (días equiv. horas/8)
    */
   conteoDias?: {
     totalPeriodo: number; // siempre 15
@@ -70,6 +72,8 @@ export interface ConteoHorasTrabajadas {
     inasistencias: number; // E05 horas / 8
     incapacidadEmpresa: number; // Primeros 3 días consecutivos / 8
     incapacidadIHSS: number; // A partir del 4to día consecutivo / 8
+    /** Compensatorias tomadas (normales): horas / 8, descuentan de días laborados como jobs especiales */
+    compensatoriasTomadas?: number;
   };
   /**
    * Deducciones de alimentación calculadas
@@ -120,6 +124,11 @@ export interface ConteoHorasProrrateo {
 
     totalHorasLaborables: number;
     horasFeriado: number; // Horas laborables asignadas a feriado
+
+    /** Horas de jornada normal marcadas como compensatorio=true (se "toman" a cuenta del banco) */
+    horasCompensatoriasTomadas?: number;
+    /** Horas extra marcadas como compensatorio=true (devolución al banco), desglosadas por job */
+    horasCompensatoriasDevueltasPorJob?: HorasPorJob[];
 
     deduccionesISR: number;
     deduccionesRAP: number;
