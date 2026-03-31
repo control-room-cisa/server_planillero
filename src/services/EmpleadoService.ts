@@ -3,6 +3,7 @@ import bcrypt from "bcrypt";
 import {
   CreateEmpleadoDto,
   UpdateEmpleadoDto,
+  UpdateMiPerfilDto,
   EmployeeDto,
   EmployeeDetailDto,
 } from "../dtos/employee.dto";
@@ -397,6 +398,80 @@ export class EmpleadoService {
     } finally {
       await FileService.deleteTemp(files.foto?.path);
       await FileService.deleteTemp(files.cv?.path);
+    }
+  }
+
+  static async updateMyProfileWithFiles(
+    employeeId: number,
+    body: UpdateMiPerfilDto,
+    files: { foto?: Express.Multer.File }
+  ): Promise<EmployeeDetailDto> {
+    const empPrev = await EmpleadoRepository.findById(employeeId);
+    if (!empPrev) {
+      await FileService.deleteTemp(files.foto?.path);
+      throw new Error("Empleado no encontrado");
+    }
+
+    if (
+      body.correoElectronico &&
+      body.correoElectronico !== empPrev.correoElectronico
+    ) {
+      const existingByEmail = await EmpleadoRepository.findByEmail(
+        body.correoElectronico
+      );
+      if (existingByEmail && existingByEmail.id !== employeeId) {
+        await FileService.deleteTemp(files.foto?.path);
+        throw new Error("El correo electrónico ya está en uso");
+      }
+    }
+
+    const payload: Prisma.EmpleadoUpdateInput = {
+      profesion: body.profesion,
+      correoElectronico: body.correoElectronico,
+      estadoCivil: body.estadoCivil,
+      nombreConyugue: body.nombreConyugue,
+      condicionSalud: body.condicionSalud,
+      nombreContactoEmergencia: body.nombreContactoEmergencia,
+      numeroContactoEmergencia: body.numeroContactoEmergencia,
+      muerteBeneficiario: body.muerteBeneficiario,
+      nombreMadre: body.nombreMadre,
+      nombrePadre: body.nombrePadre,
+      telefono: body.telefono,
+      direccion: body.direccion,
+      ...(body.urlFotoPerfil !== undefined
+        ? { urlFotoPerfil: body.urlFotoPerfil }
+        : {}),
+    };
+
+    let emp = await EmpleadoRepository.updateEmpleado(employeeId, payload);
+    let newFotoFilename: string | undefined;
+
+    try {
+      if (files.foto) {
+        const saved = await FileService.saveFoto(
+          employeeId,
+          files.foto.path,
+          files.foto.originalname
+        );
+        newFotoFilename = saved.filename;
+      }
+
+      if (newFotoFilename) {
+        emp = await EmpleadoRepository.updateEmpleado(employeeId, {
+          urlFotoPerfil: newFotoFilename,
+        });
+
+        if (empPrev.urlFotoPerfil) {
+          await FileService.deleteFoto(employeeId, empPrev.urlFotoPerfil);
+        }
+      }
+
+      return this.toDtoDetail(emp as any);
+    } catch (err) {
+      await FileService.deleteFoto(employeeId, newFotoFilename);
+      throw err;
+    } finally {
+      await FileService.deleteTemp(files.foto?.path);
     }
   }
 }

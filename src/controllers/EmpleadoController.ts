@@ -9,10 +9,12 @@ import {
   EmployeeDto,
   EmployeeDetailDto,
   UpdateEmpleadoDto,
+  UpdateMiPerfilDto,
 } from "../dtos/employee.dto";
 import {
   createEmpleadoSchema,
   updateEmpleadoSchema,
+  updateMiPerfilSchema,
 } from "../validators/empleado.validator";
 import type { ApiResponse } from "../dtos/ApiResponse";
 
@@ -302,6 +304,59 @@ export const listByCompany: RequestHandler<
       data: empleados,
     } as ApiResponse<EmployeeDto[]>);
   } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// UPDATE OWN PROFILE (campos personales no sensibles)
+// -----------------------------------------------------------------------------
+export const updateMyProfile: RequestHandler<
+  {},
+  ApiResponse<EmployeeDetailDto>,
+  UpdateMiPerfilDto,
+  {}
+> = async (req, res, next) => {
+  try {
+    const user = (req as AuthRequest).user;
+    const body = parseEmpleadoBody<UpdateMiPerfilDto>(req);
+    const parsed = updateMiPerfilSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return res.status(400).json({
+        success: false,
+        message: "Errores de validación",
+        data: null,
+        errors: parsed.error.issues.map((issue) => ({
+          field: issue.path.join(".") || "_",
+          message: issue.message,
+        })),
+      } as ApiResponse<EmployeeDetailDto>);
+    }
+
+    const { foto } = getFiles(req);
+    const dto = await EmpleadoService.updateMyProfileWithFiles(
+      user.id,
+      parsed.data,
+      { foto }
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: "Perfil actualizado correctamente",
+      data: dto,
+    } as ApiResponse<EmployeeDetailDto>);
+  } catch (err: any) {
+    if (
+      err instanceof Error &&
+      /JSON inválido|Body inválido/.test(err.message)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: err.message,
+        data: null,
+      } as ApiResponse<EmployeeDetailDto>);
+    }
     next(err);
   }
 };

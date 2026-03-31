@@ -146,3 +146,20 @@ export interface UpdateEmpleadoDto {
   rolId?: number;
   departamentoId?: number;
 }
+
+/** Payload para actualizar perfil propio (campos personales no sensibles). */
+export interface UpdateMiPerfilDto {
+  profesion?: string;
+  correoElectronico?: string;
+  estadoCivil?: EstadoCivil;
+  nombreConyugue?: string;
+  condicionSalud?: string;
+  nombreContactoEmergencia?: string;
+  numeroContactoEmergencia?: string;
+  muerteBeneficiario?: string;
+  nombreMadre?: string;
+  nombrePadre?: string;
+  telefono?: string;
+  direccion?: string;
+  urlFotoPerfil?: string | null;
+}

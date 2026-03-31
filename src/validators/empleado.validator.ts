@@ -117,6 +117,10 @@ const empleadoFields = {
   telefono: z
     .string()
     .max(45, "El teléfono no puede tener más de 45 caracteres")
+    .refine((val) => val.trim() === "" || /^\+?\d+$/.test(val), {
+      message:
+        "El teléfono solo puede contener números y opcionalmente un '+' al inicio",
+    })
     .optional(),
   direccion: z
     .string()
@@ -353,5 +357,76 @@ export const updateEmpleadoSchema = z.object({
     .number({ invalid_type_error: "El departamento debe ser un número" })
     .int("El departamento debe ser un número entero")
     .positive("El departamento debe ser positivo")
+    .optional(),
+});
+
+// Esquema para actualización de perfil propio (sin campos sensibles/organizacionales)
+export const updateMiPerfilSchema = z.object({
+  profesion: z
+    .string()
+    .max(30, "La profesión no puede tener más de 30 caracteres")
+    .optional(),
+  correoElectronico: z
+    .string()
+    .optional()
+    .refine(
+      (val) =>
+        !val || val.trim() === "" || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val),
+      { message: "Formato de correo electrónico inválido" }
+    ),
+  estadoCivil: z
+    .nativeEnum(EstadoCivil, {
+      errorMap: () => ({ message: "Estado civil inválido" }),
+    })
+    .optional(),
+  nombreConyugue: z
+    .string()
+    .max(40, "El nombre del cónyuge no puede tener más de 40 caracteres")
+    .optional(),
+  condicionSalud: z
+    .string()
+    .max(50, "La condición de salud no puede tener más de 50 caracteres")
+    .optional(),
+  nombreContactoEmergencia: z
+    .string()
+    .max(
+      40,
+      "El nombre del contacto de emergencia no puede tener más de 40 caracteres"
+    )
+    .optional(),
+  numeroContactoEmergencia: z
+    .string()
+    .max(
+      20,
+      "El número del contacto de emergencia no puede tener más de 20 caracteres"
+    )
+    .optional(),
+  muerteBeneficiario: z
+    .string()
+    .max(40, "El beneficiario no puede tener más de 40 caracteres")
+    .optional(),
+  nombreMadre: z
+    .string()
+    .max(40, "El nombre de la madre no puede tener más de 40 caracteres")
+    .optional(),
+  nombrePadre: z
+    .string()
+    .max(40, "El nombre del padre no puede tener más de 40 caracteres")
+    .optional(),
+  telefono: z
+    .string()
+    .max(45, "El teléfono no puede tener más de 45 caracteres")
+    .optional(),
+  direccion: z
+    .string()
+    .max(250, "La dirección no puede tener más de 250 caracteres")
+    .optional(),
+  urlFotoPerfil: z
+    .union([
+      z.string().url("La URL de la foto de perfil debe ser válida"),
+      z.string().length(0),
+      z.null(),
+      z.undefined(),
+    ])
     .optional(),
 });

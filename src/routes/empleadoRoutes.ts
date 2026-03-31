@@ -6,6 +6,7 @@ import {
   createEmpleado,
   updateEmpleado,
   checkUsername,
+  updateMyProfile,
 } from "../controllers/EmpleadoController";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 import { authorizeRoles } from "../middlewares/authorizeRoles";
@@ -31,6 +32,9 @@ router.get(
 
 // GET /empleados/check-username/:username - Verificar disponibilidad de nombre de usuario
 router.get("/check-username/:username", checkUsername);
+
+// PATCH /empleados/me/profile - Perfil propio (campos personales no sensibles)
+router.patch("/me/profile", uploadEmpleado, updateMyProfile);
 
 // GET /empleados/:id - Todos los autenticados pueden ver
 router.get("/:id", getById);
