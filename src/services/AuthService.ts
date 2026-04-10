@@ -3,6 +3,7 @@ import jwt from "jsonwebtoken";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { EmpleadoService } from "../services/EmpleadoService";
 import { CreateEmpleadoDto } from "../dtos/employee.dto";
+import { AppError } from "../errors/AppError";
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
@@ -71,6 +72,13 @@ export class AuthService {
       throw new Error("Contraseña incorrecta");
     }
 
+    if (!empleado.activo) {
+      throw new AppError(
+        "Su cuenta está desactivada. Comuníquese con recursos humanos.",
+        403
+      );
+    }
+
     // Generar el token JWT
     // Nota: email es opcional ahora, se usa nombreUsuario o dni como identificador alternativo
     const token = jwt.sign(
@@ -97,6 +105,7 @@ export class AuthService {
         rolId: empleado.rolId,
         tipoHorario: empleado.tipoHorario,
         editTime: empleado.editTime,
+        activo: empleado.activo,
       },
     };
   }
@@ -123,6 +132,13 @@ export class AuthService {
     const valid = await bcrypt.compare(contrasenaActual, empleado.contrasena);
     if (!valid) {
       throw new Error("Contraseña actual incorrecta");
+    }
+
+    if (!empleado.activo) {
+      throw new AppError(
+        "Su cuenta está desactivada. Comuníquese con recursos humanos.",
+        403
+      );
     }
 
     // Validar que la nueva contraseña sea diferente
