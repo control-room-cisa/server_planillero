@@ -368,3 +368,16 @@ model GlobalConfig {
 
   @@map("global_config")
 }
+
+/// Rangos de fechas (deducción de alimentación) asociados a un código de nómina (YYYYMMA|B).
+/// Un solo registro por `codigoNomina` (A = primera quincena, B = segunda).
+model RangosFechasAlimentacion {
+  id           Int      @id @default(autoincrement())
+  codigoNomina String   @unique @map("codigo_nomina") @db.VarChar(20)
+  fechaInicio  DateTime @map("fecha_inicio") @db.Date
+  fechaFin     DateTime @map("fecha_fin") @db.Date
+  createdAt    DateTime? @default(now()) @map("created_at")
+  updatedAt    DateTime? @map("updated_at")
+
+  @@map("rangos_fechas_alimentacion")
+}
