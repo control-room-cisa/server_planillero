@@ -5,13 +5,13 @@ import type { RangoFechasAlimentacionUpdateDto } from "../validators/rangosFecha
 
 function ymdToLocal(ymd: string): Date {
   const [y, m, d] = ymd.split("-").map((x) => Number(x));
-  return new Date(y, m - 1, d);
+  return new Date(Date.UTC(y, m - 1, d));
 }
 
 function toYmd(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
