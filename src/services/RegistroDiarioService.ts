@@ -142,7 +142,12 @@ export class RegistroDiarioService {
   static async updateJobBySupervisor(
     supervisorId: number,
     empleadoId: number,
-    dto: { actividadId: number; nuevoJobId: number; descripcion?: string }
+    dto: {
+      actividadId: number;
+      nuevoJobId: number;
+      descripcion?: string;
+      className?: string;
+    }
   ) {
     return RegistroDiarioRepository.updateJobBySupervisor(
       supervisorId,

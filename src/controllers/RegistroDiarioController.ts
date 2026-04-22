@@ -234,11 +234,13 @@ export const updateJobBySupervisor: RequestHandler<
     actividadId: number;
     nuevoJobId: number;
     descripcion?: string;
+    className?: string;
   }
 > = async (req, res, next) => {
   try {
     const supervisorId = (req as AuthRequest).user.id;
-    const { empleadoId, actividadId, nuevoJobId, descripcion } = req.body;
+    const { empleadoId, actividadId, nuevoJobId, descripcion, className } =
+      req.body;
 
     // Validaciones básicas
     if (!empleadoId || !actividadId || !nuevoJobId) {
@@ -270,11 +272,18 @@ export const updateJobBySupervisor: RequestHandler<
         data: null,
       });
     }
+    if (className !== undefined && typeof className !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "El campo className debe ser una cadena de texto",
+        data: null,
+      });
+    }
 
     const updated = await RegistroDiarioService.updateJobBySupervisor(
       supervisorId,
       empleadoId,
-      { actividadId, nuevoJobId, descripcion }
+      { actividadId, nuevoJobId, descripcion, className }
     );
 
     return res.json({

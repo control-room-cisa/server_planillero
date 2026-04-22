@@ -318,7 +318,12 @@ export class RegistroDiarioRepository {
   static async updateJobBySupervisor(
     supervisorId: number,
     empleadoId: number,
-    dto: { actividadId: number; nuevoJobId: number; descripcion?: string }
+    dto: {
+      actividadId: number;
+      nuevoJobId: number;
+      descripcion?: string;
+      className?: string;
+    }
   ): Promise<RegistroDiarioDetail> {
     // Verificar que el supervisor tenga rolId = Roles.SUPERVISOR
     const supervisor = await prisma.empleado.findFirst({
@@ -395,12 +400,13 @@ export class RegistroDiarioRepository {
       throw new Error("Job no encontrado o no está activo");
     }
 
-    // Actualizar el job y descripción de la actividad
+    // Actualizar job, descripción y className de la actividad
     await prisma.actividad.update({
       where: { id: dto.actividadId },
       data: {
         jobId: dto.nuevoJobId,
         ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
+        ...(dto.className !== undefined && { className: dto.className }),
         updatedAt: new Date(),
       },
     });
