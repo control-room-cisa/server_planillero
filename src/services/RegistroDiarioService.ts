@@ -146,7 +146,7 @@ export class RegistroDiarioService {
       actividadId: number;
       nuevoJobId: number;
       descripcion?: string;
-      className?: string;
+      className?: number | string | null;
     }
   ) {
     return RegistroDiarioRepository.updateJobBySupervisor(

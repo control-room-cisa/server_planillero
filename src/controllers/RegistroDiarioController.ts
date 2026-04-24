@@ -234,7 +234,7 @@ export const updateJobBySupervisor: RequestHandler<
     actividadId: number;
     nuevoJobId: number;
     descripcion?: string;
-    className?: string;
+    className?: number | string | null;
   }
 > = async (req, res, next) => {
   try {
@@ -272,10 +272,15 @@ export const updateJobBySupervisor: RequestHandler<
         data: null,
       });
     }
-    if (className !== undefined && typeof className !== "string") {
+    if (
+      className !== undefined &&
+      className !== null &&
+      typeof className !== "string" &&
+      typeof className !== "number"
+    ) {
       return res.status(400).json({
         success: false,
-        message: "El campo className debe ser una cadena de texto",
+        message: "El campo className debe ser texto, numero o null",
         data: null,
       });
     }

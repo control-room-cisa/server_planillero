@@ -9,7 +9,7 @@ export type ActividadInput = {
   duracionHoras: number;
   esExtra?: boolean;
   esCompensatorio?: boolean;
-  className?: string;
+  className?: number | string | null;
   descripcion: string;
   horaInicio?: Date;
   horaFin?: Date;
@@ -46,6 +46,14 @@ export type RegistroDiarioDetail = RegistroDiario & {
 /* sin recálculo de horas en backend: se respeta duracionHoras del frontend */
 
 export class RegistroDiarioRepository {
+  private static normalizeClassName(value?: number | string | null): number | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === "number") return Number.isFinite(value) ? value : undefined;
+    const parsed = Number.parseInt(String(value).trim(), 10);
+    return Number.isNaN(parsed) ? undefined : parsed;
+  }
+
   /**
    * Inserta o actualiza (upsert) un registro diario + actividades.
    * Detecta existencia por fecha (YYYY-MM-DD) y empleado.
@@ -96,7 +104,7 @@ export class RegistroDiarioRepository {
         horaFin: a.horaFin ?? null,
         esExtra: a.esExtra ?? false,
         esCompensatorio: a.esCompensatorio ?? false,
-        className: a.className,
+        className: this.normalizeClassName(a.className),
         descripcion: a.descripcion,
       })) ?? [];
 
@@ -322,7 +330,7 @@ export class RegistroDiarioRepository {
       actividadId: number;
       nuevoJobId: number;
       descripcion?: string;
-      className?: string;
+      className?: number | string | null;
     }
   ): Promise<RegistroDiarioDetail> {
     // Verificar que el supervisor tenga rolId = Roles.SUPERVISOR
@@ -406,7 +414,9 @@ export class RegistroDiarioRepository {
       data: {
         jobId: dto.nuevoJobId,
         ...(dto.descripcion !== undefined && { descripcion: dto.descripcion }),
-        ...(dto.className !== undefined && { className: dto.className }),
+        ...(dto.className !== undefined && {
+          className: this.normalizeClassName(dto.className),
+        }),
         updatedAt: new Date(),
       },
     });

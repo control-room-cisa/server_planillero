@@ -303,7 +303,7 @@ model Actividad {
   esCorrida        Boolean?  @map("es_corrida")
   esExtra          Boolean?  @map("es_extra")
   esCompensatorio  Boolean?  @map("es_compensatorio")
-  className        String?   @map("class") @db.VarChar(45)
+  className        Int?      @map("class")
   descripcion      String    @db.VarChar(250)
   createdAt        DateTime? @default(now()) @map("created_at")
   updatedAt        DateTime? @map("updated_at")
@@ -311,8 +311,25 @@ model Actividad {
 
   registroDiario RegistroDiario @relation(fields: [registroDiarioId], references: [id])
   job            Job?           @relation(fields: [jobId], references: [id])
+  vehiculo       Vehiculo?      @relation(fields: [className], references: [class])
 
+  @@index([className], name: "idx_actividades_class")
   @@map("actividades")
+}
+
+// -- vehiculos ----
+model Vehiculo {
+  id        Int       @id @default(autoincrement())
+  class     Int       @unique
+  nombre    String    @db.VarChar(255)
+  tipo      String?   @db.VarChar(20)
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+
+  actividades Actividad[]
+
+  @@map("vehiculos")
 }
 
 // --------- jobs ---------

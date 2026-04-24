@@ -16,6 +16,7 @@ import planillaAccesoRevisionRoutes from "./routes/PlanillaAccesoRevisionRoutes"
 import deduccionAlimentacionRoutes from "./routes/deduccionAlimentacionRoutes";
 import globalConfigRoutes from "./routes/globalConfigRoutes";
 import rangosFechasAlimentacionRoutes from "./routes/rangosFechasAlimentacionRoutes";
+import vehiculoRoutes from "./routes/VehiculoRoutes";
 
 import path from "path";
 import { config } from "dotenv";
@@ -61,6 +62,7 @@ app.use("/api/planilla-acceso-revision", planillaAccesoRevisionRoutes);
 app.use("/api/deduccion-alimentacion", deduccionAlimentacionRoutes);
 app.use("/api/global-config", globalConfigRoutes);
 app.use("/api/rangos-fechas-alimentacion", rangosFechasAlimentacionRoutes);
+app.use("/api/vehiculos", vehiculoRoutes);
 
 app.use(errorHandler);
 
