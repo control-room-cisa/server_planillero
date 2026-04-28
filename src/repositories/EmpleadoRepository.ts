@@ -180,4 +180,20 @@ export class EmpleadoRepository {
       data: { contrasena: contrasenaHash },
     });
   }
+
+  /** Eliminación lógica de empleado */
+  static async softDeleteEmpleado(id: number): Promise<Empleado | null> {
+    const existing = await prisma.empleado.findFirst({
+      where: { id, deletedAt: null },
+    });
+    if (!existing) return null;
+
+    return prisma.empleado.update({
+      where: { id },
+      data: {
+        deletedAt: new Date(),
+        activo: false,
+      },
+    });
+  }
 }

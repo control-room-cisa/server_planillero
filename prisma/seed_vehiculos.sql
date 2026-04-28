@@ -49,7 +49,7 @@ VALUES
   (322, 'NISSAN NV 200 PANEL BLANCO', NULL),
   (323, 'MITSUBISHI MONTERO SPORT CAMIONETA BRONCE METALICO', NULL),
   (324, 'NISSAN NV 200 PANEL COLOR AZUL', NULL),
-  (400, 'Retroexcavadors John Deere 310SE ano 1999', NULL),
+  (400, 'Retroexcavadors John Deere 310SE año 1999', NULL),
   (401, 'Bus International CE', NULL),
   (402, 'Camion Plataforma International 4300 SBA', NULL),
   (403, 'Bus International CE', NULL),

@@ -360,3 +360,41 @@ export const updateMyProfile: RequestHandler<
     next(err);
   }
 };
+
+// -----------------------------------------------------------------------------
+// DELETE (soft delete)
+// -----------------------------------------------------------------------------
+export const deleteEmpleado: RequestHandler<
+  { id: string },
+  ApiResponse<null>,
+  {},
+  {}
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de empleado inválido",
+        data: null,
+      } as ApiResponse<null>);
+    }
+
+    const deleted = await EmpleadoService.deleteEmpleado(id);
+    if (!deleted) {
+      return res.status(404).json({
+        success: false,
+        message: "Empleado no encontrado",
+        data: null,
+      } as ApiResponse<null>);
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Empleado eliminado correctamente",
+      data: null,
+    } as ApiResponse<null>);
+  } catch (err) {
+    next(err);
+  }
+};

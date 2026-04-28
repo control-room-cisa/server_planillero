@@ -5,6 +5,7 @@ import {
   getById,
   createEmpleado,
   updateEmpleado,
+  deleteEmpleado,
   checkUsername,
   updateMyProfile,
 } from "../controllers/EmpleadoController";
@@ -54,5 +55,8 @@ router.patch(
   uploadEmpleado,
   updateEmpleado
 );
+
+// DELETE /empleados/:id - Solo RRHH puede eliminar empleados
+router.delete("/:id", authorizeRoles(Roles.RRHH), deleteEmpleado);
 
 export default router;

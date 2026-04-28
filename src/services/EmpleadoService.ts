@@ -474,4 +474,9 @@ export class EmpleadoService {
       await FileService.deleteTemp(files.foto?.path);
     }
   }
+
+  static async deleteEmpleado(id: number): Promise<boolean> {
+    const deleted = await EmpleadoRepository.softDeleteEmpleado(id);
+    return !!deleted;
+  }
 }

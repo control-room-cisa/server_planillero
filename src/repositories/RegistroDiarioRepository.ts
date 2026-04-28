@@ -233,11 +233,13 @@ export class RegistroDiarioRepository {
     id: number,
     data: {
       aprobacionSupervisor: boolean;
+      correccionHecha?: boolean;
       codigoSupervisor?: string;
       comentarioSupervisor?: string;
     }
   ): Promise<RegistroDiario> {
-    return prisma.registroDiario.update({
+    const forceCorreccionHechaFalse = data.aprobacionSupervisor === false;
+    const updated = await prisma.registroDiario.update({
       where: { id },
       data: {
         aprobacionSupervisor: data.aprobacionSupervisor,
@@ -246,6 +248,22 @@ export class RegistroDiarioRepository {
         updatedAt: new Date(),
       },
     });
+
+    const shouldPatchCorreccionHecha =
+      data.correccionHecha !== undefined || forceCorreccionHechaFalse;
+    if (!shouldPatchCorreccionHecha) return updated;
+
+    const correccionHechaValue = forceCorreccionHechaFalse
+      ? false
+      : Boolean(data.correccionHecha);
+
+    await prisma.$executeRaw`
+      UPDATE registros_diarios
+      SET correccion_hecha = ${correccionHechaValue}
+      WHERE id = ${id}
+    `;
+
+    return prisma.registroDiario.findUniqueOrThrow({ where: { id } });
   }
 
   /**
@@ -255,11 +273,13 @@ export class RegistroDiarioRepository {
     id: number,
     data: {
       aprobacionRrhh: boolean;
+      correccionHecha?: boolean;
       codigoRrhh?: string;
       comentarioRrhh?: string;
     }
   ): Promise<RegistroDiario> {
-    return prisma.registroDiario.update({
+    const forceCorreccionHechaFalse = data.aprobacionRrhh === false;
+    const updated = await prisma.registroDiario.update({
       where: { id },
       data: {
         aprobacionRrhh: data.aprobacionRrhh,
@@ -268,6 +288,22 @@ export class RegistroDiarioRepository {
         updatedAt: new Date(),
       },
     });
+
+    const shouldPatchCorreccionHecha =
+      data.correccionHecha !== undefined || forceCorreccionHechaFalse;
+    if (!shouldPatchCorreccionHecha) return updated;
+
+    const correccionHechaValue = forceCorreccionHechaFalse
+      ? false
+      : Boolean(data.correccionHecha);
+
+    await prisma.$executeRaw`
+      UPDATE registros_diarios
+      SET correccion_hecha = ${correccionHechaValue}
+      WHERE id = ${id}
+    `;
+
+    return prisma.registroDiario.findUniqueOrThrow({ where: { id } });
   }
 
   /**
