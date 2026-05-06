@@ -33,6 +33,7 @@ export type UpsertRegistroDiarioParams = {
   codigoRrhh?: string;
   comentarioSupervisor?: string;
   comentarioRrhh?: string;
+  correccionHecha?: boolean;
   actividades?: ActividadInput[];
   /** Horas feriado provistas por el frontend */
   horasFeriado?: number;
@@ -131,6 +132,7 @@ export class RegistroDiarioRepository {
           codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
           comentarioRrhh: restOfDia.comentarioRrhh,
+          correccionHecha: restOfDia.correccionHecha,
           horasFeriado: restOfDia.horasFeriado,
 
           actividades: {
@@ -163,6 +165,7 @@ export class RegistroDiarioRepository {
           codigoRrhh: restOfDia.codigoRrhh,
           comentarioSupervisor: restOfDia.comentarioSupervisor,
           comentarioRrhh: restOfDia.comentarioRrhh,
+          correccionHecha: restOfDia.correccionHecha,
           horasFeriado: restOfDia.horasFeriado,
 
           actividades: {
@@ -278,6 +281,16 @@ export class RegistroDiarioRepository {
       comentarioRrhh?: string;
     }
   ): Promise<RegistroDiario> {
+    const existing = await prisma.registroDiario.findFirst({
+      where: { id, deletedAt: null },
+      select: { aprobacionSupervisor: true },
+    });
+
+    /** Si RRHH rechaza y el supervisor había aprobado, volver supervisor a pendiente. */
+    const resetSupervisorPending =
+      data.aprobacionRrhh === false &&
+      existing?.aprobacionSupervisor === true;
+
     const forceCorreccionHechaFalse = data.aprobacionRrhh === false;
     const updated = await prisma.registroDiario.update({
       where: { id },
@@ -286,6 +299,9 @@ export class RegistroDiarioRepository {
         codigoRrhh: data.codigoRrhh,
         comentarioRrhh: data.comentarioRrhh,
         updatedAt: new Date(),
+        ...(resetSupervisorPending && {
+          aprobacionSupervisor: null,
+        }),
       },
     });
 
@@ -428,6 +444,12 @@ export class RegistroDiarioRepository {
     if (!actividad) {
       throw new Error(
         "Actividad no encontrada o no pertenece al empleado especificado"
+      );
+    }
+
+    if (actividad.registroDiario.aprobacionRrhh === true) {
+      throw new Error(
+        "No se puede editar actividades cuando RRHH ya aprobó el registro diario"
       );
     }
 

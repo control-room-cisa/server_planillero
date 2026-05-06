@@ -8,6 +8,7 @@ import {
   UpsertRegistroDiarioParams,
   RegistroDiarioDetail,
 } from "../repositories/RegistroDiarioRepository";
+import { prisma } from "../config/prisma";
 import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
 import { FeriadoRepository } from "../repositories/FeriadoRepository";
 import { AppError } from "../errors/AppError";
@@ -88,10 +89,26 @@ export class RegistroDiarioService {
       fecha
     );
   }
-  static aprobarSupervisor(
+  static async aprobarSupervisor(
     registroDiarioId: number,
     dto: SupervisorApprovalDto
   ) {
+    const reg = await prisma.registroDiario.findFirst({
+      where: { id: registroDiarioId, deletedAt: null },
+      select: { aprobacionRrhh: true },
+    });
+
+    if (!reg) {
+      throw new AppError("Registro no encontrado", 404);
+    }
+
+    if (reg.aprobacionRrhh === true) {
+      throw new AppError(
+        "No se puede aprobar ni rechazar desde supervisor cuando RRHH ya aprobó el registro",
+        409
+      );
+    }
+
     return RegistroDiarioRepository.updateSupervisorApproval(
       registroDiarioId,
       dto
