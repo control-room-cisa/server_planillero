@@ -21,14 +21,30 @@ export const registerSchema = z.object({
 export const loginSchema = z.object({
   body: z
     .object({
+      /** Campo único preferido desde el cliente (correo, DNI, usuario o código). */
+      identificador: z.string().optional(),
       usuario: z.string().optional(),
       correoElectronico: z.string().optional(),
+      dni: z.string().optional(),
       contrasena: z.string().min(1, "La contraseña es obligatoria"),
     })
-    .refine((data) => data.usuario || data.correoElectronico, {
-      message: "Debe proporcionar usuario o correoElectronico",
-      path: ["usuario"], // Asigna el error al campo usuario
-    }),
+    .refine(
+      (data) => {
+        const has = (v?: string) =>
+          typeof v === "string" && v.trim().length > 0;
+        return (
+          has(data.identificador) ||
+          has(data.usuario) ||
+          has(data.correoElectronico) ||
+          has(data.dni)
+        );
+      },
+      {
+        message:
+          "Debe proporcionar identificador (correo, DNI, usuario o código de empleado)",
+        path: ["identificador"],
+      }
+    ),
 });
 
 export const changePasswordSchema = z.object({

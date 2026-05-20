@@ -18,10 +18,19 @@ export class EmpleadoRepository {
     });
   }
 
-  /** Busca un empleado por su código (ahora marcado @unique) */
+  /** Colaborador activo por código (incluye departamento para DTOs / permisos). */
   static async findByCodigo(codigo: string): Promise<Empleado | null> {
-    return prisma.empleado.findUnique({
-      where: { codigo },
+    const trimmed = codigo?.trim();
+    if (!trimmed) return null;
+    return prisma.empleado.findFirst({
+      where: { codigo: trimmed, deletedAt: null },
+      include: {
+        departamento: {
+          include: {
+            empresa: { select: { id: true, nombre: true } },
+          },
+        },
+      },
     });
   }
 
@@ -64,19 +73,31 @@ export class EmpleadoRepository {
     );
   }
 
-  /** Busca un empleado por correo electrónico, DNI o nombre de usuario */
+  /** Busca empleado por correo, DNI, nombre de usuario (exacto o sin distinguir mayúsculas) o código. */
   static async findByEmailDniOrUsername(
     identifier: string
   ): Promise<Empleado | null> {
-    return prisma.empleado.findFirst({
+    const trimmed = identifier.trim();
+    if (!trimmed) return null;
+
+    const byCodigo = await prisma.empleado.findFirst({
+      where: { codigo: trimmed, deletedAt: null },
+    });
+    if (byCodigo) return byCodigo;
+
+    const direct = await prisma.empleado.findFirst({
       where: {
+        deletedAt: null,
         OR: [
-          { correoElectronico: identifier },
-          { dni: identifier },
-          { nombreUsuario: identifier },
+          { correoElectronico: trimmed },
+          { dni: trimmed },
+          { nombreUsuario: trimmed },
         ],
       },
     });
+    if (direct) return direct;
+
+    return this.findByUsername(trimmed);
   }
 
   /** Crea un nuevo empleado */

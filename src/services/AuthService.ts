@@ -53,7 +53,7 @@ export class AuthService {
   }
 
   static async login(identifier: string, contrasena: string) {
-    // Buscar empleado por correo electrónico, DNI o nombre de usuario
+    // Buscar empleado por correo, DNI, nombre de usuario o código
     const empleado = await EmpleadoRepository.findByEmailDniOrUsername(
       identifier
     );
@@ -115,7 +115,7 @@ export class AuthService {
     contrasenaActual: string,
     nuevaContrasena: string
   ) {
-    // Buscar empleado por correo electrónico, DNI o nombre de usuario
+    // Buscar empleado por correo, DNI, nombre de usuario o código
     const empleado = await EmpleadoRepository.findByEmailDniOrUsername(
       identifier
     );

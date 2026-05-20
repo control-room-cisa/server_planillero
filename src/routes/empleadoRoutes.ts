@@ -3,6 +3,7 @@ import {
   listByDepartment,
   listByCompany,
   getById,
+  getByCodigoForProrrateo,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -36,6 +37,13 @@ router.get("/check-username/:username", checkUsername);
 
 // PATCH /empleados/me/profile - Perfil propio (campos personales no sensibles)
 router.patch("/me/profile", uploadEmpleado, updateMyProfile);
+
+// GET /empleados/codigo/:codigo/prorrateo-context — asistente / supervisor contabilidad (acceso por empresa)
+router.get(
+  "/codigo/:codigo/prorrateo-context",
+  authorizeRoles(Roles.ASISTENTE_CONTABILIDAD, Roles.SUPERVISOR_CONTABILIDAD),
+  getByCodigoForProrrateo
+);
 
 // GET /empleados/:id - Todos los autenticados pueden ver
 router.get("/:id", getById);

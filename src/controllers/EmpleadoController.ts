@@ -2,6 +2,7 @@
 import type { RequestHandler } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
+import { AccesoContabilidadService } from "../services/AccesoContabilidadService";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { Roles } from "../enums/roles";
 import {
@@ -230,6 +231,52 @@ export const getById: RequestHandler<
     return res.json({
       success: true,
       message: "Empleado obtenido exitosamente",
+      data: dto,
+    } as ApiResponse<EmployeeDetailDto>);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET BY CODIGO (prorrateo: no devuelve datos sin acceso a la empresa del colaborador)
+// -----------------------------------------------------------------------------
+export const getByCodigoForProrrateo: RequestHandler<
+  { codigo: string },
+  ApiResponse<EmployeeDetailDto>,
+  {},
+  {}
+> = async (req, res, next) => {
+  try {
+    const codigo = req.params.codigo?.trim();
+    if (!codigo) {
+      return res.status(400).json({
+        success: false,
+        message: "Código de colaborador requerido",
+        data: null,
+      } as ApiResponse<EmployeeDetailDto>);
+    }
+
+    const authReq = req as AuthRequest;
+    const empleado = await EmpleadoRepository.findByCodigo(codigo);
+    if (!empleado) {
+      return res.status(404).json({
+        success: false,
+        message: "Colaborador no encontrado",
+        data: null,
+      } as ApiResponse<EmployeeDetailDto>);
+    }
+
+    await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
+      authReq.user.id,
+      authReq.user.rolId,
+      empleado.id
+    );
+
+    const dto = EmpleadoService.toDtoDetail(empleado as any);
+    return res.json({
+      success: true,
+      message: "Colaborador obtenido exitosamente",
       data: dto,
     } as ApiResponse<EmployeeDetailDto>);
   } catch (err) {

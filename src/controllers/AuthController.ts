@@ -43,14 +43,25 @@ export class AuthController {
     next: NextFunction
   ) {
     try {
-      const { usuario, correoElectronico, dni, contrasena } = req.body;
-      // Aceptar cualquiera de los tres: usuario, correoElectronico o dni
-      const identifier = usuario || correoElectronico || dni;
+      const {
+        identificador,
+        usuario,
+        correoElectronico,
+        dni,
+        contrasena,
+      } = req.body;
+      const identifier = [
+        identificador,
+        usuario,
+        correoElectronico,
+        dni,
+      ].find((v) => typeof v === "string" && v.trim().length > 0)?.trim();
 
       if (!identifier) {
         return res.status(400).json({
           success: false,
-          message: "Debe proporcionar un usuario, correo electrónico o DNI",
+          message:
+            "Debe proporcionar correo, DNI, nombre de usuario o código de empleado",
           data: null,
         });
       }

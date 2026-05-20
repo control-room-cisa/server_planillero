@@ -2,6 +2,9 @@
 import type { RequestHandler } from "express";
 import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
 import type { ApiResponse } from "../dtos/ApiResponse";
+import type { AuthRequest } from "../middlewares/authMiddleware";
+import { AccesoContabilidadService } from "../services/AccesoContabilidadService";
+import { AppError } from "../errors/AppError";
 import type {
   HorarioTrabajo,
   ConteoHorasTrabajadas,
@@ -234,7 +237,7 @@ export const getProrrateo: RequestHandler<
   ApiResponse<ConteoHorasProrrateo>, // response
   {}, // body
   { fechaInicio?: string; fechaFin?: string } // query
-> = async (req, res) => {
+> = async (req, res, next) => {
   const { empleadoId } = req.params;
   const { fechaInicio, fechaFin } = req.query;
 
@@ -260,7 +263,24 @@ export const getProrrateo: RequestHandler<
     return res.status(status).json(body);
   }
 
+  const targetId = Number(empleadoId);
+  if (!Number.isFinite(targetId) || targetId <= 0) {
+    const { status, body } = buildErr<ConteoHorasProrrateo>(
+      "Parámetros inválidos",
+      toApiErrors(["empleadoId debe ser un identificador numérico válido."]),
+      400
+    );
+    return res.status(status).json(body);
+  }
+
   try {
+    const authReq = req as AuthRequest;
+    await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
+      authReq.user.id,
+      authReq.user.rolId,
+      targetId
+    );
+
     const data =
       await HorarioTrabajoDomain.getProrrateoHorasPorJobByDateAndEmpleado(
         String(fechaInicio),
@@ -274,6 +294,9 @@ export const getProrrateo: RequestHandler<
       )
     );
   } catch (err: any) {
+    if (err instanceof AppError) {
+      return next(err);
+    }
     const lower = (err?.message ?? "").toLowerCase();
     const status =
       lower.includes("no encontrado") || lower.includes("not found")

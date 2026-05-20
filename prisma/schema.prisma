@@ -42,6 +42,7 @@ model Empresa {
   jobs          Job[]          @relation("EmpresaJobs")
   jobsMostrar   Job[]          @relation("EmpresaMostrarJobs")
   nominas       Nomina[]
+  accesosContabilidad AccesoContabilidad[]
 
   @@map("empresas")
 }
@@ -160,6 +161,9 @@ model Empleado {
   accesosComoSupervisor PlanillaAcceso[] @relation("SupervisorAccesos")
   accesosComoEmpleado   PlanillaAcceso[] @relation("EmpleadoAccesos")
   registrosDiarios      RegistroDiario[]
+  accesosContabilidadComoAsistente AccesoContabilidad[] @relation("AccesoContabilidadEmpleadoTarget")
+  accesosContabilidadCreados       AccesoContabilidad[] @relation("AccesoContabilidadCreatedBy")
+  accesosContabilidadActualizados  AccesoContabilidad[] @relation("AccesoContabilidadUpdatedBy")
 
   @@map("empleados")
 }
@@ -259,6 +263,27 @@ model PlanillaAcceso {
   @@index([supervisorId], name: "fk_accesos_supervisor_idx")
   @@index([empleadoId], name: "fk_accesos_empleado_idx")
   @@map("planilla_accesos")
+}
+
+/// Asignación de empresa consorcio a asistente de contabilidad (historial vía soft delete).
+model AccesoContabilidad {
+  id        Int       @id @default(autoincrement())
+  empleadoId Int      @map("id_empleado")
+  empresaId  Int      @map("id_empresa")
+  createdBy  Int      @map("created_by")
+  createdAt  DateTime? @default(now()) @map("created_at")
+  updatedBy  Int?     @map("updated_by")
+  updatedAt  DateTime? @map("updated_at")
+  deletedAt  DateTime? @map("deleted_at")
+
+  empleado       Empleado @relation("AccesoContabilidadEmpleadoTarget", fields: [empleadoId], references: [id])
+  empresa        Empresa  @relation(fields: [empresaId], references: [id])
+  creadoPor      Empleado @relation("AccesoContabilidadCreatedBy", fields: [createdBy], references: [id])
+  actualizadoPor Empleado? @relation("AccesoContabilidadUpdatedBy", fields: [updatedBy], references: [id])
+
+  @@index([empleadoId], name: "idx_accesos_contabilidad_empleado")
+  @@index([empresaId], name: "idx_accesos_contabilidad_empresa")
+  @@map("accesos_contabilidad")
 }
 
 // -- registros diarios ----
