@@ -48,5 +48,23 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     }
   }
 
-  return next(params);
+  const result = await next(params);
+
+  if (
+    params.model === "Empleado" &&
+    (params.action === "create" || params.action === "update") &&
+    result &&
+    typeof result === "object" &&
+    "id" in result &&
+    typeof (result as { id: unknown }).id === "number"
+  ) {
+    const empleadoId = (result as { id: number }).id;
+    void import("../services/FlotaUsuarioSyncService").then(
+      ({ FlotaUsuarioSyncService }) => {
+        FlotaUsuarioSyncService.scheduleSyncOne(empleadoId);
+      }
+    );
+  }
+
+  return result;
 });

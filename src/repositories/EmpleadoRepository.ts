@@ -11,7 +11,7 @@ export class EmpleadoRepository {
       include: {
         departamento: {
           include: {
-            empresa: { select: { nombre: true } },
+            empresa: { select: { nombre: true, codigo: true } },
           },
         },
       },
@@ -143,7 +143,7 @@ export class EmpleadoRepository {
       include: {
         departamento: {
           include: {
-            empresa: { select: { nombre: true } },
+            empresa: { select: { nombre: true, codigo: true } },
           },
         },
       },
@@ -156,7 +156,7 @@ export class EmpleadoRepository {
       include: {
         departamento: {
           include: {
-            empresa: { select: { nombre: true } },
+            empresa: { select: { nombre: true, codigo: true } },
           },
         },
       },
@@ -169,7 +169,7 @@ export class EmpleadoRepository {
       include: {
         departamento: {
           include: {
-            empresa: { select: { nombre: true } },
+            empresa: { select: { nombre: true, codigo: true } },
           },
         },
       },
@@ -187,7 +187,7 @@ export class EmpleadoRepository {
       include: {
         departamento: {
           include: {
-            empresa: { select: { nombre: true } },
+            empresa: { select: { nombre: true, codigo: true } },
           },
         },
       },

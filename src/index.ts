@@ -18,6 +18,7 @@ import globalConfigRoutes from "./routes/globalConfigRoutes";
 import rangosFechasAlimentacionRoutes from "./routes/rangosFechasAlimentacionRoutes";
 import vehiculoRoutes from "./routes/VehiculoRoutes";
 import accesoContabilidadRoutes from "./routes/accesoContabilidadRoutes";
+import { startFlotaUsuarioSyncCron } from "./jobs/flotaUsuarioSyncCron";
 
 import path from "path";
 import { config } from "dotenv";
@@ -71,4 +72,5 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
+  startFlotaUsuarioSyncCron();
 });

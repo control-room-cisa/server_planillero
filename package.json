@@ -21,6 +21,7 @@
     "express": "^4.18.2",
     "jsonwebtoken": "^9.0.0",
     "multer": "^2.0.2",
+    "node-cron": "^4.2.1",
     "uuid": "^11.1.0",
     "zod": "^3.25.71"
   },
@@ -31,6 +32,7 @@
     "@types/jsonwebtoken": "^9.0.2",
     "@types/multer": "^2.0.0",
     "@types/node": "^20.19.16",
+    "@types/node-cron": "^3.0.11",
     "prisma": "^5.0.0",
     "ts-node-dev": "^2.0.0",
     "tsx": "^4.20.3",
