@@ -36,14 +36,12 @@ JWT_SECRET="una_clave_secreta_para_jwt"
 
    | Variable | Descripción |
    |----------|-------------|
-   | `FLOTA_API_PORT` | Puerto HTTP del backend de Flota (mismo valor que `PORT` en Flota) |
+   | `FLOTA_WEBHOOK_SYNC_URL` | URL del webhook de Flota (sync en tiempo real y cron usan la misma) |
    | `FLOTA_WEBHOOK_SYNC_SECRET` | Mismo valor que `WEBHOOK_SYNC_SECRET` en el `.env` de Flota |
-   | `FLOTA_WEBHOOK_SYNC_URL` | Opcional. Default: `http://127.0.0.1:${FLOTA_API_PORT}/api/webhooks/usuarios/sync` |
    | `FLOTA_SYNC_CRON_ENABLED` | Opcional. `false` desactiva el cron diario |
-   | `FLOTA_SYNC_CRON_TZ` | Opcional. Zona horaria del cron (default `America/Tegucigalpa`) |
 
    - Tras cada create/update en `empleados`, Planillero envía el usuario a Flota (debounced).
-   - Cron diario a las **02:00** sincroniza todos los empleados activos en lotes de 500.
+   - Cron diario a las **02:00** (hora local del servidor) sincroniza todos los empleados en lotes de 500.
    - Checklist: mismo secreto en ambos `.env`, probar con un empleado antes del lote completo, códigos de `empresas.codigo` alineados en Flota.
 4. **Aplicar migraciones y generar cliente Prisma**
 

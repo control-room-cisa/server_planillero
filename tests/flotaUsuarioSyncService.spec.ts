@@ -16,9 +16,9 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
   const originalEnv = { ...process.env };
 
   beforeEach(() => {
-    process.env.FLOTA_API_PORT = "3001";
+    process.env.FLOTA_WEBHOOK_SYNC_URL =
+      "http://127.0.0.1:3001/api/webhooks/usuarios/sync";
     process.env.FLOTA_WEBHOOK_SYNC_SECRET = "test-secret";
-    delete process.env.FLOTA_WEBHOOK_SYNC_URL;
   });
 
   afterEach(() => {
@@ -92,7 +92,7 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
   });
 
   it("no llama fetch si faltan variables de entorno", async () => {
-    delete process.env.FLOTA_API_PORT;
+    delete process.env.FLOTA_WEBHOOK_SYNC_URL;
     delete process.env.FLOTA_WEBHOOK_SYNC_SECRET;
 
     const fetchMock = vi.fn();

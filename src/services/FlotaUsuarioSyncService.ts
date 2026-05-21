@@ -27,13 +27,7 @@ interface FlotaSyncResponse {
 const pendingSyncs = new Map<number, ReturnType<typeof setTimeout>>();
 
 function getWebhookUrl(): string | null {
-  const explicit = process.env.FLOTA_WEBHOOK_SYNC_URL?.trim();
-  if (explicit) return explicit;
-
-  const port = process.env.FLOTA_API_PORT?.trim();
-  if (!port) return null;
-
-  return `http://127.0.0.1:${port}/api/webhooks/usuarios/sync`;
+  return process.env.FLOTA_WEBHOOK_SYNC_URL?.trim() || null;
 }
 
 function getWebhookSecret(): string | null {
@@ -90,7 +84,7 @@ export class FlotaUsuarioSyncService {
 
     if (!url || !secret) {
       console.warn(
-        "[FlotaSync] Omitido: configurar FLOTA_API_PORT y FLOTA_WEBHOOK_SYNC_SECRET en .env"
+        "[FlotaSync] Omitido: configurar FLOTA_WEBHOOK_SYNC_URL y FLOTA_WEBHOOK_SYNC_SECRET en .env"
       );
       return;
     }
@@ -128,7 +122,7 @@ export class FlotaUsuarioSyncService {
 
     if (!url || !secret) {
       console.error(
-        "[FlotaSync] Cron omitido: configurar FLOTA_API_PORT y FLOTA_WEBHOOK_SYNC_SECRET en .env"
+        "[FlotaSync] Cron omitido: configurar FLOTA_WEBHOOK_SYNC_URL y FLOTA_WEBHOOK_SYNC_SECRET en .env"
       );
       return;
     }
