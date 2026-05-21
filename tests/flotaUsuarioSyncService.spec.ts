@@ -37,7 +37,9 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
         data: {
           creados: 2,
           actualizados: 3,
-          errores: [{ codigo_empleado: "EMP099", mensaje: "Empresa no existe" }],
+          errores: [
+            { codigo_empleado: "EMP099", mensaje: "Empresa no existe" },
+          ],
         },
       }),
     });
@@ -46,9 +48,8 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
-    const { FlotaUsuarioSyncService } = await import(
-      "../src/services/FlotaUsuarioSyncService"
-    );
+    const { FlotaUsuarioSyncService } =
+      await import("../src/services/FlotaUsuarioSyncService");
 
     const prismaMock = await import("../src/config/prisma");
     vi.spyOn(prismaMock.prisma.empleado, "findFirst").mockResolvedValue({
@@ -80,33 +81,53 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
     const [, init] = fetchMock.mock.calls[0];
     expect(init?.method).toBe("POST");
     expect((init?.headers as Record<string, string>)["X-Webhook-Key"]).toBe(
-      "test-secret"
+      "test-secret",
     );
 
     expect(logSpy).toHaveBeenCalledWith(
-      expect.stringContaining("creados=2 actualizados=3 errores=1")
+      expect.stringContaining("creados=2 actualizados=3 errores=1"),
     );
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("EMP099: Empresa no existe")
+      expect.stringContaining("EMP099: Empresa no existe"),
     );
+  });
+});
+
+describe("FlotaUsuarioSyncService — sin configuración de webhook", () => {
+  const originalFetch = global.fetch;
+  const originalEnv = { ...process.env };
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    process.env = { ...originalEnv };
+    vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("no llama fetch si faltan variables de entorno", async () => {
-    delete process.env.FLOTA_WEBHOOK_SYNC_URL;
-    delete process.env.FLOTA_WEBHOOK_SYNC_SECRET;
+    vi.stubEnv("FLOTA_WEBHOOK_SYNC_URL", "");
+    vi.stubEnv("FLOTA_WEBHOOK_SYNC_SECRET", "");
 
     const fetchMock = vi.fn();
     global.fetch = fetchMock as typeof fetch;
 
-    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     vi.resetModules();
-    const { FlotaUsuarioSyncService } = await import(
-      "../src/services/FlotaUsuarioSyncService"
-    );
+    const { FlotaUsuarioSyncService } =
+      await import("../src/services/FlotaUsuarioSyncService");
+
+    const prismaMock = await import("../src/config/prisma");
+    const findFirstSpy = vi
+      .spyOn(prismaMock.prisma.empleado, "findFirst")
+      .mockResolvedValue(null as never);
 
     await FlotaUsuarioSyncService.syncOne(1);
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(findFirstSpy).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("configurar FLOTA_WEBHOOK_SYNC_URL"),
+    );
   });
 });
