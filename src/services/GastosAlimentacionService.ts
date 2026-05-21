@@ -1,3 +1,5 @@
+import { registroFechaToYmdSafe } from "../utils/dateTime";
+
 const DEFAULT_GASTOS_ALIMENTACION_ENDPOINT =
   process.env.GASTOS_ALIMENTACION_ENDPOINT ??
   "http://192.168.1.13:5200/api/employee/reportes/consumo";
@@ -100,12 +102,12 @@ export class GastosAlimentacionService {
         success: data.success,
         empleadoID: data.empleadoID,
         codigoEmpleado: data.codigoEmpleado,
-        fechaInicio: data.fechaInicio,
-        fechaFin: data.fechaFin,
+        fechaInicio: registroFechaToYmdSafe(data.fechaInicio) ?? "",
+        fechaFin: registroFechaToYmdSafe(data.fechaFin) ?? "",
         items: (data.items ?? []).map((item) => ({
           producto: item.Producto,
           precio: Number(item.Precio ?? 0),
-          fecha: item.Fecha,
+          fecha: registroFechaToYmdSafe(item.Fecha) ?? String(item.Fecha ?? ""),
         })),
         message: data.message,
       };

@@ -10,6 +10,7 @@ import type {
   ConteoHorasTrabajadas,
   ConteoHorasProrrateo,
 } from "../domain/calculo-horas/types";
+import { ymdGt } from "../utils/dateTime";
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -178,7 +179,7 @@ export const getConteoHoras: RequestHandler<
     errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
   if (fechaFin && !FECHA_RE.test(fechaFin))
     errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
-  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+  if (fechaInicio && fechaFin && ymdGt(String(fechaInicio), String(fechaFin))) {
     errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
   }
 
@@ -250,7 +251,7 @@ export const getProrrateo: RequestHandler<
     errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
   if (fechaFin && !FECHA_RE.test(fechaFin))
     errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
-  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+  if (fechaInicio && fechaFin && ymdGt(String(fechaInicio), String(fechaFin))) {
     errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
   }
 
@@ -350,7 +351,7 @@ export const getDeduccionesAlimentacion: RequestHandler<
     errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
   if (fechaFin && !FECHA_RE.test(fechaFin))
     errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
-  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+  if (fechaInicio && fechaFin && ymdGt(String(fechaInicio), String(fechaFin))) {
     errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
   }
 

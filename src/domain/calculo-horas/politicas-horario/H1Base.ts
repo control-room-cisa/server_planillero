@@ -9,6 +9,7 @@ import {
 import type { Segmento15 } from "./segmentador";
 import { JobRepository } from "../../../repositories/JobRepository";
 import { SegmentadorTiempo } from "../segmentador-tiempo";
+import { addDaysYmd } from "../../../utils/dateTime";
 
 /**
  * Clase base abstracta para políticas H1 y sus subtipos (H1.1, H1.2, H1.3)
@@ -33,13 +34,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     return start >= 5 * 60 && start < 19 * 60; // 05:00–19:00
   }
   protected static addDays(iso: string, d: number): string {
-    const [Y, M, D] = iso.split("-").map(Number);
-    const dt = new Date(Date.UTC(Y, M - 1, D));
-    dt.setUTCDate(dt.getUTCDate() + d);
-    const y = dt.getUTCFullYear();
-    const m = `${dt.getUTCMonth() + 1}`.padStart(2, "0");
-    const day = `${dt.getUTCDate()}`.padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    return addDaysYmd(iso, d);
   }
   protected static daysInclusive(a: string, b: string): number {
     const [Y1, M1, D1] = a.split("-").map(Number);

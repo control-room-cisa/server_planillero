@@ -6,6 +6,7 @@ import type {
   ConteoHorasProrrateo,
   HorasPorJob,
 } from "../types";
+import { addDaysYmd } from "../../../utils/dateTime";
 
 /**
  * Política H2Base — Base para turnos rotativos de 12h, sin almuerzo.
@@ -44,13 +45,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     return hh * 60 + mm;
   }
   protected static addDays(iso: string, d: number): string {
-    const [Y, M, D] = iso.split("-").map(Number);
-    const dt = new Date(Date.UTC(Y, M - 1, D));
-    dt.setUTCDate(dt.getUTCDate() + d);
-    const y = dt.getUTCFullYear();
-    const m = `${dt.getUTCMonth() + 1}`.padStart(2, "0");
-    const day = `${dt.getUTCDate()}`.padStart(2, "0");
-    return `${y}-${m}-${day}`;
+    return addDaysYmd(iso, d);
   }
   protected static dayCountInclusive(a: string, b: string): number {
     const [Y1, M1, D1] = a.split("-").map(Number);

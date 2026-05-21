@@ -1,26 +1,14 @@
 import { prisma } from "../config/prisma";
 import type { RangosFechasAlimentacion } from "@prisma/client";
-
-function parseYmdToLocalDate(ymd: string): Date {
-  const [y, m, d] = ymd.split("-").map((x) => Number(x));
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-function toYmd(d: Date): string {
-  // Para columnas DATE en Prisma/MySQL, usar UTC evita corrimientos por zona horaria local.
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+import { prismaDateToYmd, ymdToPrismaDate } from "../utils/dateTime";
 
 export class RangosFechasAlimentacionRepository {
   static toDto(row: RangosFechasAlimentacion) {
     return {
       id: row.id,
       codigoNomina: row.codigoNomina,
-      fechaInicio: toYmd(row.fechaInicio),
-      fechaFin: toYmd(row.fechaFin),
+      fechaInicio: prismaDateToYmd(row.fechaInicio),
+      fechaFin: prismaDateToYmd(row.fechaFin),
     };
   }
 
@@ -75,8 +63,8 @@ export class RangosFechasAlimentacionRepository {
     return prisma.rangosFechasAlimentacion.create({
       data: {
         codigoNomina: data.codigoNomina,
-        fechaInicio: parseYmdToLocalDate(data.fechaInicio),
-        fechaFin: parseYmdToLocalDate(data.fechaFin),
+        fechaInicio: ymdToPrismaDate(data.fechaInicio),
+        fechaFin: ymdToPrismaDate(data.fechaFin),
       },
     });
   }
@@ -88,8 +76,8 @@ export class RangosFechasAlimentacionRepository {
     return prisma.rangosFechasAlimentacion.update({
       where: { id },
       data: {
-        fechaInicio: parseYmdToLocalDate(data.fechaInicio),
-        fechaFin: parseYmdToLocalDate(data.fechaFin),
+        fechaInicio: ymdToPrismaDate(data.fechaInicio),
+        fechaFin: ymdToPrismaDate(data.fechaFin),
         updatedAt: new Date(),
       },
     });

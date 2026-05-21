@@ -2,6 +2,7 @@
 import type { RequestHandler } from "express";
 import { GastosAlimentacionService } from "../services/GastosAlimentacionService";
 import type { ApiResponse } from "../dtos/ApiResponse";
+import { ymdGt } from "../utils/dateTime";
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -91,8 +92,8 @@ function toApiErrors(items: any[]): ApiError[] {
 
 /**
  * @route GET /api/deduccion-alimentacion
- * @desc Obtiene las deducciones de alimentación de un empleado por código en un período
- * @query codigoEmpleado - Código del empleado
+ * @desc Obtiene las deducciones de alimentaci?n de un empleado por c?digo en un per?odo
+ * @query codigoEmpleado - C?digo del empleado
  * @query fechaInicio - Fecha de inicio (YYYY-MM-DD)
  * @query fechaFin - Fecha de fin (YYYY-MM-DD)
  * @access Private
@@ -121,10 +122,10 @@ export const getDeduccionAlimentacion: RequestHandler<
   if (!fechaInicio) errors400.push("fechaInicio es requerida.");
   if (!fechaFin) errors400.push("fechaFin es requerida.");
   if (fechaInicio && !FECHA_RE.test(fechaInicio))
-    errors400.push('Formato inválido para fechaInicio. Use "YYYY-MM-DD".');
+    errors400.push('Formato inv?lido para fechaInicio. Use "YYYY-MM-DD".');
   if (fechaFin && !FECHA_RE.test(fechaFin))
-    errors400.push('Formato inválido para fechaFin. Use "YYYY-MM-DD".');
-  if (fechaInicio && fechaFin && new Date(fechaInicio) > new Date(fechaFin)) {
+    errors400.push('Formato inv?lido para fechaFin. Use "YYYY-MM-DD".');
+  if (fechaInicio && fechaFin && ymdGt(String(fechaInicio), String(fechaFin))) {
     errors400.push("fechaInicio debe ser menor o igual a fechaFin.");
   }
 
@@ -137,12 +138,12 @@ export const getDeduccionAlimentacion: RequestHandler<
         fecha: string;
       }>;
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>("Parámetros inválidos", toApiErrors(errors400), 400);
+    }>("Par?metros inv?lidos", toApiErrors(errors400), 400);
     return res.status(status).json(body);
   }
 
   try {
-    // Llamar al servicio que hace la petición a la API externa
+    // Llamar al servicio que hace la petici?n a la API externa
     const resultado = await GastosAlimentacionService.obtenerConsumo({
       codigoEmpleado: String(codigoEmpleado).trim(),
       fechaInicio: String(fechaInicio),
@@ -160,7 +161,7 @@ export const getDeduccionAlimentacion: RequestHandler<
         }>;
         errorAlimentacion?: { tieneError: boolean; mensajeError: string };
       }>(
-        resultado.message || "Error al obtener deducciones de alimentación",
+        resultado.message || "Error al obtener deducciones de alimentaci?n",
         [],
         500
       );
@@ -187,7 +188,7 @@ export const getDeduccionAlimentacion: RequestHandler<
 
     return res.json(
       buildOk<typeof data>(
-        "Deducciones de alimentación obtenidas exitosamente",
+        "Deducciones de alimentaci?n obtenidas exitosamente",
         data
       )
     );
@@ -196,7 +197,7 @@ export const getDeduccionAlimentacion: RequestHandler<
     const status =
       lower.includes("no encontrado") || lower.includes("not found")
         ? 404
-        : lower.includes("inválid") ||
+        : lower.includes("inv?lid") ||
           lower.includes("invalid") ||
           lower.includes("formato")
         ? 400
@@ -212,7 +213,7 @@ export const getDeduccionAlimentacion: RequestHandler<
       }>;
       errorAlimentacion?: { tieneError: boolean; mensajeError: string };
     }>(
-      err?.message || "Error obteniendo deducciones de alimentación",
+      err?.message || "Error obteniendo deducciones de alimentaci?n",
       toApiErrors(errors),
       status
     );

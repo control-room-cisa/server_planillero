@@ -2,24 +2,7 @@ import { Prisma } from "@prisma/client";
 import { RangosFechasAlimentacionRepository } from "../repositories/RangosFechasAlimentacionRepository";
 import type { RangoFechasAlimentacionCreateDto } from "../validators/rangosFechasAlimentacion.validator";
 import type { RangoFechasAlimentacionUpdateDto } from "../validators/rangosFechasAlimentacion.validator";
-
-function ymdToLocal(ymd: string): Date {
-  const [y, m, d] = ymd.split("-").map((x) => Number(x));
-  return new Date(Date.UTC(y, m - 1, d));
-}
-
-function toYmd(d: Date): string {
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-function addDaysYmd(ymd: string, n: number): string {
-  const d = ymdToLocal(ymd);
-  d.setDate(d.getDate() + n);
-  return toYmd(d);
-}
+import { addDaysYmd, prismaDateToYmd } from "../utils/dateTime";
 
 /** Solape inclusivo: [a0,a1] con [b0,b1] (strings YYYY-MM-DD). */
 function rangosSeTraslapa(
@@ -44,9 +27,9 @@ function maxYmdFechaFinEntreRangos(
   rows: { fechaFin: Date }[],
 ): string | null {
   if (rows.length === 0) return null;
-  let best = toYmd(rows[0]!.fechaFin);
+  let best = prismaDateToYmd(rows[0]!.fechaFin);
   for (let i = 1; i < rows.length; i++) {
-    const y = toYmd(rows[i]!.fechaFin);
+    const y = prismaDateToYmd(rows[i]!.fechaFin);
     if (y > best) best = y;
   }
   return best;
@@ -79,8 +62,8 @@ export class RangosFechasAlimentacionService {
         rangosSeTraslapa(
           dto.fechaInicio,
           dto.fechaFin,
-          toYmd(r.fechaInicio),
-          toYmd(r.fechaFin),
+          prismaDateToYmd(r.fechaInicio),
+          prismaDateToYmd(r.fechaFin),
         )
       ) {
         throw clientError("El rango se traslapa con otro registro existente.");
@@ -90,7 +73,7 @@ export class RangosFechasAlimentacionService {
     if (total > 0) {
       const maxFin = await RangosFechasAlimentacionRepository.maxFechaFinGlobal();
       if (maxFin) {
-        const ultimaYmd = toYmd(maxFin);
+        const ultimaYmd = prismaDateToYmd(maxFin);
         const esperada = addDaysYmd(ultimaYmd, 1);
         if (dto.fechaInicio !== esperada) {
           throw clientError(
@@ -133,8 +116,8 @@ export class RangosFechasAlimentacionService {
         rangosSeTraslapa(
           dto.fechaInicio,
           dto.fechaFin,
-          toYmd(r.fechaInicio),
-          toYmd(r.fechaFin),
+          prismaDateToYmd(r.fechaInicio),
+          prismaDateToYmd(r.fechaFin),
         )
       ) {
         throw clientError("El rango se traslapa con otro registro existente.");
