@@ -1044,22 +1044,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     const SLOT_MIN = 15;
     const slotHoras = SLOT_MIN / 60;
-    const dummy: Buckets = {
-      normalMin: 0,
-      almuerzoMin: 0,
-      libreMin: 0,
-      extraC1Min: 0,
-      extraC2Min: 0,
-      extraC3Min: 0,
-      extraC4Min: 0,
-      vacacionesMin: 0,
-      permisoConSueldoMin: 0,
-      permisoSinSueldoMin: 0,
-      inasistenciasMin: 0,
-      compensatorioMin: 0,
-      compNormalesMin: 0,
-      compExtrasMin: 0,
-    };
 
     for (const seg of segmentos) {
       const durMin = PoliticaH1Base.segDurMin(seg);
@@ -1131,7 +1115,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
               esLibreOFest,
               esDiurna,
               racha,
-              dummy
+              DUMMY_BUCKETS
             );
             upsertProrrateoJob(
               bandMaps[band],
