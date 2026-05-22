@@ -372,8 +372,8 @@ export class RegistroDiarioRepository {
   }
 
   /**
-   * Permite a un supervisor actualizar el job y descripción de una actividad específica
-   * de otro empleado. Solo disponible para supervisores (rolId = Roles.SUPERVISOR).
+   * Permite actualizar job, descripción y class de una actividad de otro empleado.
+   * Roles: SUPERVISOR, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
    */
   static async updateJobBySupervisor(
     supervisorId: number,
@@ -385,7 +385,12 @@ export class RegistroDiarioRepository {
       className?: number | string | null;
     }
   ): Promise<RegistroDiarioDetail> {
-    // Verificar que el supervisor tenga rolId = Roles.SUPERVISOR
+    const ROLES_PUEDEN_EDITAR_JOB = [
+      Roles.SUPERVISOR,
+      Roles.SUPERVISOR_CONTABILIDAD,
+      Roles.ASISTENTE_CONTABILIDAD,
+    ];
+
     const supervisor = await prisma.empleado.findFirst({
       where: {
         id: supervisorId,
@@ -393,9 +398,12 @@ export class RegistroDiarioRepository {
       select: { rolId: true },
     });
 
-    if (!supervisor || supervisor.rolId !== Roles.SUPERVISOR) {
+    if (
+      !supervisor ||
+      !ROLES_PUEDEN_EDITAR_JOB.includes(supervisor.rolId as Roles)
+    ) {
       throw new Error(
-        "Solo los supervisores pueden actualizar jobs de otros empleados"
+        "No tiene permiso para actualizar jobs de actividades de otros empleados"
       );
     }
 
@@ -444,12 +452,6 @@ export class RegistroDiarioRepository {
     if (!actividad) {
       throw new Error(
         "Actividad no encontrada o no pertenece al empleado especificado"
-      );
-    }
-
-    if (actividad.registroDiario.aprobacionRrhh === true) {
-      throw new Error(
-        "No se puede editar actividades cuando RRHH ya aprobó el registro diario"
       );
     }
 

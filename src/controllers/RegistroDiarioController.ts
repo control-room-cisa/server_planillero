@@ -223,8 +223,8 @@ export const aprobacionRrhh: RequestHandler<
 
 /**
  * PATCH /api/registrodiario/update-job-supervisor
- * Permite a un supervisor actualizar el job y descripción de una actividad específica
- * de otro empleado. Solo disponible para supervisores (rolId = Roles.SUPERVISOR).
+ * Permite actualizar job, descripción y class de una actividad de otro empleado.
+ * Roles: SUPERVISOR, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
  */
 export const updateJobBySupervisor: RequestHandler<
   {},
