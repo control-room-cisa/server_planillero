@@ -148,6 +148,78 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     return regex.test(fecha);
   }
 
+  /** Minutos del día en TZ (misma lógica que segmentador.ts). */
+  protected minutesOfDayInTZ(
+    d: Date,
+    tz = "America/Tegucigalpa"
+  ): number {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+      timeZone: tz,
+    }).formatToParts(d);
+    const hh = Number(parts.find((p) => p.type === "hour")?.value ?? "0");
+    const mm = Number(parts.find((p) => p.type === "minute")?.value ?? "0");
+    return hh * 60 + mm;
+  }
+
+  /**
+   * Horas de actividad con rango horario — alineado con segmentador / conteo:
+   * si hay horaInicio y horaFin, usa la diferencia completa; si no, duracionHoras.
+   */
+  protected horasActividadConRangoHorario(act: {
+    horaInicio?: Date | string | null;
+    horaFin?: Date | string | null;
+    duracionHoras?: number | null;
+  }): number {
+    if (act?.horaInicio && act?.horaFin) {
+      const duracionMs =
+        new Date(act.horaFin).getTime() - new Date(act.horaInicio).getTime();
+      const horas = duracionMs / 3_600_000;
+      if (Number.isFinite(horas) && horas > 0) return horas;
+    }
+    const fallback = Number(act?.duracionHoras ?? 0);
+    return Number.isFinite(fallback) && fallback > 0 ? fallback : 0;
+  }
+
+  /**
+   * Reparto diurna/nocturna (05:00–19:00 local) sobre el rango completo,
+   * sin recortar al día UTC del registro.
+   */
+  protected horasExtraDiurnaNocturnaDesdeRango(
+    horaInicio: Date,
+    horaFin: Date,
+    tz = "America/Tegucigalpa"
+  ): { diurna: number; nocturna: number } {
+    const diurnaIni = 5 * 60;
+    const diurnaFin = 19 * 60;
+    const DAY_MIN = 24 * 60;
+
+    const splitSegment = (sMin: number, eMin: number) => {
+      const max0 = Math.max(sMin, diurnaIni);
+      const min1 = Math.min(eMin, diurnaFin);
+      const diurnaMin = Math.max(0, min1 - max0);
+      const totalMin = eMin - sMin;
+      const nocturnaMin = Math.max(0, totalMin - diurnaMin);
+      return { diurna: diurnaMin / 60, nocturna: nocturnaMin / 60 };
+    };
+
+    const startMin = this.minutesOfDayInTZ(horaInicio, tz);
+    const endMin = this.minutesOfDayInTZ(horaFin, tz);
+
+    if (endMin > startMin) {
+      return splitSegment(startMin, endMin);
+    }
+
+    const part1 = splitSegment(startMin, DAY_MIN);
+    const part2 = splitSegment(0, endMin);
+    return {
+      diurna: part1.diurna + part2.diurna,
+      nocturna: part1.nocturna + part2.nocturna,
+    };
+  }
+
   /**
    * Calcula las deducciones de alimentación para un empleado en un rango de fechas.
    * Retorna tanto el total como el detalle por consumo (si está disponible).

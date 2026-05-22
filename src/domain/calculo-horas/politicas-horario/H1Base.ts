@@ -1233,29 +1233,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
           // Extras compensatorias devueltas: conjunto propio (tarifa normal), no p25–p100
           if (act?.esCompensatorio === true) {
-            const startC: Date | null = act?.horaInicio
-              ? new Date(act.horaInicio)
-              : null;
-            const endC: Date | null = act?.horaFin
-              ? new Date(act.horaFin)
-              : null;
-            if (!startC || !endC) {
-              const horas = Number(act?.duracionHoras ?? 0);
-              if (horas > 0) upsertCompDevueltas(codigo, nombreReal, horas);
-            } else {
-              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
-              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-              const s = new Date(
-                Math.max(startC.getTime(), dayStart.getTime())
-              );
-              const e = new Date(Math.min(endC.getTime(), dayEnd.getTime()));
-              if (e.getTime() > s.getTime()) {
-                const toMin = (d: Date) =>
-                  (d.getTime() - dayStart.getTime()) / 60000;
-                const totalH = (toMin(e) - toMin(s)) / 60;
-                if (totalH > 0) upsertCompDevueltas(codigo, nombreReal, totalH);
-              }
-            }
+            const horas = this.horasActividadConRangoHorario(act);
+            if (horas > 0) upsertCompDevueltas(codigo, nombreReal, horas);
             const descC =
               act?.descripcion ||
               act?.comentario ||
@@ -1296,24 +1275,12 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
             continue;
           }
 
-          // recortar al día actual
-          const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
-          const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-          const s = new Date(Math.max(start.getTime(), dayStart.getTime()));
-          const e = new Date(Math.min(end.getTime(), dayEnd.getTime()));
-          if (e.getTime() <= s.getTime()) continue;
-
-          const toMin = (d: Date) => (d.getTime() - dayStart.getTime()) / 60000;
-          const sMin = toMin(s);
-          const eMin = toMin(e);
-          const diurnaIni = 5 * 60;
-          const diurnaFin = 19 * 60;
-          const max0 = Math.max(sMin, diurnaIni);
-          const min1 = Math.min(eMin, diurnaFin);
-          const diurnaMin = Math.max(0, min1 - max0);
-          const totalMin = eMin - sMin;
-          const nocturnaMin = Math.max(0, totalMin - diurnaMin);
-          addExtra(codigo, diurnaMin / 60, nocturnaMin / 60);
+          const { diurna, nocturna } = this.horasExtraDiurnaNocturnaDesdeRango(
+            start,
+            end
+          );
+          if (diurna <= 0 && nocturna <= 0) continue;
+          addExtra(codigo, diurna, nocturna);
           const desc =
             act?.descripcion ||
             act?.comentario ||

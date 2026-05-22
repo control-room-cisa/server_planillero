@@ -534,10 +534,14 @@ const expectedByDate: Record<string, any> = {
       { jobId: 0, codigoJob: "107", nombreJob: "107", cantidadHoras: 2 },
     ],
     p25: [],
-    p50: [{ jobId: 0, codigoJob: "108", nombreJob: "108", cantidadHoras: 3 }],
+    // Reparto por job con rango horario completo (TZ local), no recorte UTC
+    p50: [
+      { jobId: 0, codigoJob: "101", nombreJob: "101", cantidadHoras: 1.2 },
+      { jobId: 0, codigoJob: "108", nombreJob: "108", cantidadHoras: 1.8 },
+    ],
     p75: [
-      { jobId: 0, codigoJob: "101", nombreJob: "101", cantidadHoras: 4 },
-      { jobId: 0, codigoJob: "108", nombreJob: "108", cantidadHoras: 3 },
+      { jobId: 0, codigoJob: "101", nombreJob: "101", cantidadHoras: 2.8 },
+      { jobId: 0, codigoJob: "108", nombreJob: "108", cantidadHoras: 4.2 },
     ],
     p100: [],
     totalHorasLaborables: 8,

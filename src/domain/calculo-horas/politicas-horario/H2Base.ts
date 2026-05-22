@@ -777,46 +777,13 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
               upsertNormal(id, codigo, nombre, horas, descripcion);
             }
           } else if (act?.esCompensatorio === true) {
-            let horas = 0;
-            if (act?.horaInicio && act?.horaFin) {
-              const start = new Date(act.horaInicio);
-              const end = new Date(act.horaFin);
-              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
-              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-              const s = new Date(Math.max(start.getTime(), dayStart.getTime()));
-              const e = new Date(Math.min(end.getTime(), dayEnd.getTime()));
-              if (e.getTime() > s.getTime()) {
-                horas = (e.getTime() - s.getTime()) / 3_600_000;
-              }
-            } else {
-              horas = Number(act?.duracionHoras ?? 0);
-            }
+            const horas = this.horasActividadConRangoHorario(act);
             if (horas > 0) {
               const id = jobId || 0;
               upsertCompDev(id, codigo, nombre, horas, descripcion);
             }
           } else {
-            // ACTIVIDAD EXTRA: calcular horas desde horaInicio/horaFin o usar duracionHoras
-            let horas = 0;
-
-            if (act?.horaInicio && act?.horaFin) {
-              const start = new Date(act.horaInicio);
-              const end = new Date(act.horaFin);
-
-              // Recortar al día actual
-              const dayStart = new Date(`${currentDate}T00:00:00.000Z`);
-              const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
-              const s = new Date(Math.max(start.getTime(), dayStart.getTime()));
-              const e = new Date(Math.min(end.getTime(), dayEnd.getTime()));
-
-              if (e.getTime() > s.getTime()) {
-                horas = (e.getTime() - s.getTime()) / 3_600_000; // ms a horas
-              }
-            } else {
-              // Sin horas explícitas, usar duracionHoras
-              horas = Number(act?.duracionHoras ?? 0);
-            }
-
+            const horas = this.horasActividadConRangoHorario(act);
             if (horas > 0) {
               const id = jobId || 0;
               upsertExtra(id, codigo, nombre, horas, descripcion);
