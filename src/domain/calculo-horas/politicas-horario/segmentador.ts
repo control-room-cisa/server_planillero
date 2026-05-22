@@ -70,6 +70,8 @@ export interface Segmento15 {
   jobCodigo?: string | null;
   jobNombre?: string | null;
   descripcion?: string | null;
+  /** Class de la actividad origen (vehículo); null si no aplica */
+  className?: number | null;
   /** true cuando el segmento EXTRA proviene de una actividad compensatoria devuelta (esCompensatorio=true, esExtra=true) */
   esCompensatorio?: boolean;
 }
@@ -89,6 +91,7 @@ export interface ActividadLike {
   esExtra?: boolean | null;
   esCompensatorio?: boolean | null;
   duracionHoras?: number | null;
+  className?: number | string | null;
   descripcion: string | null;
   job?: { id: number; codigo?: string | null; nombre?: string | null } | null;
   jobId?: number | null;
@@ -142,6 +145,13 @@ function minToHHMM(min: number): string {
 function hhmmToMin(hhmm: string): number {
   const [h, m] = hhmm.split(":").map(Number);
   return h * 60 + m;
+}
+
+function normalizeClassName(value?: number | string | null): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  return Number.isNaN(parsed) ? null : parsed;
 }
 
 // Convierte Date → minutos del día en TZ dada
@@ -256,6 +266,7 @@ export function segmentarRegistroDiario(
     jobCodigo?: string | null;
     jobNombre?: string | null;
     descripcion?: string | null;
+    className?: number | null;
     esCompensatorio?: boolean;
   }> = Array.from({ length: 96 }, () => ({ tipo: "LIBRE" }));
 
@@ -381,6 +392,7 @@ export function segmentarRegistroDiario(
                 jobCodigo: act.job?.codigo ?? null,
                 jobNombre: act.job?.nombre ?? null,
                 descripcion: act.descripcion ?? null,
+                className: normalizeClassName(act.className),
               };
             } else {
               // La actividad no cubre el almuerzo, aplicar almuerzo
@@ -394,6 +406,7 @@ export function segmentarRegistroDiario(
               jobCodigo: act.job?.codigo ?? null,
               jobNombre: act.job?.nombre ?? null,
               descripcion: act.descripcion ?? null,
+              className: normalizeClassName(act.className),
             };
           }
         } else {
@@ -405,6 +418,7 @@ export function segmentarRegistroDiario(
               jobCodigo: act.job?.codigo ?? null,
               jobNombre: act.job?.nombre ?? null,
               descripcion: act.descripcion ?? null,
+              className: normalizeClassName(act.className),
             };
           }
         }
@@ -470,6 +484,7 @@ export function segmentarRegistroDiario(
       jobCodigo: curr.jobCodigo ?? undefined,
       jobNombre: curr.jobNombre ?? undefined,
       descripcion: curr.descripcion ?? undefined,
+      className: curr.className ?? undefined,
     });
   };
 
@@ -479,7 +494,8 @@ export function segmentarRegistroDiario(
       s.tipo === curr.tipo &&
       (s.esCompensatorio ?? false) === (curr.esCompensatorio ?? false) &&
       s.jobId === curr.jobId &&
-      (s.descripcion ?? null) === (curr.descripcion ?? null);
+      (s.descripcion ?? null) === (curr.descripcion ?? null) &&
+      (s.className ?? null) === (curr.className ?? null);
     if (!same) {
       pushSeg(i);
       currStart = i;

@@ -6,6 +6,14 @@ import type {
   ConteoHorasProrrateo,
   HorasPorJob,
 } from "../types";
+import {
+  classKeyFromActividad,
+  createClassNameResolver,
+  jobMapKey,
+  prorrateoMapToHorasPorJob,
+  upsertProrrateoJob,
+  type ProrrateoJobAccum,
+} from "./prorrateo-class";
 import { addDaysYmd } from "../../../utils/dateTime";
 
 /**
@@ -629,37 +637,10 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       empleadoId
     );
 
-    // Mapas para acumular horas por job y categoría
-    const horasPorJobNormal = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobP25 = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobCompDevueltas = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
+    const resolveNombreClass = await createClassNameResolver();
+    const horasPorJobNormal = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobP25 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
 
     // Recorrer cada día del período y procesar actividades
     let currentDate = fechaInicio;
@@ -676,83 +657,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           continue;
         }
 
-        // Helper para agregar horas normales por job
-        const upsertNormal = (
-          jobId: number,
-          codigo: string,
-          nombre: string,
-          horas: number,
-          descripcion?: string | null
-        ) => {
-          if (horas <= 0) return;
-          const existing = horasPorJobNormal.get(jobId);
-          if (existing) {
-            existing.horas += horas;
-            if (descripcion && !existing.comentarios.includes(descripcion)) {
-              existing.comentarios.push(descripcion);
-            }
-          } else {
-            horasPorJobNormal.set(jobId, {
-              jobId,
-              codigoJob: codigo,
-              nombreJob: nombre,
-              horas,
-              comentarios: descripcion ? [descripcion] : [],
-            });
-          }
-        };
-
-        // Helper para agregar horas extras (p25) por job
-        const upsertExtra = (
-          jobId: number,
-          codigo: string,
-          nombre: string,
-          horas: number,
-          descripcion?: string | null
-        ) => {
-          if (horas <= 0) return;
-          const existing = horasPorJobP25.get(jobId);
-          if (existing) {
-            existing.horas += horas;
-            if (descripcion && !existing.comentarios.includes(descripcion)) {
-              existing.comentarios.push(descripcion);
-            }
-          } else {
-            horasPorJobP25.set(jobId, {
-              jobId,
-              codigoJob: codigo,
-              nombreJob: nombre,
-              horas,
-              comentarios: descripcion ? [descripcion] : [],
-            });
-          }
-        };
-
-        const upsertCompDev = (
-          jobId: number,
-          codigo: string,
-          nombre: string,
-          horas: number,
-          descripcion?: string | null
-        ) => {
-          if (horas <= 0) return;
-          const existing = horasPorJobCompDevueltas.get(jobId);
-          if (existing) {
-            existing.horas += horas;
-            if (descripcion && !existing.comentarios.includes(descripcion)) {
-              existing.comentarios.push(descripcion);
-            }
-          } else {
-            horasPorJobCompDevueltas.set(jobId, {
-              jobId,
-              codigoJob: codigo,
-              nombreJob: nombre,
-              horas,
-              comentarios: descripcion ? [descripcion] : [],
-            });
-          }
-        };
-
         // Procesar actividades directamente (sin depender del segmentador para jobId)
         for (const act of (registroDiario as any).actividades ?? []) {
           // Obtener código y nombre del job
@@ -768,25 +672,51 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           if (!jobId && !codigo) continue;
 
           // Determinar si es actividad normal o extra
+          const id = jobId || 0;
+          const mapKey = jobMapKey(id, codigo || String(id));
+          const classKey = classKeyFromActividad(act);
+
           if (!act?.esExtra) {
-            // ACTIVIDAD NORMAL: usar duracionHoras directamente
             const horas = Number(act?.duracionHoras ?? 0);
             if (horas > 0) {
-              // Si tenemos jobId, usarlo; si no, buscar por código
-              const id = jobId || 0;
-              upsertNormal(id, codigo, nombre, horas, descripcion);
+              upsertProrrateoJob(
+                horasPorJobNormal,
+                mapKey,
+                id,
+                codigo,
+                nombre,
+                classKey,
+                horas,
+                descripcion
+              );
             }
           } else if (act?.esCompensatorio === true) {
             const horas = this.horasActividadConRangoHorario(act);
             if (horas > 0) {
-              const id = jobId || 0;
-              upsertCompDev(id, codigo, nombre, horas, descripcion);
+              upsertProrrateoJob(
+                horasPorJobCompDevueltas,
+                mapKey,
+                id,
+                codigo,
+                nombre,
+                classKey,
+                horas,
+                descripcion
+              );
             }
           } else {
             const horas = this.horasActividadConRangoHorario(act);
             if (horas > 0) {
-              const id = jobId || 0;
-              upsertExtra(id, codigo, nombre, horas, descripcion);
+              upsertProrrateoJob(
+                horasPorJobP25,
+                mapKey,
+                id,
+                codigo,
+                nombre,
+                classKey,
+                horas,
+                descripcion
+              );
             }
           }
         }
@@ -798,36 +728,13 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       currentDate = PoliticaH2Base.addDays(currentDate, 1);
     }
 
-    // Convertir mapas a arrays
-    const convertMapToArray = (
-      map: Map<
-        number,
-        {
-          jobId: number;
-          codigoJob: string;
-          nombreJob: string;
-          horas: number;
-          comentarios: string[];
-        }
-      >
-    ): HorasPorJob[] => {
-      return Array.from(map.values()).map((item) => ({
-        jobId: item.jobId,
-        codigoJob: item.codigoJob,
-        nombreJob: item.nombreJob,
-        cantidadHoras: Math.round(item.horas * 100) / 100,
-        comentarios: item.comentarios,
-      }));
-    };
-
-    // Construir resultado
     const resultado: ConteoHorasProrrateo = {
       fechaInicio,
       fechaFin,
       empleadoId,
       cantidadHoras: {
-        normal: convertMapToArray(horasPorJobNormal),
-        p25: convertMapToArray(horasPorJobP25),
+        normal: prorrateoMapToHorasPorJob(horasPorJobNormal, resolveNombreClass),
+        p25: prorrateoMapToHorasPorJob(horasPorJobP25, resolveNombreClass),
         p50: [], // H2 no usa p50
         p75: [], // H2 no usa p75
         p100: [], // H2 no usa p100
@@ -838,8 +745,10 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
         horasCompensatoriasTomadas:
           conteoHoras.cantidadHoras.horasCompensatoriasTomadas,
-        horasCompensatoriasDevueltasPorJob:
-          convertMapToArray(horasPorJobCompDevueltas),
+        horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompDevueltas,
+          resolveNombreClass
+        ),
         horasFeriado: 0,
         deduccionesISR: 0,
         deduccionesRAP: 0,

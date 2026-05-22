@@ -144,6 +144,14 @@ export interface ConteoHorasProrrateo {
   validationErrors?: ConteoHorasValidationError;
 }
 
+export interface HorasPorClass {
+  /** Número de class (vehículo); null = sin class */
+  class: number | null;
+  /** Nombre del vehículo asociado a la class */
+  nombreClass: string | null;
+  cantidadHoras: number;
+}
+
 export interface HorasPorJob {
   jobId: number;
   codigoJob: string;
@@ -151,6 +159,8 @@ export interface HorasPorJob {
   cantidadHoras: number;
   /** Comentarios de actividades asociadas a este job en el rango */
   comentarios?: string[];
+  /** Desglose de horas por class dentro de este job (suma ≈ cantidadHoras) */
+  horasPorClass?: HorasPorClass[];
 }
 
 /**

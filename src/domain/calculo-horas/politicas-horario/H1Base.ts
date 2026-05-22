@@ -7,6 +7,16 @@ import {
   HorasPorJob,
 } from "../types";
 import type { Segmento15 } from "./segmentador";
+import type { BandaExtraProrrateo } from "./prorrateo-class";
+import {
+  classKeyFromActividad,
+  classKeyFromSegmentClass,
+  createClassNameResolver,
+  jobMapKey,
+  prorrateoMapToHorasPorJob,
+  upsertProrrateoJob,
+  type ProrrateoJobAccum,
+} from "./prorrateo-class";
 import { JobRepository } from "../../../repositories/JobRepository";
 import { SegmentadorTiempo } from "../segmentador-tiempo";
 import { addDaysYmd } from "../../../utils/dateTime";
@@ -101,7 +111,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     esDiurna: boolean,
     r: ExtraStreak,
     b: Buckets
-  ) {
+  ): BandaExtraProrrateo {
     // C4: 2.00× (libre/festiva) con arrastre entre días mientras no haya LIBRE
     // domOFestActivo solo aplica p100 si el día actual también es feriado/libre
     // Si el día actual NO es feriado/libre, domOFestActivo solo eleva el piso
@@ -129,7 +139,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       if (esDiurna) r.vistoDiurna = true;
       else r.vistoNocturna = true;
 
-      return;
+      return "p100";
     }
 
     // No dominical/festiva → escalera normal
@@ -155,16 +165,25 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     if (mult >= 1.75) {
       b.extraC3Min += 15; // p75
-    } else if (mult >= 1.5) {
+      r.minutosExtraAcum += 15;
+      if (esDiurna) r.vistoDiurna = true;
+      else r.vistoNocturna = true;
+      return "p75";
+    }
+    if (mult >= 1.5) {
       b.extraC2Min += 15; // p50
-      r.minutosP50Acum += 15; // Acumular minutos p50
-    } else {
-      b.extraC1Min += 15; // p25
+      r.minutosP50Acum += 15;
+      r.minutosExtraAcum += 15;
+      if (esDiurna) r.vistoDiurna = true;
+      else r.vistoNocturna = true;
+      return "p50";
     }
 
+    b.extraC1Min += 15; // p25
     r.minutosExtraAcum += 15;
     if (esDiurna) r.vistoDiurna = true;
     else r.vistoNocturna = true;
+    return "p25";
   }
 
   /**
@@ -469,7 +488,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
                 racha
               );
             } else {
-              PoliticaH1Base.aplicarExtraSlot(
+              void PoliticaH1Base.aplicarExtraSlot(
                 esLibreOFest,
                 esDiurna,
                 racha,
@@ -661,7 +680,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
               r
             );
           } else {
-            PoliticaH1Base.aplicarExtraSlot(
+            void PoliticaH1Base.aplicarExtraSlot(
               esLibreOFestAnterior,
               esDiurna,
               r,
@@ -953,6 +972,252 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
   ): Promise<HorarioTrabajo>;
 
   /**
+   * Acumula prorrateo de un día (H1): mismas reglas de bandas que conteo, desglose por class.
+   */
+  private async acumularProrrateoDiaH1(
+    currentDate: string,
+    empleadoId: string,
+    registroDiario: any,
+    maps: {
+      normal: Map<number, ProrrateoJobAccum>;
+      p25: Map<number, ProrrateoJobAccum>;
+      p50: Map<number, ProrrateoJobAccum>;
+      p75: Map<number, ProrrateoJobAccum>;
+      p100: Map<number, ProrrateoJobAccum>;
+      compDev: Map<number, ProrrateoJobAccum>;
+    },
+    baseKey: number,
+    fechasConJobDesconocido: Set<string>
+  ): Promise<number> {
+    for (const act of registroDiario.actividades ?? []) {
+      if ((act?.codigoJob || act?.jobCodigo) && !act?.job) {
+        fechasConJobDesconocido.add(currentDate);
+        break;
+      }
+    }
+
+    const feriadoInfo = await this.esFeriado(currentDate);
+    const hTrabajo = await this.getHorarioTrabajoByDateAndEmpleado(
+      currentDate,
+      empleadoId
+    );
+    const segmentosResult = this.segmentarConRegistro(
+      currentDate,
+      registroDiario
+    );
+    const segmentos = segmentosResult.segmentos;
+
+    let racha = PoliticaH1Base.nuevaRacha();
+    if (this.diaEmpiezaConExtraA00(segmentos)) {
+      racha = await this.obtenerRachaDelDiaAnterior(currentDate, empleadoId);
+    }
+
+    const esFestivo = feriadoInfo.esFeriado;
+    const esLibreOFest =
+      registroDiario?.esDiaLibre === true || esFestivo;
+    const esDiaLibreContrato =
+      hTrabajo.esDiaLibre ||
+      hTrabajo.cantidadHorasLaborables === 0 ||
+      hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
+    racha.bloquearMixta = esDiaLibreContrato;
+
+    const horasFeriadoDia = Number(registroDiario?.horasFeriado ?? 0);
+    if (horasFeriadoDia > 0) {
+      upsertProrrateoJob(
+        maps.normal,
+        jobMapKey(baseKey, "00"),
+        baseKey,
+        "00",
+        "Feriados",
+        "null",
+        horasFeriadoDia
+      );
+    }
+
+    const bandMaps: Record<BandaExtraProrrateo, Map<number, ProrrateoJobAccum>> =
+      {
+        p25: maps.p25,
+        p50: maps.p50,
+        p75: maps.p75,
+        p100: maps.p100,
+      };
+
+    const SLOT_MIN = 15;
+    const slotHoras = SLOT_MIN / 60;
+    const dummy: Buckets = {
+      normalMin: 0,
+      almuerzoMin: 0,
+      libreMin: 0,
+      extraC1Min: 0,
+      extraC2Min: 0,
+      extraC3Min: 0,
+      extraC4Min: 0,
+      vacacionesMin: 0,
+      permisoConSueldoMin: 0,
+      permisoSinSueldoMin: 0,
+      inasistenciasMin: 0,
+      compensatorioMin: 0,
+      compNormalesMin: 0,
+      compExtrasMin: 0,
+    };
+
+    for (const seg of segmentos) {
+      const durMin = PoliticaH1Base.segDurMin(seg);
+      if (durMin <= 0) continue;
+      const horasSeg = durMin / 60;
+
+      if (seg.tipo === "LIBRE") {
+        racha = PoliticaH1Base.nuevaRacha();
+        continue;
+      }
+
+      if (seg.tipo === "ALMUERZO") continue;
+
+      const codigo = seg.jobCodigo ?? "";
+      if (!codigo) continue;
+      const nombre = seg.jobNombre ?? String(codigo);
+      const classKey = classKeyFromSegmentClass(seg.className ?? null);
+      const desc = seg.descripcion ?? null;
+
+      if (seg.tipo === "NORMAL") {
+        const code = codigo.toUpperCase();
+        if (
+          code === "E02" ||
+          code === "E03" ||
+          code === "E04" ||
+          code === "E05" ||
+          code === "E06" ||
+          code === "E07"
+        ) {
+          continue;
+        }
+        upsertProrrateoJob(
+          maps.normal,
+          jobMapKey(baseKey, codigo),
+          baseKey,
+          codigo,
+          nombre,
+          classKey,
+          horasSeg,
+          desc
+        );
+        continue;
+      }
+
+      if (seg.tipo === "EXTRA") {
+        const slots = durMin / SLOT_MIN;
+        const esDiurna = PoliticaH1Base.isDiurna(seg);
+        if (seg.esCompensatorio === true) {
+          for (let i = 0; i < slots; i++) {
+            PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+              esLibreOFest,
+              esDiurna,
+              racha
+            );
+          }
+          upsertProrrateoJob(
+            maps.compDev,
+            jobMapKey(baseKey, codigo),
+            baseKey,
+            codigo,
+            nombre,
+            classKey,
+            horasSeg,
+            desc
+          );
+        } else {
+          for (let i = 0; i < slots; i++) {
+            const band = PoliticaH1Base.aplicarExtraSlot(
+              esLibreOFest,
+              esDiurna,
+              racha,
+              dummy
+            );
+            upsertProrrateoJob(
+              bandMaps[band],
+              jobMapKey(baseKey, codigo),
+              baseKey,
+              codigo,
+              nombre,
+              classKey,
+              slotHoras,
+              desc
+            );
+          }
+        }
+      }
+    }
+
+    for (const act of registroDiario.actividades ?? []) {
+      const codigo =
+        act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
+      if (!codigo) continue;
+      const nombre = act?.job?.nombre ?? String(codigo);
+      const classKey = classKeyFromActividad(act);
+      const desc =
+        act?.descripcion ||
+        act?.comentario ||
+        registroDiario?.comentarioEmpleado ||
+        null;
+
+      if (!act?.esExtra) {
+        if (act?.esCompensatorio === true) continue;
+        if (act?.horaInicio && act?.horaFin) continue;
+        const horas = Number(act?.duracionHoras ?? 0);
+        if (horas > 0) {
+          upsertProrrateoJob(
+            maps.normal,
+            jobMapKey(baseKey, codigo),
+            baseKey,
+            codigo,
+            nombre,
+            classKey,
+            horas,
+            desc
+          );
+        }
+        continue;
+      }
+
+      if (act?.esCompensatorio === true) {
+        if (act?.horaInicio && act?.horaFin) continue;
+        const horas = this.horasActividadConRangoHorario(act);
+        if (horas > 0) {
+          upsertProrrateoJob(
+            maps.compDev,
+            jobMapKey(baseKey, codigo),
+            baseKey,
+            codigo,
+            nombre,
+            classKey,
+            horas,
+            desc
+          );
+        }
+        continue;
+      }
+
+      if (act?.horaInicio && act?.horaFin) continue;
+
+      const horas = Number(act?.duracionHoras ?? 0);
+      if (horas > 0) {
+        upsertProrrateoJob(
+          maps.p25,
+          jobMapKey(baseKey, codigo),
+          baseKey,
+          codigo,
+          nombre,
+          classKey,
+          horas,
+          desc
+        );
+      }
+    }
+
+    return horasFeriadoDia;
+  }
+
+  /**
    * Obtiene el prorrateo de horas por job para un empleado en un período
    */
   async getProrrateoHorasPorJobByDateAndEmpleado(
@@ -976,538 +1241,61 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       empleadoId
     );
 
-    // Mapas para acumular horas por job y categoría
-    const horasPorJobNormal = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobP25 = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobP50 = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobP75 = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    const horasPorJobP100 = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
-    /** Extras compensatorias devueltas: tarifa normal, no entran en p25–p100 */
-    const horasPorJobCompDevueltas = new Map<
-      number,
-      {
-        jobId: number;
-        codigoJob: string;
-        nombreJob: string;
-        horas: number;
-        comentarios: string[];
-      }
-    >();
+    const resolveNombreClass = await createClassNameResolver();
+    const horasPorJobNormal = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobP25 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobP50 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobP75 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobP100 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
 
-    const baseKey = 0; // tests esperan jobId 0
-
-    // E01 Job Desconocido: fechas con actividades que tienen codigo/jobCodigo pero job no resuelto
+    const baseKey = 0;
     const fechasConJobDesconocido = new Set<string>();
-
-    // Recorrer cada día del período y procesar actividades directamente
     let totalHorasFeriado = 0;
     let currentDate = fechaInicio;
+
     while (currentDate <= fechaFin) {
       try {
         const registroDiario = await this.getRegistroDiario(
           empleadoId,
           currentDate
         );
-
         if (!registroDiario) {
           currentDate = PoliticaH1Base.addDays(currentDate, 1);
           continue;
         }
 
-        // E01 Job Desconocido: actividad con codigoJob/jobCodigo pero sin job resuelto
-        for (const act of (registroDiario as any).actividades ?? []) {
-          if ((act?.codigoJob || act?.jobCodigo) && !act?.job) {
-            fechasConJobDesconocido.add(currentDate);
-            break; // una fecha solo se marca una vez
-          }
-        }
-
-        // Proporciones de extras según conteo (para el rango; en pruebas es por día)
-        const totalExtras =
-          (conteoHoras.cantidadHoras.p25 || 0) +
-          (conteoHoras.cantidadHoras.p50 || 0) +
-          (conteoHoras.cantidadHoras.p75 || 0) +
-          (conteoHoras.cantidadHoras.p100 || 0);
-        const propP25 =
-          totalExtras > 0
-            ? (conteoHoras.cantidadHoras.p25 || 0) / totalExtras
-            : 0;
-        const propP50 =
-          totalExtras > 0
-            ? (conteoHoras.cantidadHoras.p50 || 0) / totalExtras
-            : 0;
-        const propP75 =
-          totalExtras > 0
-            ? (conteoHoras.cantidadHoras.p75 || 0) / totalExtras
-            : 0;
-        const propP100 =
-          totalExtras > 0
-            ? (conteoHoras.cantidadHoras.p100 || 0) / totalExtras
-            : 0;
-
-        // 1) Acumular normales inmediatas y pre‐agrupar extras por banda (diurna/nocturna)
-        const extrasPorJob: Map<
-          string,
-          { diurna: number; nocturna: number; total: number }
-        > = new Map();
-
-        // Map auxiliar para resolver nombre real por código cuando esté disponible
-        const codigoANombre: Map<string, string> = new Map();
-        const upsertNormal = (
-          codigo: string,
-          nombre: string,
-          horas: number
-        ) => {
-          if (horas <= 0) return;
-          const jobInfo = {
-            jobId: baseKey,
-            codigoJob: codigo,
-            nombreJob: nombre,
-            horas,
-            comentarios: [],
-          };
-          // buscamos una entrada existente exactamente del mismo código
-          let foundKey: number | null = null;
-          for (const [k, v] of horasPorJobNormal) {
-            if (v.codigoJob === codigo) {
-              v.horas += horas;
-              // Actualizar nombre si estaba como placeholder
-              if (!v.nombreJob || v.nombreJob === String(codigo))
-                v.nombreJob = nombre;
-              foundKey = k;
-              break;
-            }
-          }
-          if (foundKey === null) {
-            horasPorJobNormal.set(
-              `${baseKey}:${codigo}` as unknown as number,
-              jobInfo
-            );
-          }
-        };
-
-        const upsertCompDevueltas = (
-          codigo: string,
-          nombre: string,
-          horas: number
-        ) => {
-          if (horas <= 0) return;
-          let foundKey: number | null = null;
-          for (const [k, v] of horasPorJobCompDevueltas) {
-            if (v.codigoJob === codigo) {
-              v.horas += horas;
-              if (!v.nombreJob || v.nombreJob === String(codigo))
-                v.nombreJob = nombre;
-              foundKey = k;
-              break;
-            }
-          }
-          if (foundKey === null) {
-            horasPorJobCompDevueltas.set(
-              `${baseKey}:${codigo}` as unknown as number,
-              {
-                jobId: baseKey,
-                codigoJob: codigo,
-                nombreJob: nombre,
-                horas,
-                comentarios: [],
-              }
-            );
-          }
-        };
-
-        const addExtra = (
-          codigo: string,
-          diurnaH: number,
-          nocturnaH: number
-        ) => {
-          const prev = extrasPorJob.get(codigo) ?? {
-            diurna: 0,
-            nocturna: 0,
-            total: 0,
-          };
-          prev.diurna += diurnaH;
-          prev.nocturna += nocturnaH;
-          prev.total += diurnaH + nocturnaH;
-          extrasPorJob.set(codigo, prev);
-        };
-
-        const horasFeriadoDia = Number(
-          ((registroDiario as any)?.horasFeriado ?? 0) as number
+        totalHorasFeriado += await this.acumularProrrateoDiaH1(
+          currentDate,
+          empleadoId,
+          registroDiario,
+          {
+            normal: horasPorJobNormal,
+            p25: horasPorJobP25,
+            p50: horasPorJobP50,
+            p75: horasPorJobP75,
+            p100: horasPorJobP100,
+            compDev: horasPorJobCompDevueltas,
+          },
+          baseKey,
+          fechasConJobDesconocido
         );
-
-        if (horasFeriadoDia > 0) {
-          totalHorasFeriado += horasFeriadoDia;
-          upsertNormal("00", "Feriados", horasFeriadoDia);
-        }
-
-        for (const act of (registroDiario as any).actividades ?? []) {
-          const codigo =
-            act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
-          if (!codigo) continue;
-          const nombreReal = act?.job?.nombre ?? String(codigo);
-          if (!codigoANombre.has(codigo)) codigoANombre.set(codigo, nombreReal);
-
-          if (!act?.esExtra) {
-            // Compensatorias tomadas: fuera del prorrateo "normal" por job (como jobs especiales)
-            if (act?.esCompensatorio === true) continue;
-
-            const horas = Number(act?.duracionHoras ?? 0);
-            if (horas > 0) upsertNormal(codigo, nombreReal, horas);
-            const desc =
-              act?.descripcion ||
-              act?.comentario ||
-              (registroDiario as any)?.comentarioEmpleado ||
-              null;
-            if (desc) {
-              // push comment into matching normal map entry (or create it)
-              let existingKey: number | null = null;
-              for (const [k, v] of horasPorJobNormal) {
-                if (v.codigoJob === codigo) {
-                  existingKey = k;
-                  break;
-                }
-              }
-              if (existingKey == null) {
-                const key = `${baseKey}:${codigo}` as unknown as number;
-                horasPorJobNormal.set(key, {
-                  jobId: baseKey,
-                  codigoJob: codigo,
-                  nombreJob: nombreReal,
-                  horas: 0,
-                  comentarios: [],
-                });
-                existingKey = key;
-              }
-              const target = horasPorJobNormal.get(existingKey)!;
-              if (!target.comentarios.includes(desc))
-                target.comentarios.push(desc);
-            }
-            continue;
-          }
-
-          // Extras compensatorias devueltas: conjunto propio (tarifa normal), no p25–p100
-          if (act?.esCompensatorio === true) {
-            const horas = this.horasActividadConRangoHorario(act);
-            if (horas > 0) upsertCompDevueltas(codigo, nombreReal, horas);
-            const descC =
-              act?.descripcion ||
-              act?.comentario ||
-              (registroDiario as any)?.comentarioEmpleado ||
-              null;
-            if (descC) {
-              let ek: number | null = null;
-              for (const [k, v] of horasPorJobCompDevueltas) {
-                if (v.codigoJob === codigo) {
-                  ek = k;
-                  break;
-                }
-              }
-              if (ek == null) {
-                const key = `${baseKey}:${codigo}` as unknown as number;
-                horasPorJobCompDevueltas.set(key, {
-                  jobId: baseKey,
-                  codigoJob: codigo,
-                  nombreJob: nombreReal,
-                  horas: 0,
-                  comentarios: [],
-                });
-                ek = key;
-              }
-              const tc = horasPorJobCompDevueltas.get(ek)!;
-              if (!tc.comentarios.includes(descC)) tc.comentarios.push(descC);
-            }
-            continue;
-          }
-
-          const start: Date | null = act?.horaInicio
-            ? new Date(act.horaInicio)
-            : null;
-          const end: Date | null = act?.horaFin ? new Date(act.horaFin) : null;
-          if (!start || !end) {
-            const horas = Number(act?.duracionHoras ?? 0);
-            if (horas > 0) addExtra(codigo, horas, 0);
-            continue;
-          }
-
-          const { diurna, nocturna } = this.horasExtraDiurnaNocturnaDesdeRango(
-            start,
-            end
-          );
-          if (diurna <= 0 && nocturna <= 0) continue;
-          addExtra(codigo, diurna, nocturna);
-          const desc =
-            act?.descripcion ||
-            act?.comentario ||
-            (registroDiario as any)?.comentarioEmpleado ||
-            null;
-          if (desc) {
-            const ensureCommentEntry = (
-              map: Map<
-                number,
-                {
-                  jobId: number;
-                  codigoJob: string;
-                  nombreJob: string;
-                  horas: number;
-                  comentarios: string[];
-                }
-              >,
-              codigo: string
-            ) => {
-              for (const [k, v] of map) if (v.codigoJob === codigo) return k;
-              const key = `${baseKey}:${codigo}` as unknown as number;
-              map.set(key, {
-                jobId: baseKey,
-                codigoJob: codigo,
-                nombreJob: String(codigo),
-                horas: 0,
-                comentarios: [],
-              });
-              return key;
-            };
-            const k25 = ensureCommentEntry(horasPorJobP25 as any, codigo);
-            const t25 = (horasPorJobP25 as any).get(k25)!;
-            if (!t25.comentarios.includes(desc)) t25.comentarios.push(desc);
-            const k50 = ensureCommentEntry(horasPorJobP50 as any, codigo);
-            const t50 = (horasPorJobP50 as any).get(k50)!;
-            if (!t50.comentarios.includes(desc)) t50.comentarios.push(desc);
-            const k75 = ensureCommentEntry(horasPorJobP75 as any, codigo);
-            const t75 = (horasPorJobP75 as any).get(k75)!;
-            if (!t75.comentarios.includes(desc)) t75.comentarios.push(desc);
-            const k100 = ensureCommentEntry(horasPorJobP100 as any, codigo);
-            const t100 = (horasPorJobP100 as any).get(k100)!;
-            if (!t100.comentarios.includes(desc)) t100.comentarios.push(desc);
-          }
-        }
-
-        // 2) Distribución por bandas usando conocimiento de bandas del día
-        const sumBy = (
-          sel: (v: {
-            diurna: number;
-            nocturna: number;
-            total: number;
-          }) => number
-        ) => {
-          let t = 0;
-          for (const v of extrasPorJob.values()) t += sel(v);
-          return t;
-        };
-
-        const totalDiurna = sumBy((v) => v.diurna);
-        const totalNocturna = sumBy((v) => v.nocturna);
-        const totalExtra = sumBy((v) => v.total);
-
-        const p25Total = Number(conteoHoras.cantidadHoras.p25 || 0);
-        const p50Total = Number(conteoHoras.cantidadHoras.p50 || 0);
-        const p75Total = Number(conteoHoras.cantidadHoras.p75 || 0);
-        const p100Total = Number(conteoHoras.cantidadHoras.p100 || 0);
-
-        const ensureEntry = (
-          map: Map<
-            number,
-            {
-              jobId: number;
-              codigoJob: string;
-              nombreJob: string;
-              horas: number;
-              comentarios: string[];
-            }
-          >,
-          codigo: string
-        ) => {
-          // buscar existente por código
-          for (const [k, v] of map) if (v.codigoJob === codigo) return k;
-          const key = `${baseKey}:${codigo}` as unknown as number;
-          map.set(key, {
-            jobId: baseKey,
-            codigoJob: codigo,
-            nombreJob: codigoANombre.get(codigo) ?? String(codigo),
-            horas: 0,
-            comentarios: [],
-          });
-          return key;
-        };
-
-        // p25: diurna si hay, si no proporcional al total
-        if (p25Total > 0 && extrasPorJob.size > 0) {
-          const denom = totalDiurna > 0 ? totalDiurna : totalExtra;
-          for (const [codigo, v] of extrasPorJob) {
-            const weight = totalDiurna > 0 ? v.diurna : v.total;
-            const horas = denom > 0 ? (p25Total * weight) / denom : 0;
-            if (horas <= 0) continue;
-            const k = ensureEntry(horasPorJobP25, codigo);
-            horasPorJobP25.get(k)!.horas += horas;
-          }
-        }
-
-        // p50: nocturna si hay, si no proporcional al total
-        if (p50Total > 0 && extrasPorJob.size > 0) {
-          const denom = totalNocturna > 0 ? totalNocturna : totalExtra;
-          for (const [codigo, v] of extrasPorJob) {
-            const weight = totalNocturna > 0 ? v.nocturna : v.total;
-            const horas = denom > 0 ? (p50Total * weight) / denom : 0;
-            if (horas <= 0) continue;
-            const k = ensureEntry(horasPorJobP50, codigo);
-            horasPorJobP50.get(k)!.horas += horas;
-          }
-        }
-
-        // p75: 2 fases → primero diurna hasta totalDiurna; resto a nocturna. Sin cap por job
-        if (p75Total > 0 && extrasPorJob.size > 0) {
-          const asignarProporcional = (
-            totalAsignar: number,
-            selector: (v: {
-              diurna: number;
-              nocturna: number;
-              total: number;
-            }) => number
-          ) => {
-            const denom = Array.from(extrasPorJob.values()).reduce(
-              (acc, v) => acc + selector(v),
-              0
-            );
-            if (totalAsignar <= 0 || denom <= 0) return 0;
-            for (const [codigo, v] of extrasPorJob) {
-              const peso = selector(v);
-              if (peso <= 0) continue;
-              const horas = (totalAsignar * peso) / denom;
-              const k = ensureEntry(horasPorJobP75, codigo);
-              horasPorJobP75.get(k)!.horas += horas;
-            }
-            return totalAsignar;
-          };
-
-          const diurnaAsign = Math.min(p75Total, totalDiurna);
-          asignarProporcional(diurnaAsign, (v) => v.diurna);
-          const rem = p75Total - diurnaAsign;
-          asignarProporcional(rem, (v) => v.nocturna);
-        }
-
-        // p100: proporcional al total extra (dominical/feriado)
-        if (p100Total > 0 && extrasPorJob.size > 0) {
-          const denom = totalExtra;
-          for (const [codigo, v] of extrasPorJob) {
-            const horas = denom > 0 ? (p100Total * v.total) / denom : 0;
-            if (horas <= 0) continue;
-            const k = ensureEntry(horasPorJobP100, codigo);
-            horasPorJobP100.get(k)!.horas += horas;
-          }
-        }
       } catch (error) {
         console.error(`Error procesando día ${currentDate}:`, error);
       }
-
       currentDate = PoliticaH1Base.addDays(currentDate, 1);
     }
 
-    if (totalHorasFeriado > 0) {
-      let feriadoEntry:
-        | {
-            jobId: number;
-            codigoJob: string;
-            nombreJob: string;
-            horas: number;
-            comentarios: string[];
-          }
-        | undefined;
-      for (const v of horasPorJobNormal.values()) {
-        if (v.codigoJob === "00") {
-          feriadoEntry = v;
-          break;
-        }
-      }
-      if (!feriadoEntry) {
-        horasPorJobNormal.set(`${baseKey}:00` as unknown as number, {
-          jobId: baseKey,
-          codigoJob: "00",
-          nombreJob: "Feriados",
-          horas: totalHorasFeriado,
-          comentarios: [],
-        });
-      }
-    }
-
-    // Convertir mapas a arrays
-    const convertMapToArray = (
-      map: Map<
-        number,
-        {
-          jobId: number;
-          codigoJob: string;
-          nombreJob: string;
-          horas: number;
-          comentarios: string[];
-        }
-      >
-    ): HorasPorJob[] => {
-      return Array.from(map.values())
-        .map((item) => ({
-          jobId: item.jobId,
-          codigoJob: item.codigoJob,
-          nombreJob: item.nombreJob,
-          cantidadHoras: Math.round(item.horas * 100) / 100,
-          comentarios: item.comentarios,
-        }))
-        .filter((item) => item.cantidadHoras > 0);
-    };
-
-    // Construir resultado
     const resultado: ConteoHorasProrrateo = {
       fechaInicio,
       fechaFin,
       empleadoId,
       cantidadHoras: {
-        normal: convertMapToArray(horasPorJobNormal),
-        p25: convertMapToArray(horasPorJobP25),
-        p50: convertMapToArray(horasPorJobP50),
-        p75: convertMapToArray(horasPorJobP75),
-        p100: convertMapToArray(horasPorJobP100),
+        normal: prorrateoMapToHorasPorJob(horasPorJobNormal, resolveNombreClass),
+        p25: prorrateoMapToHorasPorJob(horasPorJobP25, resolveNombreClass),
+        p50: prorrateoMapToHorasPorJob(horasPorJobP50, resolveNombreClass),
+        p75: prorrateoMapToHorasPorJob(horasPorJobP75, resolveNombreClass),
+        p100: prorrateoMapToHorasPorJob(horasPorJobP100, resolveNombreClass),
         vacacionesHoras: conteoHoras.cantidadHoras.vacaciones || 0,
         permisoConSueldoHoras: conteoHoras.cantidadHoras.permisoConSueldo || 0,
         permisoSinSueldoHoras: conteoHoras.cantidadHoras.permisoSinSueldo || 0,
@@ -1515,8 +1303,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
         horasCompensatoriasTomadas:
           conteoHoras.cantidadHoras.horasCompensatoriasTomadas,
-        horasCompensatoriasDevueltasPorJob: convertMapToArray(
-          horasPorJobCompDevueltas
+        horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompDevueltas,
+          resolveNombreClass
         ),
         horasFeriado: totalHorasFeriado,
         deduccionesISR: 0,
