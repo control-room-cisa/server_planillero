@@ -62,6 +62,16 @@ const empleadoFields = {
   sueldoMensual: z
     .number({ invalid_type_error: "El sueldo mensual debe ser un número" })
     .optional(),
+  aporteVoluntarioRap: z
+    .number({
+      invalid_type_error: "El aporte voluntario RAP debe ser un número",
+    })
+    .min(0, "El aporte voluntario RAP no puede ser negativo")
+    .optional(),
+  isr: z
+    .number({ invalid_type_error: "El ISR debe ser un número" })
+    .min(0, "El ISR no puede ser negativo")
+    .optional(),
   tipoContrato: z
     .nativeEnum(TipoContrato, {
       errorMap: () => ({ message: "Tipo de contrato inválido" }),
@@ -245,6 +255,16 @@ export const updateEmpleadoSchema = z.object({
     .optional(),
   sueldoMensual: z
     .number({ invalid_type_error: "El sueldo mensual debe ser un número" })
+    .optional(),
+  aporteVoluntarioRap: z
+    .number({
+      invalid_type_error: "El aporte voluntario RAP debe ser un número",
+    })
+    .min(0, "El aporte voluntario RAP no puede ser negativo")
+    .optional(),
+  isr: z
+    .number({ invalid_type_error: "El ISR debe ser un número" })
+    .min(0, "El ISR no puede ser negativo")
     .optional(),
   tipoContrato: z
     .nativeEnum(TipoContrato, {

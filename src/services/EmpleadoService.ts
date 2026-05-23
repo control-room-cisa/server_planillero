@@ -60,6 +60,8 @@ export class EmpleadoService {
       nombreConyugue: emp.nombreConyugue ?? undefined,
       cargo: emp.cargo ?? undefined,
       sueldoMensual: emp.sueldoMensual ?? undefined,
+      aporteVoluntarioRap: emp.aporteVoluntarioRap ?? undefined,
+      isr: emp.isr ?? undefined,
       tipoContrato: mapTipoContrato(emp.tipoContrato) as any,
       condicionSalud: emp.condicionSalud ?? undefined,
       nombreContactoEmergencia: emp.nombreContactoEmergencia ?? undefined,

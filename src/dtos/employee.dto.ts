@@ -53,6 +53,8 @@ export interface EmployeeDetailDto {
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
+  aporteVoluntarioRap?: number;
+  isr?: number;
   tipoContrato?: string; // Valor mapeado del enum (ej: "7x7", "Indefinido Normal")
   condicionSalud?: string;
   nombreContactoEmergencia?: string;
@@ -88,6 +90,8 @@ export interface CreateEmpleadoDto {
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
+  aporteVoluntarioRap?: number;
+  isr?: number;
   tipoContrato?: TipoContrato;
   condicionSalud?: string;
   nombreContactoEmergencia?: string;
@@ -125,6 +129,8 @@ export interface UpdateEmpleadoDto {
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
+  aporteVoluntarioRap?: number;
+  isr?: number;
   tipoContrato?: TipoContrato;
   condicionSalud?: string;
   nombreContactoEmergencia?: string;

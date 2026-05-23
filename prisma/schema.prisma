@@ -124,6 +124,8 @@ model Empleado {
   nombreConyugue           String?       @map("nombre_conyugue") @db.VarChar(40)
   cargo                    String?       @db.VarChar(30)
   sueldoMensual            Float?
+  aporteVoluntarioRap      Float?        @map("aporte_voluntario_rap")
+  isr                      Float?        @map("isr")
   tiempoCompensatorioHoras Float?
   tiempoVacacionesHoras    Float?
   tipoContrato             TipoContrato? @map("tipo_contrato")
