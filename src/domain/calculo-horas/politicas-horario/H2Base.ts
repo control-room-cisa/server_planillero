@@ -574,11 +574,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     const diasDespuesIncapacidad = totalPeriodo - totalIncapacidad;
 
     const diasNoLaboradosPorEspeciales =
-      diasVacaciones +
-      diasPermisoCS +
-      diasPermisoSS +
-      diasInasistencias +
-      diasCompensatoriasTomadas;
+      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
     const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
 
     conteo.conteoDias = {

@@ -920,11 +920,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const diasDespuesIncapacidad = totalPeriodo - totalIncapacidad;
 
     const diasNoLaboradosPorEspeciales =
-      diasVacaciones +
-      diasPermisoCS +
-      diasPermisoSS +
-      diasInasistencias +
-      diasCompensatoriasTomadas;
+      diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
     const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
 
     result.conteoDias = {

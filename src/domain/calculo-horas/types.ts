@@ -60,19 +60,19 @@ export interface ConteoHorasTrabajadas {
 
   /**
    * Conteo agregado en días para el período. Base 15 días por período.
-   * La suma debe cumplir: 15 = diasLaborados + vacaciones + permisoConSueldo + permisoSinSueldo +
-   * incapacidadEmpresa + incapacidadIHSS + inasistencias + compensatoriasTomadas (días equiv. horas/8)
+   * diasLaborados = totalPeriodo − incapacidades − vacaciones − permisos − inasistencias.
+   * compensatoriasTomadas se reportan aparte (horas/8) y no reducen diasLaborados.
    */
   conteoDias?: {
     totalPeriodo: number; // siempre 15
-    diasLaborados: number; // 15 - (otras categorías)
+    diasLaborados: number;
     vacaciones: number; // E02 horas / 8
     permisoConSueldo: number; // E03 horas / 8
     permisoSinSueldo: number; // E04 horas / 8
     inasistencias: number; // E05 horas / 8
     incapacidadEmpresa: number; // Primeros 3 días consecutivos / 8
     incapacidadIHSS: number; // A partir del 4to día consecutivo / 8
-    /** Compensatorias tomadas (normales): horas / 8, descuentan de días laborados como jobs especiales */
+    /** Compensatorias tomadas (normales): horas / 8, informativo; remuneración vía horas compensatorias */
     compensatoriasTomadas?: number;
   };
   /**
