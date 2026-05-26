@@ -203,6 +203,7 @@ export class NominaService {
       deduccionISR: payload.deduccionISR ?? null,
       deduccionRAP: payload.deduccionRAP ?? null,
       deduccionAlimentacion: payload.deduccionAlimentacion ?? null,
+      deduccionAlojamiento: payload.deduccionAlojamiento ?? null,
       cobroPrestamo: payload.cobroPrestamo ?? null,
       impuestoVecinal: payload.impuestoVecinal ?? null,
       otros: payload.otros ?? null,

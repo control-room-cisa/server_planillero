@@ -31,6 +31,7 @@ export interface NominaDto {
   deduccionISR?: number | null;
   deduccionRAP?: number | null;
   deduccionAlimentacion?: number | null;
+  deduccionAlojamiento?: number | null;
   cobroPrestamo?: number | null;
   impuestoVecinal?: number | null;
   otros?: number | null;

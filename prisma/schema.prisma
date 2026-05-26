@@ -217,6 +217,7 @@ model Nomina {
   deduccionISR          Float? @map("deduccion_isr")
   deduccionRAP          Float? @map("deduccion_rap")
   deduccionAlimentacion Float? @map("deduccion_alimentacion")
+  deduccionAlojamiento  Float? @map("deduccion_alojamiento")
   cobroPrestamo         Float? @map("cobro_prestamo")
   impuestoVecinal       Float? @map("impuesto_vecinal")
   otros                 Float? @map("otros")

@@ -106,6 +106,10 @@ export const crearNominaSchema = z.object({
   deduccionAlimentacion: z
     .number({ invalid_type_error: "La deducción de alimentación debe ser un número válido" })
     .default(0),
+  deduccionAlojamiento: z
+    .number({ invalid_type_error: "La deducción de alojamiento debe ser un número válido" })
+    .nonnegative("La deducción de alojamiento no puede ser negativa")
+    .default(0),
   cobroPrestamo: z
     .number({ invalid_type_error: "El cobro de préstamo debe ser un número válido" })
     .default(0),
