@@ -35,9 +35,14 @@ export class EmpleadoService {
 
   static toDtoDetail(
     emp: Empleado & {
-      departamento?: { nombre: string | null; empresaId: number } | null;
+      departamento?: {
+        nombre: string | null;
+        empresaId: number;
+        empresa?: { nombre: string | null } | null;
+      } | null;
     }
   ): EmployeeDetailDto {
+    const empresaNombre = emp.departamento?.empresa?.nombre ?? null;
     return {
       id: emp.id,
       nombre: emp.nombre,
@@ -45,6 +50,7 @@ export class EmpleadoService {
       codigo: emp.codigo ?? undefined,
       departamento: emp.departamento?.nombre ?? undefined,
       empresaId: emp.departamento?.empresaId ?? undefined,
+      empresa: empresaNombre ? { nombre: empresaNombre } : undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
         emp.urlFotoPerfil ?? undefined

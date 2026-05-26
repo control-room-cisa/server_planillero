@@ -152,13 +152,22 @@ export interface HorasPorClass {
   cantidadHoras: number;
 }
 
+/** Comentario de actividad/segmento dentro de un job, asociado a su class. */
+export interface ComentarioProrrateoJob {
+  texto: string;
+  /** Número de class al que corresponde el comentario; null = sin class */
+  class: number | null;
+  /** Nombre legible del vehículo asociado a la class */
+  nombreClass?: string | null;
+}
+
 export interface HorasPorJob {
   jobId: number;
   codigoJob: string;
   nombreJob: string;
   cantidadHoras: number;
   /** Comentarios de actividades asociadas a este job en el rango */
-  comentarios?: string[];
+  comentarios?: ComentarioProrrateoJob[];
   /** Desglose de horas por class dentro de este job (suma ≈ cantidadHoras) */
   horasPorClass?: HorasPorClass[];
 }

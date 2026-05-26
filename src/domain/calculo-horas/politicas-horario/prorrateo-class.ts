@@ -9,7 +9,8 @@ export type ProrrateoJobAccum = {
   codigoJob: string;
   nombreJob: string;
   horas: number;
-  comentarios: string[];
+  /** Comentario con la class a la que pertenece (deduplicado por texto+classKey). */
+  comentarios: Array<{ texto: string; classKey: string }>;
   horasPorClass: Map<string, number>;
 };
 
@@ -90,8 +91,13 @@ export function upsertProrrateoJob(
     map.set(key, entry);
   }
   addHorasPorClass(entry, classKey, horas);
-  if (descripcion && !entry.comentarios.includes(descripcion)) {
-    entry.comentarios.push(descripcion);
+  if (descripcion) {
+    const yaExiste = entry.comentarios.some(
+      (c) => c.texto === descripcion && c.classKey === classKey
+    );
+    if (!yaExiste) {
+      entry.comentarios.push({ texto: descripcion, classKey });
+    }
   }
 }
 
@@ -139,7 +145,14 @@ export function prorrateoMapToHorasPorJob(
       codigoJob: item.codigoJob,
       nombreJob: item.nombreJob,
       cantidadHoras: round2(item.horas),
-      comentarios: item.comentarios,
+      comentarios: item.comentarios.map((c) => {
+        const classValue = classValueFromKey(c.classKey);
+        return {
+          texto: c.texto,
+          class: classValue,
+          nombreClass: resolveNombre(classValue),
+        };
+      }),
       horasPorClass: buildHorasPorClassArray(item, resolveNombre),
     }))
     .filter((item) => item.cantidadHoras > 0);

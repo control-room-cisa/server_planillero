@@ -41,6 +41,7 @@ export interface EmployeeDetailDto {
   codigo?: string;
   departamento?: string;
   empresaId?: number;
+  empresa?: { nombre: string };
   urlFotoPerfil?: string;
   urlCv?: string;
   // Campos adicionales para vista completa
