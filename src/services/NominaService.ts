@@ -276,8 +276,10 @@ export class NominaService {
     const existing = await NominaRepository.findById(id);
     if (!existing) throw new AppError("Nómina no encontrada", 404);
 
+    const { empleadoId: empleadoIdPayload, ...restPayload } = payload;
+
     // Validar solapamientos si se están actualizando las fechas o el empleado
-    const empleadoId = payload.empleadoId ?? existing.empleadoId;
+    const empleadoId = empleadoIdPayload ?? existing.empleadoId;
     const fechaInicio = payload.fechaInicio
       ? payload.fechaInicio instanceof Date
         ? payload.fechaInicio
@@ -297,7 +299,7 @@ export class NominaService {
     if (
       payload.fechaInicio ||
       payload.fechaFin ||
-      (payload.empleadoId && payload.empleadoId !== existing.empleadoId)
+      (empleadoIdPayload && empleadoIdPayload !== existing.empleadoId)
     ) {
       const overlapping = await NominaRepository.findOverlapping(
         empleadoId,
@@ -313,21 +315,20 @@ export class NominaService {
       }
     }
 
-    // Prisma ignora automáticamente los campos undefined en las actualizaciones
+    // Prisma no acepta empleadoId como escalar en update; usar connect en la relación
     const updated = await NominaRepository.update(id, {
-      ...payload,
+      ...restPayload,
       ...(updatedBy
         ? { updatedByEmpleado: { connect: { id: updatedBy } } }
         : {}),
-      // Relaciones opcionales requieren sintaxis especial de Prisma
-      ...(payload.empleadoId
-        ? { empleado: { connect: { id: payload.empleadoId } } }
+      ...(empleadoIdPayload
+        ? { empleado: { connect: { id: empleadoIdPayload } } }
         : {}),
     });
 
     // Recalcular y ajustar saldos en Empleado para mantener consistencia.
     const oldEmpleadoId = existing.empleadoId;
-    const newEmpleadoId = payload.empleadoId ?? existing.empleadoId;
+    const newEmpleadoId = empleadoIdPayload ?? existing.empleadoId;
 
     const oldComp = Number(existing.horasCompensatorias ?? 0);
     const newComp = Number(payload.horasCompensatorias ?? existing.horasCompensatorias ?? 0);
