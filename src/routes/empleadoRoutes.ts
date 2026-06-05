@@ -3,6 +3,7 @@ import {
   listByDepartment,
   listByCompany,
   getById,
+  getByCodigo,
   getByCodigoForProrrateo,
   createEmpleado,
   updateEmpleado,
@@ -44,6 +45,9 @@ router.get(
   authorizeRoles(Roles.ASISTENTE_CONTABILIDAD, Roles.SUPERVISOR_CONTABILIDAD),
   getByCodigoForProrrateo
 );
+
+// GET /empleados/codigo/:codigo — acceso directo por código (nóminas / URL)
+router.get("/codigo/:codigo", getByCodigo);
 
 // GET /empleados/:id - Todos los autenticados pueden ver
 router.get("/:id", getById);
