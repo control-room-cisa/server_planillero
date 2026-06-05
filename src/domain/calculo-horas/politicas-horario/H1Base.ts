@@ -980,6 +980,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       p50: Map<number, ProrrateoJobAccum>;
       p75: Map<number, ProrrateoJobAccum>;
       p100: Map<number, ProrrateoJobAccum>;
+      compTom: Map<number, ProrrateoJobAccum>;
       compDev: Map<number, ProrrateoJobAccum>;
     },
     baseKey: number,
@@ -1129,10 +1130,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     }
 
     for (const act of registroDiario.actividades ?? []) {
-      const codigo =
-        act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
-      if (!codigo) continue;
-      const nombre = act?.job?.nombre ?? String(codigo);
       const classKey = classKeyFromActividad(act);
       const desc =
         act?.descripcion ||
@@ -1140,8 +1137,41 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         registroDiario?.comentarioEmpleado ||
         null;
 
+      // Compensatorias tomadas: pueden ir sin job (banco de horas); siempre acumular comentarios
+      if (!act?.esExtra && act?.esCompensatorio === true) {
+        const horas =
+          act?.horaInicio && act?.horaFin
+            ? this.horasActividadConRangoHorario(act)
+            : Number(act?.duracionHoras ?? 0);
+        if (horas > 0) {
+          const codigoComp =
+            act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "—";
+          const jobIdComp = act?.jobId || act?.job?.id || baseKey;
+          const nombreComp =
+            act?.job?.nombre ??
+            (codigoComp === "—"
+              ? "Compensatorias tomadas"
+              : String(codigoComp));
+          upsertProrrateoJob(
+            maps.compTom,
+            jobMapKey(jobIdComp, codigoComp),
+            jobIdComp,
+            codigoComp,
+            nombreComp,
+            classKey,
+            horas,
+            desc
+          );
+        }
+        continue;
+      }
+
+      const codigo =
+        act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
+      if (!codigo) continue;
+      const nombre = act?.job?.nombre ?? String(codigo);
+
       if (!act?.esExtra) {
-        if (act?.esCompensatorio === true) continue;
         if (act?.horaInicio && act?.horaFin) continue;
         const horas = Number(act?.duracionHoras ?? 0);
         if (horas > 0) {
@@ -1227,6 +1257,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const horasPorJobP50 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobP75 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobP100 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompTomadas = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
 
     const baseKey = 0;
@@ -1255,6 +1286,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
             p50: horasPorJobP50,
             p75: horasPorJobP75,
             p100: horasPorJobP100,
+            compTom: horasPorJobCompTomadas,
             compDev: horasPorJobCompDevueltas,
           },
           baseKey,
@@ -1283,6 +1315,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
         horasCompensatoriasTomadas:
           conteoHoras.cantidadHoras.horasCompensatoriasTomadas,
+        horasCompensatoriasTomadasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompTomadas,
+          resolveNombreClass
+        ),
         horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
           horasPorJobCompDevueltas,
           resolveNombreClass

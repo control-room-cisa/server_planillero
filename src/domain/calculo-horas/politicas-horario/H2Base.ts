@@ -636,6 +636,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     const resolveNombreClass = await createClassNameResolver();
     const horasPorJobNormal = new Map<number, ProrrateoJobAccum>();
     const horasPorJobP25 = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompTomadas = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
 
     // Recorrer cada día del período y procesar actividades
@@ -655,22 +656,49 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
         // Procesar actividades directamente (sin depender del segmentador para jobId)
         for (const act of (registroDiario as any).actividades ?? []) {
-          // Obtener código y nombre del job
-          const jobId = act?.jobId || act?.job?.id;
-          const codigo = act?.job?.codigo ?? act?.codigoJob ?? "";
-          const nombre = act?.job?.nombre ?? String(codigo);
+          const classKey = classKeyFromActividad(act);
           const descripcion =
             act?.descripcion ||
+            act?.comentario ||
             (registroDiario as any)?.comentarioEmpleado ||
             null;
 
-          if (!act?.esExtra && act?.esCompensatorio === true) continue;
+          // Compensatorias tomadas: pueden ir sin job; siempre acumular comentarios
+          if (!act?.esExtra && act?.esCompensatorio === true) {
+            const horas =
+              act?.horaInicio && act?.horaFin
+                ? this.horasActividadConRangoHorario(act)
+                : Number(act?.duracionHoras ?? 0);
+            if (horas > 0) {
+              const codigoComp = act?.job?.codigo ?? act?.codigoJob ?? "—";
+              const jobIdComp = act?.jobId || act?.job?.id || 0;
+              const nombreComp =
+                act?.job?.nombre ??
+                (codigoComp === "—"
+                  ? "Compensatorias tomadas"
+                  : String(codigoComp));
+              upsertProrrateoJob(
+                horasPorJobCompTomadas,
+                jobMapKey(jobIdComp, codigoComp),
+                jobIdComp,
+                codigoComp,
+                nombreComp,
+                classKey,
+                horas,
+                descripcion
+              );
+            }
+            continue;
+          }
+
+          const jobId = act?.jobId || act?.job?.id;
+          const codigo = act?.job?.codigo ?? act?.codigoJob ?? "";
+          const nombre = act?.job?.nombre ?? String(codigo);
+
           if (!jobId && !codigo) continue;
 
-          // Determinar si es actividad normal o extra
           const id = jobId || 0;
           const mapKey = jobMapKey(id, codigo || String(id));
-          const classKey = classKeyFromActividad(act);
 
           if (!act?.esExtra) {
             const horas = Number(act?.duracionHoras ?? 0);
@@ -741,6 +769,10 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         totalHorasLaborables: conteoHoras.cantidadHoras.normal || 0,
         horasCompensatoriasTomadas:
           conteoHoras.cantidadHoras.horasCompensatoriasTomadas,
+        horasCompensatoriasTomadasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompTomadas,
+          resolveNombreClass
+        ),
         horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
           horasPorJobCompDevueltas,
           resolveNombreClass

@@ -127,6 +127,8 @@ export interface ConteoHorasProrrateo {
 
     /** Horas de jornada normal marcadas como compensatorio=true (se "toman" a cuenta del banco) */
     horasCompensatoriasTomadas?: number;
+    /** Compensatorias tomadas desglosadas por job (con comentarios por actividad) */
+    horasCompensatoriasTomadasPorJob?: HorasPorJob[];
     /** Horas extra marcadas como compensatorio=true (devolución al banco), desglosadas por job */
     horasCompensatoriasDevueltasPorJob?: HorasPorJob[];
 

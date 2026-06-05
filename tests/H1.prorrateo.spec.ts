@@ -1100,6 +1100,18 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
       // extra=true, compensatorio=true → ninguna en este día
       compDevueltas: [],
     });
+
+    const compTomJobs = got.horasCompensatoriasTomadasPorJob ?? [];
+    expect(compTomJobs).toHaveLength(1);
+    expect(compTomJobs[0]).toMatchObject({
+      codigoJob: "—",
+      cantidadHoras: 4,
+    });
+    expect(compTomJobs[0].comentarios).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ texto: "Compensatorio tomado (sin job)" }),
+      ])
+    );
   });
 
   // --------------------------------------------------------------------------
