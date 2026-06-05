@@ -188,10 +188,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
   /**
    * Igual que `aplicarExtraSlot` para la racha (piso, minutosP50Acum, flags),
-   * pero sin sumar minutos a buckets p25–p100: las compensatorias devueltas
-   * no son extras remuneradas; van en `compExtrasMin` / `horasCompensatoriasDevueltas`.
+   * pero sin sumar minutos a buckets p25–p100: las compensatorias acumuladas
+   * no son extras remuneradas; van en `compExtrasMin` / `horasCompensatoriasAcumuladas`.
    */
-  protected static aplicarExtraSlotCompensatorioDevuelto(
+  protected static aplicarExtraSlotCompensatorioAcumulado(
     esLibreOFest: boolean,
     esDiurna: boolean,
     r: ExtraStreak
@@ -414,7 +414,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Extraer horas compensatorias calculadas por el segmentador
     const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas;
-    const compExtrasArray = segmentosResult.horasCompensatoriasDevueltas;
+    const compExtrasArray = segmentosResult.horasCompensatoriasAcumuladas;
 
     // Agregar horas compensatorias a los buckets (convertir de horas a minutos)
     b.compNormalesMin += Math.round(compNormalesHoras * 60);
@@ -479,10 +479,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         case "EXTRA": {
           const slots = dur / 15;
           const esDiurna = PoliticaH1Base.isDiurna(seg);
-          const esCompDev = seg.esCompensatorio === true;
+          const esCompAcum = seg.esCompensatorio === true;
           for (let i = 0; i < slots; i++) {
-            if (esCompDev) {
-              PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+            if (esCompAcum) {
+              PoliticaH1Base.aplicarExtraSlotCompensatorioAcumulado(
                 esLibreOFest,
                 esDiurna,
                 racha
@@ -671,10 +671,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         huboExtra = true;
         const slots = dur / 15;
         const esDiurna = PoliticaH1Base.isDiurna(seg);
-        const esCompDev = seg.esCompensatorio === true;
+        const esCompAcum = seg.esCompensatorio === true;
         for (let i = 0; i < slots; i++) {
-          if (esCompDev) {
-            PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+          if (esCompAcum) {
+            PoliticaH1Base.aplicarExtraSlotCompensatorioAcumulado(
               esLibreOFestAnterior,
               esDiurna,
               r
@@ -804,7 +804,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       b.extraC4Min +
       b.incapacidadEmpresaMin +
       b.incapacidadIHSSMin +
-      // Extras compensatorias devueltas no van a p25–p100; minutos solo en compExtrasMin
+      // Extras compensatorias acumuladas no van a p25–p100; minutos solo en compExtrasMin
       b.compExtrasMin +
       b.compNormalesMin;
 
@@ -860,7 +860,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         horasCompensatoriasTomadas: PoliticaH1Base.minutosAhoras(
           b.compNormalesMin
         ),
-        horasCompensatoriasDevueltas: PoliticaH1Base.minutosAhoras(
+        horasCompensatoriasAcumuladas: PoliticaH1Base.minutosAhoras(
           b.compExtrasMin
         ),
       },
@@ -981,7 +981,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       p75: Map<number, ProrrateoJobAccum>;
       p100: Map<number, ProrrateoJobAccum>;
       compTom: Map<number, ProrrateoJobAccum>;
-      compDev: Map<number, ProrrateoJobAccum>;
+      compAcum: Map<number, ProrrateoJobAccum>;
     },
     baseKey: number,
     fechasConJobDesconocido: Set<string>
@@ -1090,14 +1090,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         const esDiurna = PoliticaH1Base.isDiurna(seg);
         if (seg.esCompensatorio === true) {
           for (let i = 0; i < slots; i++) {
-            PoliticaH1Base.aplicarExtraSlotCompensatorioDevuelto(
+            PoliticaH1Base.aplicarExtraSlotCompensatorioAcumulado(
               esLibreOFest,
               esDiurna,
               racha
             );
           }
           upsertProrrateoJob(
-            maps.compDev,
+            maps.compAcum,
             jobMapKey(baseKey, codigo),
             baseKey,
             codigo,
@@ -1194,7 +1194,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         const horas = this.horasActividadConRangoHorario(act);
         if (horas > 0) {
           upsertProrrateoJob(
-            maps.compDev,
+            maps.compAcum,
             jobMapKey(baseKey, codigo),
             baseKey,
             codigo,
@@ -1258,7 +1258,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const horasPorJobP75 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobP100 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompTomadas = new Map<number, ProrrateoJobAccum>();
-    const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompAcumuladas = new Map<number, ProrrateoJobAccum>();
 
     const baseKey = 0;
     const fechasConJobDesconocido = new Set<string>();
@@ -1287,7 +1287,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
             p75: horasPorJobP75,
             p100: horasPorJobP100,
             compTom: horasPorJobCompTomadas,
-            compDev: horasPorJobCompDevueltas,
+            compAcum: horasPorJobCompAcumuladas,
           },
           baseKey,
           fechasConJobDesconocido
@@ -1319,8 +1319,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           horasPorJobCompTomadas,
           resolveNombreClass
         ),
-        horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
-          horasPorJobCompDevueltas,
+        horasCompensatoriasAcumuladasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompAcumuladas,
           resolveNombreClass
         ),
         horasFeriado: totalHorasFeriado,

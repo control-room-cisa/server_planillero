@@ -88,7 +88,7 @@ type Horas = {
   p100: number;
   horasFeriado?: number;
   horasCompensatoriasTomadas?: number;
-  horasCompensatoriasDevueltas?: number;
+  horasCompensatoriasAcumuladas?: number;
   vacaciones?: number;
   incapacidad?: number; // incapacidadEmpresa + incapacidadIHSS
 };
@@ -116,25 +116,25 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   const expCompTomadas = exp.horasCompensatoriasTomadas ?? 0;
   const gotCompTomadas = got.horasCompensatoriasTomadas ?? 0;
 
-  const expCompDevueltas = exp.horasCompensatoriasDevueltas ?? 0;
-  // horasCompensatoriasDevueltas es un array, sumar todas las horas
-  const gotCompDevueltasArray = (got as any).horasCompensatoriasDevueltas;
-  const gotCompDevueltas = Array.isArray(gotCompDevueltasArray)
-    ? gotCompDevueltasArray.reduce(
+  const expCompAcumuladas = exp.horasCompensatoriasAcumuladas ?? 0;
+  // horasCompensatoriasAcumuladas es un array, sumar todas las horas
+  const gotCompAcumuladasArray = (got as any).horasCompensatoriasAcumuladas;
+  const gotCompAcumuladas = Array.isArray(gotCompAcumuladasArray)
+    ? gotCompAcumuladasArray.reduce(
         (sum, item) => sum + (item.cantidadHoras ?? 0),
         0,
       )
-    : (got.horasCompensatoriasDevueltas ?? 0);
+    : (got.horasCompensatoriasAcumuladas ?? 0);
 
   // Partición 24h: tomadas cuentan aparte (en segmentador van como LIBRE);
-  // devueltas no van a p25–p100 (van a compExtrasMin).
+  // acumuladas no van a p25–p100 (van a compExtrasMin).
   const expLibre =
     24 -
     sumHoras(exp) -
     expCompTomadas -
-    expCompDevueltas;
+    expCompAcumuladas;
   const gotTotal =
-    sumHoras(got) + gotCompTomadas + gotCompDevueltas;
+    sumHoras(got) + gotCompTomadas + gotCompAcumuladas;
   const gotLibre = 24 - gotTotal;
 
   const expVacaciones = exp.vacaciones ?? 0;
@@ -159,9 +159,9 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
       obtenido: gotCompTomadas,
     },
     {
-      métrica: "comp_devueltas",
-      esperado: expCompDevueltas,
-      obtenido: gotCompDevueltas,
+      métrica: "comp_acumuladas",
+      esperado: expCompAcumuladas,
+      obtenido: gotCompAcumuladas,
     },
     { métrica: "vacaciones", esperado: expVacaciones, obtenido: gotVacaciones },
     {
@@ -202,7 +202,7 @@ function logAndAssert(fecha: string, got: HorasExt, exp: Horas) {
   expect(got.p100).toBe(exp.p100);
   expect(gotFeriado).toBe(expFeriado);
   expect(gotCompTomadas).toBe(expCompTomadas);
-  expect(gotCompDevueltas).toBe(expCompDevueltas);
+  expect(gotCompAcumuladas).toBe(expCompAcumuladas);
   expect(gotVacaciones).toBe(expVacaciones);
   expect(gotIncapacidad).toBe(expIncapacidad);
 
@@ -1000,16 +1000,16 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p75: 0,
       p100: 0,
       horasCompensatoriasTomadas: 4,
-      horasCompensatoriasDevueltas: 0,
+      horasCompensatoriasAcumuladas: 0,
     });
   });
 
-  // -------------------- Caso Compensatorio 2: Horas extras compensatorias (devueltas al banco) --------------------
+  // -------------------- Caso Compensatorio 2: Horas extras compensatorias (acumuladas al banco) --------------------
   // Día normal: 4h job 200 + 5h job 300 + 3h extras compensatorias
-  // Las 3h extras compensatorias NO cuentan como horas extras, pasan a horasCompensatoriasDevueltas
+  // Las 3h extras compensatorias NO cuentan como horas extras, pasan a horasCompensatoriasAcumuladas
   // NO se aplica racha en horas compensatorias extras
-  // Esperado: 1,9,0,0,0,0 + 3h compensatorias devueltas
-  it("24/09/2025: 9h normales + 3h extras compensatorias ⇒ 1/9/0/0/0/0 + comp_devueltas:3", async () => {
+  // Esperado: 1,9,0,0,0,0 + 3h compensatorias acumuladas
+  it("24/09/2025: 9h normales + 3h extras compensatorias ⇒ 1/9/0/0/0/0 + comp_acumuladas:3", async () => {
     const fecha = "2025-09-24";
     const p = new H1Test();
 
@@ -1028,7 +1028,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p75: 0,
       p100: 0,
       horasCompensatoriasTomadas: 0,
-      horasCompensatoriasDevueltas: 3,
+      horasCompensatoriasAcumuladas: 3,
     });
   });
 

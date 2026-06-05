@@ -235,7 +235,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     let p25Min = 0;
     let libreMin = 0;
     let compNormalesMin = 0; // Horas compensatorias tomadas (normales)
-    let compExtrasMin = 0; // Horas compensatorias devueltas (extras)
+    let compExtrasMin = 0; // Horas compensatorias acumuladas (extras)
     let incapacidadEmpresaMin = 0; // Primeros 3 días consecutivos (24h por día)
     let incapacidadIHSSMin = 0; // A partir del 4to día consecutivo (24h por día)
     let almuerzoMin = 0; // H2_1: siempre 0; H2_2: se acumula cuando hay almuerzo
@@ -305,7 +305,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
       // Extraer horas compensatorias calculadas por el segmentador
       const compNormalesHoras = segmentosResult.horasCompensatoriasTomadas || 0;
-      const compExtrasArray = segmentosResult.horasCompensatoriasDevueltas || [];
+      const compExtrasArray = segmentosResult.horasCompensatoriasAcumuladas || [];
 
       // Agregar horas compensatorias a los acumuladores (convertir de horas a minutos)
       compNormalesMin += Math.round(compNormalesHoras * 60);
@@ -341,7 +341,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
             libreMinDia += dur;
             break;
           case "EXTRA":
-            // Extras compensatorias devueltas: no van a p25; ya están en compExtrasMin vía segmentador
+            // Extras compensatorias acumuladas: no van a p25; ya están en compExtrasMin vía segmentador
             if (seg.esCompensatorio === true) break;
             extraMinDia += dur;
             break;
@@ -478,7 +478,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       incapacidadEmpresaMin +
       incapacidadIHSSMin +
       almuerzoMin + // H2_2 incluye almuerzo; H2_1 es 0
-      // Extras compensatorias devueltas no van a p25; minutos solo en compExtrasMin
+      // Extras compensatorias acumuladas no van a p25; minutos solo en compExtrasMin
       compExtrasMin;
 
     if (totalMin !== esperadoGlobalMin) {
@@ -529,7 +529,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         inasistencias: horasInasistencias,
         // Horas compensatorias separadas por tipo (calculadas por el segmentador)
         horasCompensatoriasTomadas: toHours(compNormalesMin),
-        horasCompensatoriasDevueltas: toHours(compExtrasMin),
+        horasCompensatoriasAcumuladas: toHours(compExtrasMin),
       },
     };
 
@@ -637,7 +637,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     const horasPorJobNormal = new Map<number, ProrrateoJobAccum>();
     const horasPorJobP25 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompTomadas = new Map<number, ProrrateoJobAccum>();
-    const horasPorJobCompDevueltas = new Map<number, ProrrateoJobAccum>();
+    const horasPorJobCompAcumuladas = new Map<number, ProrrateoJobAccum>();
 
     // Recorrer cada día del período y procesar actividades
     let currentDate = fechaInicio;
@@ -718,7 +718,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
             const horas = this.horasActividadConRangoHorario(act);
             if (horas > 0) {
               upsertProrrateoJob(
-                horasPorJobCompDevueltas,
+                horasPorJobCompAcumuladas,
                 mapKey,
                 id,
                 codigo,
@@ -773,8 +773,8 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           horasPorJobCompTomadas,
           resolveNombreClass
         ),
-        horasCompensatoriasDevueltasPorJob: prorrateoMapToHorasPorJob(
-          horasPorJobCompDevueltas,
+        horasCompensatoriasAcumuladasPorJob: prorrateoMapToHorasPorJob(
+          horasPorJobCompAcumuladas,
           resolveNombreClass
         ),
         horasFeriado: 0,

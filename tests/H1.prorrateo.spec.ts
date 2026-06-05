@@ -71,10 +71,10 @@ function allJobsOfDay(exp: {
   p50: HorasPorJob[];
   p75: HorasPorJob[];
   p100: HorasPorJob[];
-  compDevueltas?: HorasPorJob[];
+  compAcumuladas?: HorasPorJob[];
 }) {
   const s = new Set<string>();
-  [exp.normal, exp.p25, exp.p50, exp.p75, exp.p100, exp.compDevueltas ?? []].forEach(
+  [exp.normal, exp.p25, exp.p50, exp.p75, exp.p100, exp.compAcumuladas ?? []].forEach(
     (arr) => arr.forEach((j) => s.add(j.codigoJob))
   );
   return [...s].sort();
@@ -90,7 +90,7 @@ function formatValue(got: number, exp: number): string {
 }
 
 // Tabla ancha: una fila por job con columnas esperado/obtenido por banda
-// Incluye columna de compensatorias devueltas (extra=true, compensatorio=true)
+// Incluye columna de compensatorias acumuladas (extra=true, compensatorio=true)
 function rowsWideByJob(
   gotBands: {
     normal: HorasPorJob[];
@@ -98,7 +98,7 @@ function rowsWideByJob(
     p50: HorasPorJob[];
     p75: HorasPorJob[];
     p100: HorasPorJob[];
-    compDevueltas?: HorasPorJob[];
+    compAcumuladas?: HorasPorJob[];
   },
   expBands: {
     normal: HorasPorJob[];
@@ -106,7 +106,7 @@ function rowsWideByJob(
     p50: HorasPorJob[];
     p75: HorasPorJob[];
     p100: HorasPorJob[];
-    compDevueltas?: HorasPorJob[];
+    compAcumuladas?: HorasPorJob[];
   }
 ) {
   const expIdx = {
@@ -115,7 +115,7 @@ function rowsWideByJob(
     p50: toIndex(expBands.p50),
     p75: toIndex(expBands.p75),
     p100: toIndex(expBands.p100),
-    compDevueltas: toIndex(expBands.compDevueltas ?? []),
+    compAcumuladas: toIndex(expBands.compAcumuladas ?? []),
   };
   const gotIdx = {
     normal: toIndex(gotBands.normal ?? []),
@@ -123,7 +123,7 @@ function rowsWideByJob(
     p50: toIndex(gotBands.p50 ?? []),
     p75: toIndex(gotBands.p75 ?? []),
     p100: toIndex(gotBands.p100 ?? []),
-    compDevueltas: toIndex(gotBands.compDevueltas ?? []),
+    compAcumuladas: toIndex(gotBands.compAcumuladas ?? []),
   };
 
   const jobs = new Set<string>([
@@ -142,8 +142,8 @@ function rowsWideByJob(
     const g75 = Number((gotIdx.p75.get(codigo) ?? 0).toFixed(4));
     const e100 = Number((expIdx.p100.get(codigo) ?? 0).toFixed(4));
     const g100 = Number((gotIdx.p100.get(codigo) ?? 0).toFixed(4));
-    const eComp = Number((expIdx.compDevueltas.get(codigo) ?? 0).toFixed(4));
-    const gComp = Number((gotIdx.compDevueltas.get(codigo) ?? 0).toFixed(4));
+    const eComp = Number((expIdx.compAcumuladas.get(codigo) ?? 0).toFixed(4));
+    const gComp = Number((gotIdx.compAcumuladas.get(codigo) ?? 0).toFixed(4));
 
     return {
       job: codigo,
@@ -158,8 +158,8 @@ function rowsWideByJob(
       "75%✗": formatValue(g75, e75),
       "100%✓": e100,
       "100%✗": formatValue(g100, e100),
-      "cDev✓": eComp,
-      "cDev✗": formatValue(gComp, eComp),
+      "cAcum✓": eComp,
+      "cAcum✗": formatValue(gComp, eComp),
     };
   });
 
@@ -174,8 +174,8 @@ function rowsWideByJob(
   const total75Got = sumHoras(gotBands.p75 ?? []);
   const total100Exp = sumHoras(expBands.p100);
   const total100Got = sumHoras(gotBands.p100 ?? []);
-  const totalCompExp = sumHoras(expBands.compDevueltas ?? []);
-  const totalCompGot = sumHoras(gotBands.compDevueltas ?? []);
+  const totalCompExp = sumHoras(expBands.compAcumuladas ?? []);
+  const totalCompGot = sumHoras(gotBands.compAcumuladas ?? []);
 
   rows.push({
     job: "TOTAL",
@@ -190,8 +190,8 @@ function rowsWideByJob(
     "75%✗": formatValue(total75Got, total75Exp),
     "100%✓": total100Exp,
     "100%✗": formatValue(total100Got, total100Exp),
-    "cDev✓": totalCompExp,
-    "cDev✗": formatValue(totalCompGot, totalCompExp),
+    "cAcum✓": totalCompExp,
+    "cAcum✗": formatValue(totalCompGot, totalCompExp),
   });
 
   return rows;
@@ -205,7 +205,7 @@ function hasDifferences(
     p50: HorasPorJob[];
     p75: HorasPorJob[];
     p100: HorasPorJob[];
-    compDevueltas?: HorasPorJob[];
+    compAcumuladas?: HorasPorJob[];
     totalHorasLaborables: number;
     horasFeriado?: number;
     horasCompensatoriasTomadas?: number;
@@ -216,7 +216,7 @@ function hasDifferences(
     p50: HorasPorJob[];
     p75: HorasPorJob[];
     p100: HorasPorJob[];
-    compDevueltas?: HorasPorJob[];
+    compAcumuladas?: HorasPorJob[];
     totalHorasLaborables: number;
     horasFeriado?: number;
     horasCompensatoriasTomadas?: number;
@@ -283,16 +283,16 @@ function hasDifferences(
   if (!assertBandEqual(got.p50 ?? [], exp.p50)) return true;
   if (!assertBandEqual(got.p75 ?? [], exp.p75)) return true;
   if (!assertBandEqual(got.p100 ?? [], exp.p100)) return true;
-  if (!assertBandEqual(got.compDevueltas ?? [], exp.compDevueltas ?? []))
+  if (!assertBandEqual(got.compAcumuladas ?? [], exp.compAcumuladas ?? []))
     return true;
 
   return false;
 }
 
 /**
- * Tabla 1 — Prorrateo por Job (bands normales + extras + compensatorias devueltas)
- *   comp = "✔" si el job tiene horas compensatorias devueltas (extra=true, compensatorio=true)
- *   cDev = compensatorias devueltas (extra=true, compensatorio=true)  — columna nueva
+ * Tabla 1 — Prorrateo por Job (bands normales + extras + compensatorias acumuladas)
+ *   comp = "✔" si el job tiene horas compensatorias acumuladas (extra=true, compensatorio=true)
+ *   cAcum = compensatorias acumuladas (extra=true, compensatorio=true)  — columna nueva
  *
  * Tabla 2 — Resumen de métricas:
  *   TOT   = suma de todas las bandas del día (normal+p25+p50+p75+p100)
@@ -324,7 +324,7 @@ function logProrrateoAndAssert(
     Prestamo: number;
     Total: number;
     horasCompensatoriasTomadas?: number;
-    horasCompensatoriasDevueltasPorJob?: HorasPorJob[];
+    horasCompensatoriasAcumuladasPorJob?: HorasPorJob[];
   },
   exp: {
     normal: HorasPorJob[];
@@ -337,11 +337,11 @@ function logProrrateoAndAssert(
     vacacionesHoras?: number;
     incapacidadHoras?: number;
     horasCompensatoriasTomadas?: number;
-    compDevueltas?: HorasPorJob[];
+    compAcumuladas?: HorasPorJob[];
   }
 ) {
-  const gotCompDev = got.horasCompensatoriasDevueltasPorJob ?? [];
-  const expCompDev = exp.compDevueltas ?? [];
+  const gotCompAcum = got.horasCompensatoriasAcumuladasPorJob ?? [];
+  const expCompAcum = exp.compAcumuladas ?? [];
 
   // Verificar si hay diferencias antes de imprimir
   const hasDiff = hasDifferences(
@@ -351,21 +351,21 @@ function logProrrateoAndAssert(
       p50: got.p50 ?? [],
       p75: got.p75 ?? [],
       p100: got.p100 ?? [],
-      compDevueltas: gotCompDev,
+      compAcumuladas: gotCompAcum,
       totalHorasLaborables: got.totalHorasLaborables ?? 0,
       horasFeriado: got.horasFeriado ?? 0,
       horasCompensatoriasTomadas: got.horasCompensatoriasTomadas ?? 0,
     },
     {
       ...exp,
-      compDevueltas: expCompDev,
+      compAcumuladas: expCompAcum,
       horasCompensatoriasTomadas: exp.horasCompensatoriasTomadas ?? 0,
     }
   );
 
   // Solo imprimir si hay diferencias
   if (hasDiff) {
-    // 1) Tabla ancha, una fila por job (incluye columna de compensatorias devueltas)
+    // 1) Tabla ancha, una fila por job (incluye columna de compensatorias acumuladas)
     const wide = rowsWideByJob(
       {
         normal: got.normal ?? [],
@@ -373,7 +373,7 @@ function logProrrateoAndAssert(
         p50: got.p50 ?? [],
         p75: got.p75 ?? [],
         p100: got.p100 ?? [],
-        compDevueltas: gotCompDev,
+        compAcumuladas: gotCompAcum,
       },
       {
         normal: exp.normal,
@@ -381,7 +381,7 @@ function logProrrateoAndAssert(
         p50: exp.p50,
         p75: exp.p75,
         p100: exp.p100,
-        compDevueltas: expCompDev,
+        compAcumuladas: expCompAcum,
       }
     );
 
@@ -469,8 +469,8 @@ function logProrrateoAndAssert(
   assertBand(got.p50 ?? [], exp.p50);
   assertBand(got.p75 ?? [], exp.p75);
   assertBand(got.p100 ?? [], exp.p100);
-  // Compensatorias devueltas (extra=true, compensatorio=true)
-  assertBand(gotCompDev, expCompDev);
+  // Compensatorias acumuladas (extra=true, compensatorio=true)
+  assertBand(gotCompAcum, expCompAcum);
 
   const totalGot =
     sumHoras(got.normal ?? []) +
@@ -923,39 +923,39 @@ function seedInputForDate(p: H1Test, fecha: string) {
 //  Helpers para pruebas de compensatorias
 // =============================================================================
 
-/** Verifica que horasCompensatoriasTomadas y horasCompensatoriasDevueltasPorJob
+/** Verifica que horasCompensatoriasTomadas y horasCompensatoriasAcumuladasPorJob
  *  coincidan con lo esperado e imprime una tabla de diferencias si hay error. */
 function assertCompensatorios(
   got: {
     horasCompensatoriasTomadas?: number;
-    horasCompensatoriasDevueltasPorJob?: HorasPorJob[];
+    horasCompensatoriasAcumuladasPorJob?: HorasPorJob[];
   },
   exp: {
     horasCompensatoriasTomadas: number;
-    horasCompensatoriasDevueltasPorJob: HorasPorJob[];
+    horasCompensatoriasAcumuladasPorJob: HorasPorJob[];
   }
 ) {
   const gotTomadas = got.horasCompensatoriasTomadas ?? 0;
-  const gotDevueltas = got.horasCompensatoriasDevueltasPorJob ?? [];
-  const expDevueltas = exp.horasCompensatoriasDevueltasPorJob;
+  const gotAcumuladas = got.horasCompensatoriasAcumuladasPorJob ?? [];
+  const expAcumuladas = exp.horasCompensatoriasAcumuladasPorJob;
 
   const tomOk = Math.abs(gotTomadas - exp.horasCompensatoriasTomadas) < 0.0001;
   const devOk =
-    toIndex(gotDevueltas).size === toIndex(expDevueltas).size &&
-    [...toIndex(expDevueltas).entries()].every(
-      ([cod, h]) => Math.abs((toIndex(gotDevueltas).get(cod) ?? 0) - h) < 0.0001
+    toIndex(gotAcumuladas).size === toIndex(expAcumuladas).size &&
+    [...toIndex(expAcumuladas).entries()].every(
+      ([cod, h]) => Math.abs((toIndex(gotAcumuladas).get(cod) ?? 0) - h) < 0.0001
     );
 
   if (!tomOk || !devOk) {
-    const devueltasRows = [...new Set([
-      ...toIndex(expDevueltas).keys(),
-      ...toIndex(gotDevueltas).keys(),
+    const acumuladasRows = [...new Set([
+      ...toIndex(expAcumuladas).keys(),
+      ...toIndex(gotAcumuladas).keys(),
     ])].sort().map((cod) => ({
       job: cod,
-      "devueltas✓": Number((toIndex(expDevueltas).get(cod) ?? 0).toFixed(4)),
-      "devueltas✗": formatValue(
-        Number((toIndex(gotDevueltas).get(cod) ?? 0).toFixed(4)),
-        Number((toIndex(expDevueltas).get(cod) ?? 0).toFixed(4))
+      "acumuladas✓": Number((toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4)),
+      "acumuladas✗": formatValue(
+        Number((toIndex(gotAcumuladas).get(cod) ?? 0).toFixed(4)),
+        Number((toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4))
       ),
     }));
 
@@ -969,9 +969,9 @@ function assertCompensatorios(
         "✗": formatValue(gotTomadas, exp.horasCompensatoriasTomadas),
       },
     ]);
-    if (devueltasRows.length > 0) {
+    if (acumuladasRows.length > 0) {
       // eslint-disable-next-line no-console
-      console.table(devueltasRows);
+      console.table(acumuladasRows);
     }
   }
 
@@ -987,7 +987,7 @@ function assertCompensatorios(
         a.codigoJob < b.codigoJob ? -1 : a.codigoJob > b.codigoJob ? 1 : 0
       );
 
-  expect(norm(gotDevueltas)).toEqual(norm(expDevueltas));
+  expect(norm(gotAcumuladas)).toEqual(norm(expAcumuladas));
 }
 
 /** =========================
@@ -1048,7 +1048,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
   //    p25/p50/p75/p100 → vacías
   //    totalHorasLaborables → 9
   //    horasCompensatoriasTomadas → 4h  (sin job, se acumulan en banco)
-  //    horasCompensatoriasDevueltasPorJob → []
+  //    horasCompensatoriasAcumuladasPorJob → []
   // --------------------------------------------------------------------------
   it("2025-10-06 (lunes): tomar 4h compensatorias – job 100 tiene 5h normales", async () => {
     const FECHA = "2025-10-06";
@@ -1098,7 +1098,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
       // extra=false, compensatorio=true → 4h acumuladas en banco (sin job)
       horasCompensatoriasTomadas: 4,
       // extra=true, compensatorio=true → ninguna en este día
-      compDevueltas: [],
+      compAcumuladas: [],
     });
 
     const compTomJobs = got.horasCompensatoriasTomadasPorJob ?? [];
@@ -1121,16 +1121,16 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
   //  Actividades:
   //    Act1 – normal, 5h, job 100
   //    Act2 – normal, 4h, job 200
-  //    Act3 – extra, esCompensatorio=true,  17:00–20:00, job 300  (3h devueltas)
+  //    Act3 – extra, esCompensatorio=true,  17:00–20:00, job 300  (3h acumuladas)
   //    Act4 – extra, esCompensatorio=false, 20:00–22:00, job 400  (2h, 75%)
   //
   //  Esperado:
   //    normal → job "100": 5h, job "200": 4h
-  //    p25   → job "400": 2h (clasificación conteo; compensatorias devueltas en banda aparte)
+  //    p25   → job "400": 2h (clasificación conteo; compensatorias acumuladas en banda aparte)
   //    p50/p75/p100 → según conteo
   //    totalHorasLaborables → conteo.normal del día
   //    horasCompensatoriasTomadas       → 0
-  //    horasCompensatoriasDevueltasPorJob → [{ codigoJob: "300", cantidadHoras: 3 }]
+  //    horasCompensatoriasAcumuladasPorJob → [{ codigoJob: "300", cantidadHoras: 3 }]
   // --------------------------------------------------------------------------
   it("2025-10-07 (martes): devolver 3h compensatorias job 300, extra 75% 2h job 400", async () => {
     const FECHA_LUN = "2025-10-06";
@@ -1225,7 +1225,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
       // extra=false, compensatorio=true → ninguna en este día
       horasCompensatoriasTomadas: 0,
       // extra=true, compensatorio=true → job 300 devuelve 3h al banco
-      compDevueltas: [
+      compAcumuladas: [
         { jobId: 0, codigoJob: "300", nombreJob: "300", cantidadHoras: 3 },
       ],
     });

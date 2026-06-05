@@ -72,7 +72,7 @@ export interface Segmento15 {
   descripcion?: string | null;
   /** Class de la actividad origen (vehículo); null si no aplica */
   className?: number | null;
-  /** true cuando el segmento EXTRA proviene de una actividad compensatoria devuelta (esCompensatorio=true, esExtra=true) */
+  /** true cuando el segmento EXTRA proviene de una actividad compensatoria acumulada (esCompensatorio=true, esExtra=true) */
   esCompensatorio?: boolean;
 }
 
@@ -121,7 +121,7 @@ export interface ResultadoSegmentacion {
   };
   // Horas compensatorias (contadas por separado, segmentadas como LIBRE)
   horasCompensatoriasTomadas: number; // Horas normales compensatorias
-  horasCompensatoriasDevueltas: Array<{
+  horasCompensatoriasAcumuladas: Array<{
     codigoJob: string;
     cantidadHoras: number;
   }>; // Horas extras compensatorias por job
@@ -341,7 +341,7 @@ export function segmentarRegistroDiario(
 
   // 4) ACTIVIDADES → pintan EXTRA (fuera de normal o esExtra=true) o NORMAL (dentro de normal)
   // NOTA: Las compensatorias tomadas (extra=false) NO se segmentan, se cuentan en sección 4.5
-  // NOTA: Las compensatorias devueltas (extra=true) SÍ se segmentan como EXTRA con flag esCompensatorio=true
+  // NOTA: Las compensatorias acumuladas (extra=true) SÍ se segmentan como EXTRA con flag esCompensatorio=true
   const rangosExtraPintados: Rango[] = []; // para validar EXTRA dentro de NORMAL
 
   for (const act of actividades) {
@@ -606,7 +606,7 @@ export function segmentarRegistroDiario(
 
   // Calcular horas compensatorias (actividades con esCompensatorio=true)
   let horasCompensatoriasTomadas = 0; // Normales compensatorias
-  const horasCompensatoriasDevueltasMap = new Map<string, number>(); // Extras compensatorias por job
+  const horasCompensatoriasAcumuladasMap = new Map<string, number>(); // Extras compensatorias por job
 
   for (const act of actividades) {
     if (!act.esCompensatorio) continue;
@@ -625,8 +625,8 @@ export function segmentarRegistroDiario(
     if (act.esExtra) {
       // Horas EXTRAS compensatorias → agrupar por código de job
       const codigoJob = act.job?.codigo ?? "SIN_CODIGO";
-      const actual = horasCompensatoriasDevueltasMap.get(codigoJob) ?? 0;
-      horasCompensatoriasDevueltasMap.set(codigoJob, actual + horas);
+      const actual = horasCompensatoriasAcumuladasMap.get(codigoJob) ?? 0;
+      horasCompensatoriasAcumuladasMap.set(codigoJob, actual + horas);
     } else {
       // Horas NORMALES compensatorias
       horasCompensatoriasTomadas += horas;
@@ -634,8 +634,8 @@ export function segmentarRegistroDiario(
   }
 
   // Convertir el mapa a array
-  const horasCompensatoriasDevueltas = Array.from(
-    horasCompensatoriasDevueltasMap.entries()
+  const horasCompensatoriasAcumuladas = Array.from(
+    horasCompensatoriasAcumuladasMap.entries()
   ).map(([codigoJob, cantidadHoras]) => ({ codigoJob, cantidadHoras }));
 
   return {
@@ -649,6 +649,6 @@ export function segmentarRegistroDiario(
       minutosLibre,
     },
     horasCompensatoriasTomadas,
-    horasCompensatoriasDevueltas,
+    horasCompensatoriasAcumuladas,
   };
 }

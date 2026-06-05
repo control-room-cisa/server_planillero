@@ -64,7 +64,7 @@ Resultado:  últimas 4 h del rango (13:00–17:00) pasan a LIBRE
 
 
 
-### 2. Compensatorias Devueltas (`esExtra = true`, `esCompensatorio = true`)
+### 2. Compensatorias Acumuladas (`esExtra = true`, `esCompensatorio = true`)
 
 
 
@@ -78,7 +78,7 @@ El empleado **deposita horas en el banco**: trabaja fuera de su jornada normal p
 
 - **No se incluyen en** `totalHorasExtra` ni en los mapas `p25/p50/p75/p100`.
 
-- Se acumulan en el campo `horasCompensatoriasDevueltasPorJob[]` del resultado del prorrateo.
+- Se acumulan en el campo `horasCompensatoriasAcumuladasPorJob[]` del resultado del prorrateo.
 
 - La duración se calcula directamente desde `horaFin - horaInicio`, **sin distinción diurna/nocturna**.
 
@@ -86,7 +86,7 @@ El empleado **deposita horas en el banco**: trabaja fuera de su jornada normal p
 
 **Efecto en la racha de extras:**
 
-Las compensatorias devueltas avanzan el acumulador de racha (`minutosP50Acum`) como si fueran horas a nivel p50, y activan `existeDiurnaExtra` si ocurren en franja diurna (05:00–19:00). Esto permite que las horas extra ordinarias que siguen inmediatamente a un bloque de compensatorias devueltas escalen correctamente a p75 o p100.
+Las compensatorias acumuladas avanzan el acumulador de racha (`minutosP50Acum`) como si fueran horas a nivel p50, y activan `existeDiurnaExtra` si ocurren en franja diurna (05:00–19:00). Esto permite que las horas extra ordinarias que siguen inmediatamente a un bloque de compensatorias acumuladas escalen correctamente a p75 o p100.
 
 
 
@@ -94,7 +94,7 @@ Las compensatorias devueltas avanzan el acumulador de racha (`minutosP50Acum`) c
 
 ```
 
-17:00–20:00  esExtra=true, esCompensatorio=true, job=300  →  3 h compensatorias devueltas
+17:00–20:00  esExtra=true, esCompensatorio=true, job=300  →  3 h compensatorias acumuladas
 
 20:00–22:00  esExtra=true, esCompensatorio=false, job=400  →  2 h extra ordinarias
 
@@ -114,7 +114,7 @@ Clasificación de 20:00–22:00:
 
 
 
-horasCompensatoriasDevueltasPorJob = [{ codigoJob: "300", cantidadHoras: 3 }]
+horasCompensatoriasAcumuladasPorJob = [{ codigoJob: "300", cantidadHoras: 3 }]
 
 ```
 
@@ -134,11 +134,11 @@ horasCompensatoriasDevueltasPorJob = [{ codigoJob: "300", cantidadHoras: 3 }]
 
 | `horasCompensatoriasTomadas` | `number?` | Total de horas normales tomadas como compensatorio (sin job). Omitido si es 0. |
 
-| `horasCompensatoriasDevueltasPorJob` | `HorasPorJob[]?` | Horas compensatorias devueltas, desglosadas por job. Omitido si vacío. |
+| `horasCompensatoriasAcumuladasPorJob` | `HorasPorJob[]?` | Horas compensatorias acumuladas, desglosadas por job. Omitido si vacío. |
 
 
 
-En el conteo base (`ConteoHorasTrabajadas`), el total agregado de horas extra compensatorias del período va en `cantidadHoras.horasCompensatoriasDevueltas` (no es pago monetario: es tiempo devuelto al banco).
+En el conteo base (`ConteoHorasTrabajadas`), el total agregado de horas extra compensatorias del período va en `cantidadHoras.horasCompensatoriasAcumuladas` (no es pago monetario: es tiempo devuelto al banco).
 
 
 
@@ -150,7 +150,7 @@ En el conteo base (`ConteoHorasTrabajadas`), el total agregado de horas extra co
 
 
 
-`totalHorasLaborables` refleja **solo las horas efectivamente laboradas** en el período. Las compensatorias tomadas **reducen** las horas laborables del día (los slots se convierten a LIBRE en el segmentador). Las compensatorias devueltas **no suman** a `totalHorasLaborables` (son tiempo de reintegro, no jornada nueva).
+`totalHorasLaborables` refleja **solo las horas efectivamente laboradas** en el período. Las compensatorias tomadas **reducen** las horas laborables del día (los slots se convierten a LIBRE en el segmentador). Las compensatorias acumuladas **no suman** a `totalHorasLaborables` (son tiempo de reintegro, no jornada nueva).
 
 
 
@@ -166,10 +166,10 @@ En el conteo base (`ConteoHorasTrabajadas`), el total agregado de horas extra co
 
 |---|---|
 
-| `segmentador.ts` | `Segmento15.esCompensatorio?` en extras; compensatorias tomadas a LIBRE (sección 4.5). Agregación de devueltas: `horasCompensatoriasDevueltasMap` → `horasCompensatoriasDevueltas[]`. |
+| `segmentador.ts` | `Segmento15.esCompensatorio?` en extras; compensatorias tomadas a LIBRE (sección 4.5). Agregación de acumuladas: `horasCompensatoriasAcumuladasMap` → `horasCompensatoriasAcumuladas[]`. |
 
 | `H1Base.aplicarExtraSlotCompensatorio()` | Avanza la racha (piso=1.5, minutosP50Acum+15) y escribe en `compExtrasMin`. |
 
 | `H1Base.procesarDiaCompletamente()` | Segmentos EXTRA con `esCompensatorio=true` llaman al nuevo método. |
 
-| `H1Base` (totales de conteo) | Suma minutos desde `segmentosResult.horasCompensatoriasDevueltas` hacia `compExtrasMin` → `cantidadHoras.horasCompensatoriasDevueltas`. |
+| `H1Base` (totales de conteo) | Suma minutos desde `segmentosResult.horasCompensatoriasAcumuladas` hacia `compExtrasMin` → `cantidadHoras.horasCompensatoriasAcumuladas`. |

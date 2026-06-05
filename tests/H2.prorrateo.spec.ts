@@ -390,7 +390,7 @@ function seedInputForDate(p: H2Test, fecha: string) {
 /** =========================
  *     Suite de pruebas
  *  ========================= */
-/** Stub H2_2 para pruebas de compensatorias devueltas (caso quincena 202604B). */
+/** Stub H2_2 para pruebas de compensatorias acumuladas (caso quincena 202604B). */
 class H2_2Test extends PoliticaH2_2 {
   private registros: Record<string, any> = {};
   private feriados: Record<string, boolean> = {};
@@ -424,7 +424,7 @@ function sumHorasPorJob(
   );
 }
 
-const sumCompDevueltas = sumHorasPorJob;
+const sumCompAcumuladas = sumHorasPorJob;
 
 /**
  * Replica registro 2026-04-23 del caso 202604B (empleado 46, H2_2):
@@ -432,7 +432,7 @@ const sumCompDevueltas = sumHorasPorJob;
  * - Comp dev 00:00→01:00 con timestamps en el día calendario siguiente (1h)
  * El conteo (segmentador) suma 2h; el prorrateo actual recorta por UTC y pierde la 2.ª.
  */
-function seedCaso202604BCompensatoriasDevueltas(p: H2_2Test) {
+function seedCaso202604BCompensatoriasAcumuladas(p: H2_2Test) {
   const FECHA = "2026-04-23";
   p.seedRegistro(FECHA, {
     fecha: FECHA,
@@ -450,7 +450,7 @@ function seedCaso202604BCompensatoriasDevueltas(p: H2_2Test) {
         duracionHoras: 10,
       },
       {
-        descripcion: "Compensatoria devuelta 23:00–00:00",
+        descripcion: "Compensatoria acumulada 23:00–00:00",
         esExtra: true,
         esCompensatorio: true,
         jobId: 810,
@@ -460,7 +460,7 @@ function seedCaso202604BCompensatoriasDevueltas(p: H2_2Test) {
         horaFin: makeDateUTC("2026-04-24", "00:00"),
       },
       {
-        descripcion: "Compensatoria devuelta 00:00–01:00 (día calendario siguiente)",
+        descripcion: "Compensatoria acumulada 00:00–01:00 (día calendario siguiente)",
         esExtra: true,
         esCompensatorio: true,
         jobId: 100,
@@ -474,7 +474,7 @@ function seedCaso202604BCompensatoriasDevueltas(p: H2_2Test) {
 }
 
 /**
- * Mismo layout horario que seedCaso202604BCompensatoriasDevueltas, pero extras
+ * Mismo layout horario que seedCaso202604BCompensatoriasAcumuladas, pero extras
  * ordinarias (esExtra=true, esCompensatorio=false) → banda p25 en H2.
  */
 function seedCaso202604BExtrasSinCompensatorio(p: H2_2Test) {
@@ -518,13 +518,13 @@ function seedCaso202604BExtrasSinCompensatorio(p: H2_2Test) {
   });
 }
 
-describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)", () => {
+describe("PoliticaH2_2 - Compensatorias acumuladas: conteo vs prorrateo (202604B)", () => {
   const FECHA = "2026-04-23";
   const EMPLEADO_ID = "46";
 
-  it(`${FECHA}: conteo reporta 2h compensatorias devueltas (segmentador)`, async () => {
+  it(`${FECHA}: conteo reporta 2h compensatorias acumuladas (segmentador)`, async () => {
     const p = new H2_2Test();
-    seedCaso202604BCompensatoriasDevueltas(p);
+    seedCaso202604BCompensatoriasAcumuladas(p);
 
     const conteo = await p.getConteoHorasTrabajadasByDateAndEmpleado(
       FECHA,
@@ -532,12 +532,12 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
       EMPLEADO_ID
     );
 
-    expect(conteo.cantidadHoras.horasCompensatoriasDevueltas).toBe(2);
+    expect(conteo.cantidadHoras.horasCompensatoriasAcumuladas).toBe(2);
   });
 
-  it(`${FECHA}: prorrateo debe sumar 2h compensatorias devueltas por job (caso 202604B)`, async () => {
+  it(`${FECHA}: prorrateo debe sumar 2h compensatorias acumuladas por job (caso 202604B)`, async () => {
     const p = new H2_2Test();
-    seedCaso202604BCompensatoriasDevueltas(p);
+    seedCaso202604BCompensatoriasAcumuladas(p);
 
     const prorrateo = await p.getProrrateoHorasPorJobByDateAndEmpleado(
       FECHA,
@@ -546,9 +546,9 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
     );
 
     const porJob =
-      prorrateo.cantidadHoras.horasCompensatoriasDevueltasPorJob ?? [];
+      prorrateo.cantidadHoras.horasCompensatoriasAcumuladasPorJob ?? [];
 
-    expect(sumCompDevueltas(porJob)).toBe(2);
+    expect(sumCompAcumuladas(porJob)).toBe(2);
     expect(
       porJob.find((x) => x.codigoJob === "810")?.cantidadHoras ?? 0
     ).toBe(1);
@@ -557,9 +557,9 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
     ).toBe(1);
   });
 
-  it(`${FECHA}: prorrateo y conteo deben coincidir en compensatorias devueltas`, async () => {
+  it(`${FECHA}: prorrateo y conteo deben coincidir en compensatorias acumuladas`, async () => {
     const p = new H2_2Test();
-    seedCaso202604BCompensatoriasDevueltas(p);
+    seedCaso202604BCompensatoriasAcumuladas(p);
 
     const conteo = await p.getConteoHorasTrabajadasByDateAndEmpleado(
       FECHA,
@@ -572,15 +572,15 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
       EMPLEADO_ID
     );
 
-    const conteoDev = conteo.cantidadHoras.horasCompensatoriasDevueltas ?? 0;
-    const prorDev = sumCompDevueltas(
-      prorrateo.cantidadHoras.horasCompensatoriasDevueltasPorJob
+    const conteoAcum = conteo.cantidadHoras.horasCompensatoriasAcumuladas ?? 0;
+    const prorAcum = sumCompAcumuladas(
+      prorrateo.cantidadHoras.horasCompensatoriasAcumuladasPorJob
     );
 
-    expect(prorDev).toBeCloseTo(conteoDev, 6);
+    expect(prorAcum).toBeCloseTo(conteoAcum, 6);
   });
 
-  it(`${FECHA}: una sola comp devuelta 23:00–01:00 debe contar 2h en prorrateo`, async () => {
+  it(`${FECHA}: una sola comp acumulada 23:00–01:00 debe contar 2h en prorrateo`, async () => {
     const p = new H2_2Test();
     p.seedRegistro(FECHA, {
       fecha: FECHA,
@@ -598,7 +598,7 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
           duracionHoras: 10,
         },
         {
-          descripcion: "Compensatoria devuelta cruza medianoche",
+          descripcion: "Compensatoria acumulada cruza medianoche",
           esExtra: true,
           esCompensatorio: true,
           jobId: 400,
@@ -621,10 +621,10 @@ describe("PoliticaH2_2 - Compensatorias devueltas: conteo vs prorrateo (202604B)
       EMPLEADO_ID
     );
 
-    expect(conteo.cantidadHoras.horasCompensatoriasDevueltas).toBe(2);
+    expect(conteo.cantidadHoras.horasCompensatoriasAcumuladas).toBe(2);
     expect(
-      sumCompDevueltas(
-        prorrateo.cantidadHoras.horasCompensatoriasDevueltasPorJob
+      sumCompAcumuladas(
+        prorrateo.cantidadHoras.horasCompensatoriasAcumuladasPorJob
       )
     ).toBe(2);
   });
@@ -645,7 +645,7 @@ describe("PoliticaH2_2 - Extras p25 sin compensatorio: conteo vs prorrateo (2026
     );
 
     expect(conteo.cantidadHoras.p25).toBe(2);
-    expect(conteo.cantidadHoras.horasCompensatoriasDevueltas ?? 0).toBe(0);
+    expect(conteo.cantidadHoras.horasCompensatoriasAcumuladas ?? 0).toBe(0);
   });
 
   it(`${FECHA}: prorrateo debe sumar 2h en p25 por job (mismo caso horario)`, async () => {

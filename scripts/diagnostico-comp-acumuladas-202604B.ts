@@ -1,6 +1,6 @@
 /**
- * Diagnóstico: compensatorias devueltas conteo vs prorrateo (quincena 202604B).
- * Uso: npx tsx scripts/diagnostico-comp-devueltas-202604B.ts [empleadoId]
+ * Diagnóstico: compensatorias acumuladas conteo vs prorrateo (quincena 202604B).
+ * Uso: npx tsx scripts/diagnostico-comp-acumuladas-202604B.ts [empleadoId]
  */
 import "dotenv/config";
 import { PrismaClient } from "@prisma/client";
@@ -15,7 +15,7 @@ const FECHA_FIN = "2026-04-26";
 
 const prisma = new PrismaClient();
 
-function sumProrrateoCompDev(
+function sumProrrateoCompAcum(
   items: { cantidadHoras: number }[] | undefined
 ): number {
   return (items ?? []).reduce((a, x) => a + (x.cantidadHoras ?? 0), 0);
@@ -61,7 +61,7 @@ function horasFromActividadSegmentador(act: {
 async function main() {
   const empleadoIdArg = process.argv[2];
 
-  console.log("=== Diagnóstico compensatorias devueltas ===");
+  console.log("=== Diagnóstico compensatorias acumuladas ===");
   console.log(`Quincena: ${CODIGO_NOMINA} | Rango: ${FECHA_INICIO} .. ${FECHA_FIN}`);
   console.log(`DB: ${process.env.DATABASE_URL?.replace(/:[^:@]+@/, ":****@")}\n`);
 
@@ -117,7 +117,7 @@ async function main() {
   });
 
   console.log(
-    `\nActividades compensatorias DEVUELTAS (esExtra+esCompensatorio) en rango: ${actividades.length}`
+    `\nActividades compensatorias ACUMULADAS (esExtra+esCompensatorio) en rango: ${actividades.length}`
   );
 
   const byEmpleado = new Map<
@@ -189,10 +189,10 @@ async function main() {
           FECHA_FIN,
           String(empleadoId)
         );
-      const compDevConteo =
-        conteo.cantidadHoras.horasCompensatoriasDevueltas ?? 0;
+      const compAcumConteo =
+        conteo.cantidadHoras.horasCompensatoriasAcumuladas ?? 0;
       console.log(
-        `  API conteo horasCompensatoriasDevueltas: ${compDevConteo}h`
+        `  API conteo horasCompensatoriasAcumuladas: ${compAcumConteo}h`
       );
     } catch (e: any) {
       console.log(`  API conteo ERROR: ${e?.message?.slice(0, 200)}`);
@@ -205,16 +205,16 @@ async function main() {
           FECHA_FIN,
           String(empleadoId)
         );
-      const compDevPror = sumProrrateoCompDev(
-        prorrateo.cantidadHoras.horasCompensatoriasDevueltasPorJob
+      const compAcumPror = sumProrrateoCompAcum(
+        prorrateo.cantidadHoras.horasCompensatoriasAcumuladasPorJob
       );
       console.log(
-        `  API prorrateo sum(horasCompensatoriasDevueltasPorJob): ${compDevPror}h`
+        `  API prorrateo sum(horasCompensatoriasAcumuladasPorJob): ${compAcumPror}h`
       );
       console.log(
         "  Detalle por job:",
         JSON.stringify(
-          prorrateo.cantidadHoras.horasCompensatoriasDevueltasPorJob,
+          prorrateo.cantidadHoras.horasCompensatoriasAcumuladasPorJob,
           null,
           2
         )
@@ -235,8 +235,8 @@ async function main() {
           FECHA_FIN,
           String(empleadoId)
         );
-        const sumDirect = sumProrrateoCompDev(
-          prDirect.cantidadHoras.horasCompensatoriasDevueltasPorJob
+        const sumDirect = sumProrrateoCompAcum(
+          prDirect.cantidadHoras.horasCompensatoriasAcumuladasPorJob
         );
         console.log(
           `  Política directa (${empleado.tipoHorario}) prorrateo comp dev: ${sumDirect}h`
@@ -261,7 +261,7 @@ async function main() {
   }
 
   if (byEmpleado.size === 0) {
-    console.log("\nNo hay actividades compensatorias devueltas en ese rango.");
+    console.log("\nNo hay actividades compensatorias acumuladas en ese rango.");
     console.log(
       "Pase empleadoId como argumento si el caso es otro rango de fechas."
     );

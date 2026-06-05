@@ -54,8 +54,8 @@ export interface ConteoHorasTrabajadas {
     compensatorio?: number; // E06 y E07
     // Horas compensatorias (actividades con esCompensatorio=true)
     horasCompensatoriasTomadas?: number; // Horas normales compensatorias (no se cuentan como normales)
-    /** Extras compensatorias devueltas: fuera de p25–p100; remuneración = tarifa hora normal. */
-    horasCompensatoriasDevueltas?: number;
+    /** Extras compensatorias acumuladas: fuera de p25–p100; remuneración = tarifa hora normal. */
+    horasCompensatoriasAcumuladas?: number;
   };
 
   /**
@@ -129,8 +129,8 @@ export interface ConteoHorasProrrateo {
     horasCompensatoriasTomadas?: number;
     /** Compensatorias tomadas desglosadas por job (con comentarios por actividad) */
     horasCompensatoriasTomadasPorJob?: HorasPorJob[];
-    /** Horas extra marcadas como compensatorio=true (devolución al banco), desglosadas por job */
-    horasCompensatoriasDevueltasPorJob?: HorasPorJob[];
+    /** Horas extra marcadas como compensatorio=true (acumulación al banco), desglosadas por job */
+    horasCompensatoriasAcumuladasPorJob?: HorasPorJob[];
 
     deduccionesISR: number;
     deduccionesRAP: number;
