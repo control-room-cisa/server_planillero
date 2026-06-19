@@ -43,6 +43,19 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const start = PoliticaH1Base.HHMM_TO_MIN(seg.inicio);
     return start >= 5 * 60 && start < 19 * 60; // 05:00–19:00
   }
+
+  /** Hay tramo EXTRA diurno (05–19) en el mismo bloque continuo (hasta el próximo LIBRE). */
+  protected static hayExtraDiurnaEnBloqueExtra(
+    segmentos: Segmento15[],
+    desdeIdx: number
+  ): boolean {
+    for (let i = desdeIdx; i < segmentos.length; i++) {
+      const seg = segmentos[i];
+      if (seg.tipo === "LIBRE") break;
+      if (seg.tipo === "EXTRA" && PoliticaH1Base.isDiurna(seg)) return true;
+    }
+    return false;
+  }
   protected static addDays(iso: string, d: number): string {
     return addDaysYmd(iso, d);
   }
@@ -96,6 +109,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       domOFestActivo: false, // arrastre de C4 a través de medianoche
       bloquearMixta: false, // deshabilitar p75 en días no laborables
       existeDiurnaExtra: false, // indica si hay tramo extra diurno (5-19h) en la racha
+      hayExtraDiurnaEnBloque: false, // diurna EXTRA pendiente en el bloque actual del día
     };
   }
   protected static copiarRacha(r: ExtraStreak): ExtraStreak {
@@ -154,11 +168,17 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       r.existeDiurnaExtra = true;
     }
 
-    // Verificar si se debe pasar a p75 (mixta)
-    // Condiciones: >=3h de p50 específicamente Y existeDiurnaExtra activa
+    // Verificar si se debe pasar a p75 (mixta o excedente nocturno)
+    // Mixta: >=3h p50 y ya hubo extra diurna en la racha.
+    // Excedente nocturno: >=3h p50, slot nocturno y sin extra diurna pendiente en el bloque
+    // (incluye fracciones <1h; p.ej. 3h p50 + 0.5h p75 en 19:00–22:30).
     let aplicarP75 = false;
-    if (!r.bloquearMixta && r.minutosP50Acum >= 180 && r.existeDiurnaExtra) {
-      aplicarP75 = true;
+    if (!r.bloquearMixta && r.minutosP50Acum >= 180) {
+      if (r.existeDiurnaExtra) {
+        aplicarP75 = true;
+      } else if (!esDiurna && !r.hayExtraDiurnaEnBloque) {
+        aplicarP75 = true;
+      }
     }
 
     const mult = aplicarP75 ? 1.75 : r.piso;
@@ -214,8 +234,12 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     if (esDiurna) r.existeDiurnaExtra = true;
 
     let aplicarP75 = false;
-    if (!r.bloquearMixta && r.minutosP50Acum >= 180 && r.existeDiurnaExtra) {
-      aplicarP75 = true;
+    if (!r.bloquearMixta && r.minutosP50Acum >= 180) {
+      if (r.existeDiurnaExtra) {
+        aplicarP75 = true;
+      } else if (!esDiurna && !r.hayExtraDiurnaEnBloque) {
+        aplicarP75 = true;
+      }
     }
 
     const mult = aplicarP75 ? 1.75 : r.piso;
@@ -443,7 +467,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     racha.bloquearMixta = esDiaLibreContrato;
 
     // Procesar segmentos del día
-    for (const seg of segmentos) {
+    for (let segIdx = 0; segIdx < segmentos.length; segIdx++) {
+      const seg = segmentos[segIdx]!;
       const dur = PoliticaH1Base.segDurMin(seg);
       if (dur <= 0) continue;
 
@@ -480,6 +505,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
           const slots = dur / 15;
           const esDiurna = PoliticaH1Base.isDiurna(seg);
           const esCompAcum = seg.esCompensatorio === true;
+          racha.hayExtraDiurnaEnBloque =
+            PoliticaH1Base.hayExtraDiurnaEnBloqueExtra(segmentos, segIdx);
           for (let i = 0; i < slots; i++) {
             if (esCompAcum) {
               PoliticaH1Base.aplicarExtraSlotCompensatorioAcumulado(
@@ -1042,7 +1069,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const SLOT_MIN = 15;
     const slotHoras = SLOT_MIN / 60;
 
-    for (const seg of segmentos) {
+    for (let segIdx = 0; segIdx < segmentos.length; segIdx++) {
+      const seg = segmentos[segIdx]!;
       const durMin = PoliticaH1Base.segDurMin(seg);
       if (durMin <= 0) continue;
       const horasSeg = durMin / 60;
@@ -1088,6 +1116,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       if (seg.tipo === "EXTRA") {
         const slots = durMin / SLOT_MIN;
         const esDiurna = PoliticaH1Base.isDiurna(seg);
+        racha.hayExtraDiurnaEnBloque =
+          PoliticaH1Base.hayExtraDiurnaEnBloqueExtra(segmentos, segIdx);
         if (seg.esCompensatorio === true) {
           for (let i = 0; i < slots; i++) {
             PoliticaH1Base.aplicarExtraSlotCompensatorioAcumulado(
@@ -1357,6 +1387,7 @@ type ExtraStreak = {
   domOFestActivo: boolean; // arrastre de p100 entre días
   bloquearMixta: boolean; // deshabilita p75 en no laborables
   existeDiurnaExtra: boolean; // indica si hay tramo extra diurno (5-19h) en la racha
+  hayExtraDiurnaEnBloque: boolean; // extra diurna pendiente en el bloque actual (hasta LIBRE)
 };
 
 type Buckets = {

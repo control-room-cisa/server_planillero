@@ -1082,3 +1082,65 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
     });
   });
 });
+
+// =============================================================================
+//  Hora corrida 07–19 + extra 19–22:30 (miércoles 2026-03-04)
+//  Jornada: entrada 07:00, salida 19:00, esHoraCorrida=true
+//  Actividad normal 9h job 100; extra 19:00–22:30 job 200 (sin traslape)
+//  Esperado conteo: 12h normal, 3h p50, 0.5h p75
+// =============================================================================
+describe("PoliticaH1_1 - Hora corrida 07–19 + extra 19–22:30", () => {
+  const FECHA = "2026-03-04";
+  const FECHA_SIG = "2026-03-05";
+
+  function seedHoraCorrida07a19(p: H1Test) {
+    p.seedHorario(FECHA, {
+      inicio: "07:00",
+      fin: "19:00",
+      incluyeAlmuerzo: false,
+      cantidadHorasLaborables: 12,
+      esDiaLibre: false,
+    });
+    p.seedRegistro(FECHA, {
+      fecha: FECHA,
+      horaEntrada: makeDateUTC(FECHA, "13:00"), // 07:00 local
+      horaSalida: makeDateUTC(FECHA_SIG, "01:00"), // 19:00 local
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 9h job 100",
+          esExtra: false,
+          job: { codigo: "100" },
+          duracionHoras: 9,
+        },
+        {
+          descripcion: "Extra 19-22:30 job 200",
+          esExtra: true,
+          horaInicio: makeDateUTC(FECHA_SIG, "01:00"), // 19:00 local
+          horaFin: makeDateUTC(FECHA_SIG, "04:30"), // 22:30 local
+          job: { codigo: "200" },
+        },
+      ],
+    });
+  }
+
+  it("2026-03-04: hora corrida 07–19 + extra 19–22:30 ⇒ 0/12/0/3/0.5/0", async () => {
+    const p = new H1Test();
+    seedHoraCorrida07a19(p);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    logAndAssert(FECHA, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 12,
+      p25: 0,
+      p50: 3,
+      p75: 0.5,
+      p100: 0,
+    });
+  });
+});

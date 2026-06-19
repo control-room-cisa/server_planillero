@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { PoliticaH1_1 } from "../src/domain/calculo-horas/politicas-horario/H1_1";
+import type { HorarioTrabajo } from "../src/domain/calculo-horas/types";
 
 /** =========================
  *   Stubs / helpers comunes
@@ -7,11 +8,33 @@ import { PoliticaH1_1 } from "../src/domain/calculo-horas/politicas-horario/H1_1
 class H1Test extends PoliticaH1_1 {
   private registros: Record<string, any> = {};
   private feriados: Record<string, boolean> = {};
+  private horarios: Record<
+    string,
+    {
+      inicio: string;
+      fin: string;
+      incluyeAlmuerzo: boolean;
+      cantidadHorasLaborables: number;
+      esDiaLibre: boolean;
+    }
+  > = {};
   seedRegistro(fecha: string, reg: any) {
     this.registros[fecha] = reg;
   }
   seedFeriado(fecha: string, esFeriado: boolean) {
     this.feriados[fecha] = esFeriado;
+  }
+  seedHorario(
+    fecha: string,
+    data: {
+      inicio: string;
+      fin: string;
+      incluyeAlmuerzo: boolean;
+      cantidadHorasLaborables: number;
+      esDiaLibre: boolean;
+    },
+  ) {
+    this.horarios[fecha] = data;
   }
   protected async getRegistroDiario(_empleadoId: string, fecha: string) {
     // En producción, el repositorio solo devuelve actividades del día actual
@@ -27,6 +50,29 @@ class H1Test extends PoliticaH1_1 {
   }
   protected async getEmpleado(_empleadoId: string) {
     return { id: Number(_empleadoId), nombre: "Test" } as any;
+  }
+  async getHorarioTrabajoByDateAndEmpleado(
+    fecha: string,
+    empleadoId: string,
+  ): Promise<HorarioTrabajo> {
+    const personalizado = this.horarios[fecha];
+    if (personalizado) {
+      return {
+        tipoHorario: "H1_1",
+        fecha,
+        empleadoId,
+        horarioTrabajo: {
+          inicio: personalizado.inicio,
+          fin: personalizado.fin,
+        },
+        incluyeAlmuerzo: personalizado.incluyeAlmuerzo,
+        cantidadHorasLaborables: personalizado.cantidadHorasLaborables,
+        esDiaLibre: personalizado.esDiaLibre,
+        esFestivo: this.feriados[fecha] ?? false,
+        nombreDiaFestivo: this.feriados[fecha] ? "Feriado" : "",
+      };
+    }
+    return super.getHorarioTrabajoByDateAndEmpleado(fecha, empleadoId);
   }
 
   // Helper para agregar días a una fecha
@@ -74,9 +120,14 @@ function allJobsOfDay(exp: {
   compAcumuladas?: HorasPorJob[];
 }) {
   const s = new Set<string>();
-  [exp.normal, exp.p25, exp.p50, exp.p75, exp.p100, exp.compAcumuladas ?? []].forEach(
-    (arr) => arr.forEach((j) => s.add(j.codigoJob))
-  );
+  [
+    exp.normal,
+    exp.p25,
+    exp.p50,
+    exp.p75,
+    exp.p100,
+    exp.compAcumuladas ?? [],
+  ].forEach((arr) => arr.forEach((j) => s.add(j.codigoJob)));
   return [...s].sort();
 }
 
@@ -107,7 +158,7 @@ function rowsWideByJob(
     p75: HorasPorJob[];
     p100: HorasPorJob[];
     compAcumuladas?: HorasPorJob[];
-  }
+  },
 ) {
   const expIdx = {
     normal: toIndex(expBands.normal),
@@ -147,7 +198,7 @@ function rowsWideByJob(
 
     return {
       job: codigo,
-      comp: eComp > 0 || gComp > 0 ? "✔" : "",  // marca si es compensatoria pagada
+      comp: eComp > 0 || gComp > 0 ? "✔" : "", // marca si es compensatoria pagada
       "norm✓": eN,
       "norm✗": formatValue(gN, eN),
       "25%✓": e25,
@@ -220,7 +271,7 @@ function hasDifferences(
     totalHorasLaborables: number;
     horasFeriado?: number;
     horasCompensatoriasTomadas?: number;
-  }
+  },
 ): boolean {
   const assertBandEqual = (gotArr: HorasPorJob[], expArr: HorasPorJob[]) => {
     const norm = (a: HorasPorJob[]) =>
@@ -233,8 +284,8 @@ function hasDifferences(
           x.codigoJob < y.codigoJob
             ? -1
             : x.codigoJob > y.codigoJob
-            ? 1
-            : x.cantidadHoras - y.cantidadHoras
+              ? 1
+              : x.cantidadHoras - y.cantidadHoras,
         );
     const gotNorm = norm(gotArr ?? []);
     const expNorm = norm(expArr);
@@ -274,7 +325,7 @@ function hasDifferences(
   if (
     Math.abs(
       (got.horasCompensatoriasTomadas ?? 0) -
-        (exp.horasCompensatoriasTomadas ?? 0)
+        (exp.horasCompensatoriasTomadas ?? 0),
     ) > 0.0001
   )
     return true;
@@ -338,7 +389,7 @@ function logProrrateoAndAssert(
     incapacidadHoras?: number;
     horasCompensatoriasTomadas?: number;
     compAcumuladas?: HorasPorJob[];
-  }
+  },
 ) {
   const gotCompAcum = got.horasCompensatoriasAcumuladasPorJob ?? [];
   const expCompAcum = exp.compAcumuladas ?? [];
@@ -360,7 +411,7 @@ function logProrrateoAndAssert(
       ...exp,
       compAcumuladas: expCompAcum,
       horasCompensatoriasTomadas: exp.horasCompensatoriasTomadas ?? 0,
-    }
+    },
   );
 
   // Solo imprimir si hay diferencias
@@ -382,7 +433,7 @@ function logProrrateoAndAssert(
         p75: exp.p75,
         p100: exp.p100,
         compAcumuladas: expCompAcum,
-      }
+      },
     );
 
     // eslint-disable-next-line no-console
@@ -416,7 +467,7 @@ function logProrrateoAndAssert(
         "✓": Number(exp.totalHorasLaborables.toFixed(4)),
         "✗": formatValue(
           got.totalHorasLaborables ?? 0,
-          exp.totalHorasLaborables
+          exp.totalHorasLaborables,
         ),
       },
       {
@@ -439,7 +490,7 @@ function logProrrateoAndAssert(
         "✓": Number((exp.horasCompensatoriasTomadas ?? 0).toFixed(4)),
         "✗": formatValue(
           got.horasCompensatoriasTomadas ?? 0,
-          exp.horasCompensatoriasTomadas ?? 0
+          exp.horasCompensatoriasTomadas ?? 0,
         ),
       },
     ]);
@@ -457,8 +508,8 @@ function logProrrateoAndAssert(
           x.codigoJob < y.codigoJob
             ? -1
             : x.codigoJob > y.codigoJob
-            ? 1
-            : x.cantidadHoras - y.cantidadHoras
+              ? 1
+              : x.cantidadHoras - y.cantidadHoras,
         );
     expect(norm(gotArr ?? [])).toEqual(norm(expArr));
     expect(sumHoras(gotArr ?? [])).toBeCloseTo(sumHoras(expArr), 6);
@@ -487,7 +538,7 @@ function logProrrateoAndAssert(
 
   expect(Number(totalGot.toFixed(6))).toBeCloseTo(
     Number(totalExp.toFixed(6)),
-    6
+    6,
   );
   expect(got.totalHorasLaborables).toBeCloseTo(exp.totalHorasLaborables, 6);
 
@@ -497,7 +548,7 @@ function logProrrateoAndAssert(
   // Compensatorias tomadas (extra=false, compensatorio=true)
   expect(got.horasCompensatoriasTomadas ?? 0).toBeCloseTo(
     exp.horasCompensatoriasTomadas ?? 0,
-    6
+    6,
   );
   expect(got.permisoConSueldoHoras).toBe(0);
   expect(got.permisoSinSueldoHoras).toBe(0);
@@ -933,7 +984,7 @@ function assertCompensatorios(
   exp: {
     horasCompensatoriasTomadas: number;
     horasCompensatoriasAcumuladasPorJob: HorasPorJob[];
-  }
+  },
 ) {
   const gotTomadas = got.horasCompensatoriasTomadas ?? 0;
   const gotAcumuladas = got.horasCompensatoriasAcumuladasPorJob ?? [];
@@ -943,21 +994,28 @@ function assertCompensatorios(
   const devOk =
     toIndex(gotAcumuladas).size === toIndex(expAcumuladas).size &&
     [...toIndex(expAcumuladas).entries()].every(
-      ([cod, h]) => Math.abs((toIndex(gotAcumuladas).get(cod) ?? 0) - h) < 0.0001
+      ([cod, h]) =>
+        Math.abs((toIndex(gotAcumuladas).get(cod) ?? 0) - h) < 0.0001,
     );
 
   if (!tomOk || !devOk) {
-    const acumuladasRows = [...new Set([
-      ...toIndex(expAcumuladas).keys(),
-      ...toIndex(gotAcumuladas).keys(),
-    ])].sort().map((cod) => ({
-      job: cod,
-      "acumuladas✓": Number((toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4)),
-      "acumuladas✗": formatValue(
-        Number((toIndex(gotAcumuladas).get(cod) ?? 0).toFixed(4)),
-        Number((toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4))
-      ),
-    }));
+    const acumuladasRows = [
+      ...new Set([
+        ...toIndex(expAcumuladas).keys(),
+        ...toIndex(gotAcumuladas).keys(),
+      ]),
+    ]
+      .sort()
+      .map((cod) => ({
+        job: cod,
+        "acumuladas✓": Number(
+          (toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4),
+        ),
+        "acumuladas✗": formatValue(
+          Number((toIndex(gotAcumuladas).get(cod) ?? 0).toFixed(4)),
+          Number((toIndex(expAcumuladas).get(cod) ?? 0).toFixed(4)),
+        ),
+      }));
 
     // eslint-disable-next-line no-console
     console.log("\n▶️ Compensatorias — Esperado vs Obtenido");
@@ -984,7 +1042,7 @@ function assertCompensatorios(
         cantidadHoras: Number(cantidadHoras.toFixed(4)),
       }))
       .sort((a, b) =>
-        a.codigoJob < b.codigoJob ? -1 : a.codigoJob > b.codigoJob ? 1 : 0
+        a.codigoJob < b.codigoJob ? -1 : a.codigoJob > b.codigoJob ? 1 : 0,
       );
 
   expect(norm(gotAcumuladas)).toEqual(norm(expAcumuladas));
@@ -1019,7 +1077,7 @@ describe("PoliticaH1_1 - Prorrateo por Job (11–20/09/2025) con tablas comparat
       const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
         fecha,
         fecha,
-        "1"
+        "1",
       );
       const got = res.cantidadHoras;
       const exp = expectedByDate[fecha];
@@ -1081,7 +1139,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
     const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
       FECHA,
       FECHA,
-      "1"
+      "1",
     );
     const got = res.cantidadHoras;
 
@@ -1110,7 +1168,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
     expect(compTomJobs[0].comentarios).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ texto: "Compensatorio tomado (sin job)" }),
-      ])
+      ]),
     );
   });
 
@@ -1206,7 +1264,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
     const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
       FECHA,
       FECHA,
-      "1"
+      "1",
     );
     const got = res.cantidadHoras;
 
@@ -1215,9 +1273,7 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
         { jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 5 },
         { jobId: 0, codigoJob: "200", nombreJob: "200", cantidadHoras: 4 },
       ],
-      p25: [
-        { jobId: 0, codigoJob: "400", nombreJob: "400", cantidadHoras: 2 },
-      ],
+      p25: [{ jobId: 0, codigoJob: "400", nombreJob: "400", cantidadHoras: 2 }],
       p50: [],
       p75: [],
       p100: [],
@@ -1228,6 +1284,74 @@ describe("PoliticaH1_1 - Compensatorias: tomar y devolver", () => {
       compAcumuladas: [
         { jobId: 0, codigoJob: "300", nombreJob: "300", cantidadHoras: 3 },
       ],
+    });
+  });
+});
+
+// =============================================================================
+//  Hora corrida 07–19 + extra 19–22:30 (miércoles 2026-03-04)
+//  Esperado prorrateo: 12h job 100 normal, 3h job 200 p50, 0.5h job 200 p75
+//  Extra 19:00–22:30 sin traslape con jornada 07–19
+// =============================================================================
+describe("PoliticaH1_1 - Prorrateo: hora corrida 07–19 + extra 19–22:30", () => {
+  const FECHA = "2026-03-04";
+  const FECHA_SIG = "2026-03-05";
+
+  function seedHoraCorrida07a19(p: H1Test) {
+    p.seedHorario(FECHA, {
+      inicio: "07:00",
+      fin: "19:00",
+      incluyeAlmuerzo: false,
+      cantidadHorasLaborables: 12,
+      esDiaLibre: false,
+    });
+    p.seedRegistro(FECHA, {
+      fecha: FECHA,
+      horaEntrada: makeDateUTC(FECHA, "13:00"), // 07:00 local
+      horaSalida: makeDateUTC(FECHA_SIG, "01:00"), // 19:00 local
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Normal 12h job 100",
+          esExtra: false,
+          job: { codigo: "100", nombre: "100" },
+          duracionHoras: 12,
+        },
+        {
+          descripcion: "Extra 19-22:30 job 200",
+          esExtra: true,
+          horaInicio: makeDateUTC(FECHA_SIG, "01:00"), // 19:00 local
+          horaFin: makeDateUTC(FECHA_SIG, "04:30"), // 22:30 local
+          job: { codigo: "200", nombre: "200" },
+        },
+      ],
+    });
+  }
+
+  it("2026-03-04: prorrateo por job coincide con esperado", async () => {
+    const p = new H1Test();
+    seedHoraCorrida07a19(p);
+
+    const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    const got = res.cantidadHoras;
+
+    logProrrateoAndAssert(FECHA, got as any, {
+      normal: [
+        { jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 12 },
+      ],
+      p25: [],
+      p50: [{ jobId: 0, codigoJob: "200", nombreJob: "200", cantidadHoras: 3 }],
+      p75: [
+        { jobId: 0, codigoJob: "200", nombreJob: "200", cantidadHoras: 0.5 },
+      ],
+      p100: [],
+      totalHorasLaborables: 12,
+      horasFeriado: 0,
     });
   });
 });
