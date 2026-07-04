@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { RangosFechasAlimentacionRepository } from "../repositories/RangosFechasAlimentacionRepository";
 import type { RangoFechasAlimentacionCreateDto } from "../validators/rangosFechasAlimentacion.validator";
 import type { RangoFechasAlimentacionUpdateDto } from "../validators/rangosFechasAlimentacion.validator";
+import { RANGOS_ALIMENTACION_PAGE_SIZE } from "../validators/rangosFechasAlimentacion.validator";
 import { addDaysYmd, prismaDateToYmd } from "../utils/dateTime";
 
 /** Solape inclusivo: [a0,a1] con [b0,b1] (strings YYYY-MM-DD). */
@@ -43,6 +44,37 @@ export class RangosFechasAlimentacionService {
     ]);
     return {
       items: rows,
+      idPermiteEdicion: ultimo?.id ?? null,
+    };
+  }
+
+  static async listPaginated(page = 0) {
+    const safePage = Number.isFinite(page) && page >= 0 ? Math.floor(page) : 0;
+    const pageSize = RANGOS_ALIMENTACION_PAGE_SIZE;
+    const ultimo =
+      await RangosFechasAlimentacionRepository.findConMayorFechaFinDesc();
+
+    let { rows, total } = await RangosFechasAlimentacionRepository.findPaginated(
+      safePage,
+      pageSize,
+    );
+    const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
+    let currentPage = safePage;
+
+    if (total > 0 && safePage >= totalPages) {
+      currentPage = totalPages - 1;
+      ({ rows, total } = await RangosFechasAlimentacionRepository.findPaginated(
+        currentPage,
+        pageSize,
+      ));
+    }
+
+    return {
+      items: rows.map((row) => RangosFechasAlimentacionRepository.toDto(row)),
+      total,
+      page: currentPage,
+      pageSize,
+      totalPages,
       idPermiteEdicion: ultimo?.id ?? null,
     };
   }

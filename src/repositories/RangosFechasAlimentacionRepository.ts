@@ -21,6 +21,21 @@ export class RangosFechasAlimentacionRepository {
     });
   }
 
+  static async findPaginated(
+    page: number,
+    pageSize: number,
+  ): Promise<{ rows: RangosFechasAlimentacion[]; total: number }> {
+    const [rows, total] = await Promise.all([
+      prisma.rangosFechasAlimentacion.findMany({
+        orderBy: { fechaInicio: "desc" },
+        skip: page * pageSize,
+        take: pageSize,
+      }),
+      prisma.rangosFechasAlimentacion.count(),
+    ]);
+    return { rows, total };
+  }
+
   static async findById(id: number): Promise<RangosFechasAlimentacion | null> {
     return prisma.rangosFechasAlimentacion.findUnique({ where: { id } });
   }

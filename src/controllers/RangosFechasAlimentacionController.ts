@@ -17,9 +17,22 @@ type RangoRow = {
 type ListRangosPayload = {
   items: RangoRow[];
   idPermiteEdicion: number | null;
+  total?: number;
+  page?: number;
+  pageSize?: number;
+  totalPages?: number;
 };
 
-function badValidation(res: any, err: { issues: { path: (string | number)[]; message: string }[] }) {
+function parsePageQuery(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+}
+
+function badValidation(
+  res: Parameters<RequestHandler>[1],
+  err: { issues: { path: (string | number)[]; message: string }[] },
+) {
   return res.status(400).json({
     success: false,
     message: "Errores de validación",
@@ -31,28 +44,32 @@ function badValidation(res: any, err: { issues: { path: (string | number)[]; mes
   } satisfies ApiResponse<null>);
 }
 
-/** GET /api/rangos-fechas-alimentacion?codigoNomina=2025041 */
+/** GET /api/rangos-fechas-alimentacion?codigoNomina=202504A | ?page=0 */
 export const listRangosFechasAlimentacion: RequestHandler<
   object,
   ApiResponse<ListRangosPayload | null>,
   object,
-  { codigoNomina?: string }
+  { codigoNomina?: string; page?: string }
 > = async (req, res, next) => {
   try {
     const codigo = req.query.codigoNomina?.trim();
-    if (!codigo) {
-      return res.status(400).json({
-        success: false,
-        message: "Parámetro requerido: codigoNomina",
-        data: null,
+    if (codigo) {
+      const { items, idPermiteEdicion } =
+        await RangosFechasAlimentacionService.listRangosPorCodigoConMeta(codigo);
+      const data: ListRangosPayload = {
+        items: items.map((r) => RangosFechasAlimentacionRepository.toDto(r)),
+        idPermiteEdicion,
+      };
+      return res.json({
+        success: true,
+        message: "Rangos de alimentación",
+        data,
       });
     }
-    const { items, idPermiteEdicion } =
-      await RangosFechasAlimentacionService.listRangosPorCodigoConMeta(codigo);
-    const data: ListRangosPayload = {
-      items: items.map((r) => RangosFechasAlimentacionRepository.toDto(r)),
-      idPermiteEdicion,
-    };
+
+    const data = await RangosFechasAlimentacionService.listPaginated(
+      parsePageQuery(req.query.page),
+    );
     return res.json({
       success: true,
       message: "Rangos de alimentación",

@@ -39,3 +39,5 @@ export type RangoFechasAlimentacionCreateDto = z.infer<
 export type RangoFechasAlimentacionUpdateDto = z.infer<
   typeof rangoFechasAlimentacionUpdateSchema
 >;
+
+export const RANGOS_ALIMENTACION_PAGE_SIZE = 20;

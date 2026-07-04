@@ -427,3 +427,15 @@ model RangosFechasAlimentacion {
 
   @@map("rangos_fechas_alimentacion")
 }
+
+/// Techo IHSS vigente por rango de fechas (monto del piso/techo para cálculos de nómina).
+model TechoIhss {
+  id          Int       @id @default(autoincrement())
+  createdAt   DateTime  @default(now()) @map("fecha_creacion")
+  fechaInicio DateTime  @map("fecha_inicio") @db.Date
+  fechaFin    DateTime  @map("fecha_fin") @db.Date
+  monto       Float
+  updatedAt   DateTime? @map("updated_at")
+
+  @@map("techo_ihss")
+}
