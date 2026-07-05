@@ -208,7 +208,9 @@ export const getConteoHoras: RequestHandler<
   } catch (err: any) {
     const lower = (err?.message ?? "").toLowerCase();
     const status =
-      lower.includes("no encontrado") || lower.includes("not found")
+      err instanceof AppError
+        ? err.statusCode
+        : lower.includes("no encontrado") || lower.includes("not found")
         ? 404
         : lower.includes("inválid") ||
           lower.includes("invalid") ||
@@ -216,7 +218,8 @@ export const getConteoHoras: RequestHandler<
         ? 400
         : lower.includes("validaciones fallidas") ||
           lower.includes("validación") ||
-          lower.includes("cuadre")
+          lower.includes("cuadre") ||
+          lower.includes("incapacidad ihss")
         ? 422
         : 500;
 
@@ -226,6 +229,9 @@ export const getConteoHoras: RequestHandler<
       toApiErrors(errors),
       status
     );
+    if (err?.validationErrors) {
+      body.validationErrors = err.validationErrors;
+    }
     return res.status(st).json(body);
   }
 };

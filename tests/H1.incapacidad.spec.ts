@@ -28,6 +28,25 @@ class IncapTest extends PoliticaH1_1 {
   protected async getRegistroDiario(_id: string, fecha: string) {
     return this.registros[fecha] ?? null;
   }
+  protected async fetchIncapacidadFlagsEnRango(
+    _id: string,
+    fechaDesde: string,
+    fechaHasta: string
+  ) {
+    const rows: Array<{ fecha: string; esIncapacidad: boolean }> = [];
+    let f = fechaDesde;
+    while (f <= fechaHasta) {
+      const reg = this.registros[f];
+      if (reg) {
+        rows.push({ fecha: f, esIncapacidad: reg.esIncapacidad === true });
+      }
+      f = addDays(f, 1);
+    }
+    return rows.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  }
+  protected async fetchTechoIhssEnFecha(_fecha: string) {
+    return 11903.13;
+  }
   protected async esFeriado(fecha: string) {
     return { esFeriado: !!this.feriados[fecha], nombre: "" };
   }

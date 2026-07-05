@@ -6,11 +6,19 @@ import {
   ConteoHorasProrrateo,
 } from "../types";
 import { RegistroDiarioRepository } from "../../../repositories/RegistroDiarioRepository";
+import { TechoIhssRepository } from "../../../repositories/TechoIhssRepository";
 import { FeriadoRepository } from "../../../repositories/FeriadoRepository";
 import { EmpleadoRepository } from "../../../repositories/EmpleadoRepository";
+import { AppError } from "../../../errors/AppError";
 import { ResultadoSegmentacion, segmentarRegistroDiario } from "./segmentador";
 import { GastosAlimentacionService } from "../../../services/GastosAlimentacionService";
 import type { DeduccionAlimentacionDetalle } from "../types";
+import {
+  calcularSecuenciasIncapacidadEnRango,
+  type ClasificacionIncapacidadDia,
+  type IncapacidadIhssResumen,
+  type SecuenciaIncapacidadEnRango,
+} from "./incapacidad-secuencias";
 
 /**
  * Clase base abstracta para todas las políticas de horario
@@ -108,6 +116,76 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     return RegistroDiarioRepository.findByEmpleadoAndDateWithActivities(
       parseInt(empleadoId),
       fecha
+    );
+  }
+
+  /** Sobrescribir en tests para usar registros en memoria. */
+  protected async fetchIncapacidadFlagsEnRango(
+    empleadoId: string,
+    fechaDesde: string,
+    fechaHasta: string
+  ): Promise<Array<{ fecha: string; esIncapacidad: boolean }>> {
+    return RegistroDiarioRepository.findIncapacidadFlagsByEmpleadoAndRange(
+      parseInt(empleadoId),
+      fechaDesde,
+      fechaHasta
+    );
+  }
+
+  /** Sobrescribir en tests. Retorna monto del techo vigente en la fecha. */
+  protected async fetchTechoIhssEnFecha(fecha: string): Promise<number | null> {
+    const row = await TechoIhssRepository.findVigenteEnFecha(fecha);
+    if (row) {
+      const dto = TechoIhssRepository.toDto(row);
+      console.log("[Incapacidad/IHSS] Techo IHSS en BD", {
+        fechaConsulta: fecha,
+        encontrado: true,
+        id: dto.id,
+        monto: dto.monto,
+        fechaInicio: dto.fechaInicio,
+        fechaFin: dto.fechaFin,
+      });
+      return dto.monto;
+    }
+    console.log("[Incapacidad/IHSS] Techo IHSS en BD", {
+      fechaConsulta: fecha,
+      encontrado: false,
+    });
+    return null;
+  }
+
+  protected lanzarErroresValidacionIncapacidad(errores: string[]): never {
+    throw new AppError(
+      "No se puede calcular nómina por errores de incapacidad IHSS",
+      422,
+      {
+        fechasNoAprobadas: [],
+        fechasSinRegistro: [],
+        erroresIncapacidad: errores,
+      }
+    );
+  }
+
+  /**
+   * Secuencias de incapacidad en el rango de nómina y clasificación por día
+   * (días 1–3 empresa, 4+ IHSS con subsidioDiario).
+   */
+  protected async resolverSecuenciasIncapacidadEnRango(
+    empleadoId: string,
+    fechaInicio: string,
+    fechaFin: string
+  ): Promise<{
+    secuencias: SecuenciaIncapacidadEnRango[];
+    clasificacionPorFecha: Map<string, ClasificacionIncapacidadDia>;
+    errores: string[];
+    incapacidadIhss: IncapacidadIhssResumen;
+  }> {
+    return calcularSecuenciasIncapacidadEnRango(
+      fechaInicio,
+      fechaFin,
+      (desde, hasta) =>
+        this.fetchIncapacidadFlagsEnRango(empleadoId, desde, hasta),
+      (fecha) => this.fetchTechoIhssEnFecha(fecha)
     );
   }
 

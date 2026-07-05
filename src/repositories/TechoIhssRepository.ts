@@ -38,6 +38,17 @@ export class TechoIhssRepository {
     return prisma.techoIhss.findUnique({ where: { id } });
   }
 
+  /** Techo IHSS vigente en una fecha (inclusive). */
+  static async findVigenteEnFecha(fecha: string): Promise<TechoIhss | null> {
+    return prisma.techoIhss.findFirst({
+      where: {
+        fechaInicio: { lte: ymdToPrismaDate(fecha) },
+        fechaFin: { gte: ymdToPrismaDate(fecha) },
+      },
+      orderBy: { fechaInicio: "desc" },
+    });
+  }
+
   static async create(data: {
     fechaInicio: string;
     fechaFin: string;

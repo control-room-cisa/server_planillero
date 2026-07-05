@@ -129,36 +129,6 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     return floors.reduce((a, b) => a + b, 0);
   }
 
-  /**
-   * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
-   * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
-   * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
-   *
-   * @param fecha - Fecha del día actual en formato YYYY-MM-DD
-   * @param empleadoId - ID del empleado
-   * @returns true si los 3 días anteriores tienen esIncapacidad=true (consecutivos)
-   */
-  private async verificar3DiasAnterioresIncapacidad(
-    fecha: string,
-    empleadoId: string
-  ): Promise<boolean> {
-    // Verificar los 3 días anteriores
-    for (let i = 1; i <= 3; i++) {
-      const fechaAnterior = PoliticaH2Base.addDays(fecha, -i);
-      const registroAnterior = await this.getRegistroDiario(
-        empleadoId,
-        fechaAnterior
-      );
-
-      // Si algún día anterior no tiene incapacidad, los días de incapacidad son ≤3
-      if (!registroAnterior || registroAnterior.esIncapacidad !== true) {
-        return false;
-      }
-    }
-
-    // Los 3 días anteriores tienen incapacidad → este es el día 4+ → IHSS
-    return true;
-  }
   /** Minutos declarados como NORMAL por Entrada/Salida (sin almuerzo). */
   protected static normalesDeclaradosMin(e: Date, s: Date): number {
     const em = this.minutesOfDayInTZ(e);
@@ -230,6 +200,20 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     const diasEnRango = PoliticaH2Base.dayCountInclusive(fechaInicio, fechaFin);
 
+    const {
+      clasificacionPorFecha: clasificacionIncapacidad,
+      errores: erroresIncapacidad,
+      incapacidadIhss,
+    } = await this.resolverSecuenciasIncapacidadEnRango(
+      empleadoId,
+      fechaInicio,
+      fechaFin
+    );
+
+    if (erroresIncapacidad.length > 0) {
+      this.lanzarErroresValidacionIncapacidad(erroresIncapacidad);
+    }
+
     // acumuladores en minutos
     let normalMin = 0;
     let p25Min = 0;
@@ -271,17 +255,13 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       // Se ignoran todas las actividades del día
       if (reg?.esIncapacidad === true) {
         const HORAS_INCAPACIDAD_MIN = 24 * 60; // 1440 minutos = 24 horas = 1 día literal
+        const clasificacion = clasificacionIncapacidad.get(f);
+        const esIhss = clasificacion?.tipo === "ihss";
 
-        // Verificar si los 3 días anteriores también tienen incapacidad
-        const incapacidadMayorATresDias =
-          await this.verificar3DiasAnterioresIncapacidad(f, empleadoId);
-
-        if (incapacidadMayorATresDias) {
-          // A partir del 4to día consecutivo → IHSS
+        if (esIhss) {
           incapacidadIHSSMin += HORAS_INCAPACIDAD_MIN;
           tiposIncapPorDia.push("ihss");
         } else {
-          // Primeros 3 días consecutivos → Empresa
           incapacidadEmpresaMin += HORAS_INCAPACIDAD_MIN;
           tiposIncapPorDia.push("empresa");
         }
@@ -575,7 +555,10 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
 
     const diasNoLaboradosPorEspeciales =
       diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
-    const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
+    const diasLaborados = Math.max(
+      0,
+      diasDespuesIncapacidad - diasNoLaboradosPorEspeciales
+    );
 
     conteo.conteoDias = {
       totalPeriodo,
@@ -594,6 +577,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     conteo.deduccionesAlimentacion = 0;
     conteo.deduccionesAlimentacionDetalle = [];
     conteo.errorAlimentacion = undefined;
+    conteo.incapacidadIhss = incapacidadIhss;
 
     return Object.assign(conteo, { tiposDias });
   }

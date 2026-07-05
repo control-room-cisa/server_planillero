@@ -557,4 +557,29 @@ export class RegistroDiarioRepository {
       fechasSinRegistro,
     };
   }
+
+  /**
+   * Flags mínimos de incapacidad para un rango (sin actividades).
+   * Incluye registros con esIncapacidad true y false (ausencia = sin fila).
+   */
+  static async findIncapacidadFlagsByEmpleadoAndRange(
+    empleadoId: number,
+    fechaDesde: string,
+    fechaHasta: string
+  ): Promise<Array<{ fecha: string; esIncapacidad: boolean }>> {
+    const rows = await prisma.registroDiario.findMany({
+      where: {
+        empleadoId,
+        deletedAt: null,
+        fecha: { gte: fechaDesde, lte: fechaHasta },
+      },
+      select: { fecha: true, esIncapacidad: true },
+      orderBy: { fecha: "desc" },
+    });
+
+    return rows.map((r) => ({
+      fecha: r.fecha,
+      esIncapacidad: r.esIncapacidad === true,
+    }));
+  }
 }

@@ -20,6 +20,7 @@ import {
 import { JobRepository } from "../../../repositories/JobRepository";
 import { SegmentadorTiempo } from "../segmentador-tiempo";
 import { addDaysYmd } from "../../../utils/dateTime";
+import type { ClasificacionIncapacidadDia } from "./incapacidad-secuencias";
 
 /**
  * Clase base abstracta para políticas H1 y sus subtipos (H1.1, H1.2, H1.3)
@@ -65,37 +66,6 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const d1 = Date.UTC(Y1, M1 - 1, D1);
     const d2 = Date.UTC(Y2, M2 - 1, D2);
     return Math.floor((d2 - d1) / 86400000) + 1;
-  }
-
-  /**
-   * Verifica si los 3 días anteriores a la fecha dada tienen esIncapacidad=true.
-   * Si los 3 días anteriores tienen incapacidad, retorna true (incapacidad > 3 días → IHSS).
-   * Si alguno de los 3 días anteriores no tiene incapacidad, retorna false (≤ 3 días → Empresa).
-   *
-   * @param fecha - Fecha del día actual en formato YYYY-MM-DD
-   * @param empleadoId - ID del empleado
-   * @returns true si los 3 días anteriores tienen esIncapacidad=true (consecutivos)
-   */
-  protected async verificar3DiasAnterioresIncapacidad(
-    fecha: string,
-    empleadoId: string
-  ): Promise<boolean> {
-    // Verificar los 3 días anteriores
-    for (let i = 1; i <= 3; i++) {
-      const fechaAnterior = PoliticaH1Base.addDays(fecha, -i);
-      const registroAnterior = await this.getRegistroDiario(
-        empleadoId,
-        fechaAnterior
-      );
-
-      // Si algún día anterior no tiene incapacidad, los días de incapacidad son ≤3
-      if (!registroAnterior || registroAnterior.esIncapacidad !== true) {
-        return false;
-      }
-    }
-
-    // Los 3 días anteriores tienen incapacidad → este es el día 4+ → IHSS
-    return true;
   }
 
   // Estado de racha que cruza días
@@ -349,16 +319,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
    * - Si esIncapacidad=true en el registro diario:
    *   - Se asignan 24 horas (1440 min) de incapacidad = 1 día literal
    *   - Se ignoran todas las actividades del día
-   *   - Si los 3 días anteriores también tienen esIncapacidad=true:
-   *     → Las 24 horas van a incapacidadIHSS (a partir del 4to día)
-   *   - Si alguno de los 3 días anteriores no tiene incapacidad:
-   *     → Las 24 horas van a incapacidadEmpresa (primeros 3 días)
+   *   - Ordinal en la secuencia consecutiva (día 1 encontrado con lookback):
+   *     → días 1–3: incapacidadEmpresa
+   *     → día 4+: incapacidadIHSS (montoIhssDiario=0 por ahora)
    *   - El conteo de días es LITERAL (1 día = 1 día, no basado en horas de 8 o 9)
    */
   private async procesarDiaCompletoOptimizado(
     fecha: string,
     empleadoId: string,
-    empleado: any
+    empleado: any,
+    clasificacionIncapacidad: Map<string, ClasificacionIncapacidadDia>
   ): Promise<typeof PoliticaH1Base.DayResultType> {
     // Solo 2 consultas por día: registro y feriado
     const [registroDelDia, feriadoInfo] = await Promise.all([
@@ -399,16 +369,12 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     // Se ignoran todas las actividades del día.
     if (registroDelDia?.esIncapacidad === true) {
       const HORAS_INCAPACIDAD_MIN = 24 * 60; // 1440 minutos = 24 horas = 1 día literal
+      const clasificacion = clasificacionIncapacidad.get(fecha);
+      const esIhss = clasificacion?.tipo === "ihss";
 
-      // Verificar si los 3 días anteriores también tienen incapacidad
-      const incapacidadMayorATresDias =
-        await this.verificar3DiasAnterioresIncapacidad(fecha, empleadoId);
-
-      if (incapacidadMayorATresDias) {
-        // A partir del 4to día consecutivo → IHSS
+      if (esIhss) {
         b.incapacidadIHSSMin = HORAS_INCAPACIDAD_MIN;
       } else {
-        // Primeros 3 días consecutivos → Empresa
         b.incapacidadEmpresaMin = HORAS_INCAPACIDAD_MIN;
       }
 
@@ -419,7 +385,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
         addPermisoSSMin: 0,
         addInasistenciasMin: 0,
         addCompensatorioMin: 0,
-        incapacidadDia: incapacidadMayorATresDias ? "ihss" : "empresa",
+        incapacidadDia: esIhss ? "ihss" : "empresa",
       };
     }
 
@@ -751,10 +717,29 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     if (!empleado)
       throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
 
+    const {
+      clasificacionPorFecha: clasificacionIncapacidad,
+      errores: erroresIncapacidad,
+      incapacidadIhss,
+    } = await this.resolverSecuenciasIncapacidadEnRango(
+      empleadoId,
+      fechaInicio,
+      fechaFin
+    );
+
+    if (erroresIncapacidad.length > 0) {
+      this.lanzarErroresValidacionIncapacidad(erroresIncapacidad);
+    }
+
     // Procesar TODOS los días en paralelo (sin deducciones de alimentación)
     const resultadosPorDia = await Promise.all(
       fechas.map((fecha) =>
-        this.procesarDiaCompletoOptimizado(fecha, empleadoId, empleado)
+        this.procesarDiaCompletoOptimizado(
+          fecha,
+          empleadoId,
+          empleado,
+          clasificacionIncapacidad
+        )
       )
     );
 
@@ -948,7 +933,10 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     const diasNoLaboradosPorEspeciales =
       diasVacaciones + diasPermisoCS + diasPermisoSS + diasInasistencias;
-    const diasLaborados = diasDespuesIncapacidad - diasNoLaboradosPorEspeciales;
+    const diasLaborados = Math.max(
+      0,
+      diasDespuesIncapacidad - diasNoLaboradosPorEspeciales
+    );
 
     result.conteoDias = {
       totalPeriodo,
@@ -961,6 +949,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       incapacidadIHSS: diasIncapacidadIHSS,
       compensatoriasTomadas: diasCompensatoriasTomadas,
     };
+
+    result.incapacidadIhss = incapacidadIhss;
 
     // Las deducciones de alimentación ahora se obtienen en un endpoint separado
     // para no retrasar el cálculo de horas

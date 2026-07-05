@@ -26,6 +26,8 @@ export interface ConteoHorasValidationError {
   fechasSinRegistro: string[]; // Fechas que no tienen registro diario creado
   /** E01 Job Desconocido: fechas con actividades cuyo job no está registrado. No se lanza excepción; se notifica en validationErrors. */
   fechasConJobDesconocido?: string[];
+  /** Errores al calcular subsidio IHSS por incapacidad (techo faltante, etc.). */
+  erroresIncapacidad?: string[];
 }
 
 /**
@@ -74,6 +76,19 @@ export interface ConteoHorasTrabajadas {
     incapacidadIHSS: number; // A partir del 4to día consecutivo / 8
     /** Compensatorias tomadas (normales): horas / 8, informativo; remuneración vía horas compensatorias */
     compensatoriasTomadas?: number;
+  };
+  /**
+   * Monto IHSS por incapacidad en el período evaluado (días IHSS × subsidioDiario).
+   */
+  incapacidadIhss?: {
+    diasIhss: number;
+    montoIhss: number;
+    secuencias: Array<{
+      fechaInicioSecuencia: string;
+      subsidioDiario: number;
+      diasIhssEnRango: number;
+      montoIhssEnRango: number;
+    }>;
   };
   /**
    * Deducciones de alimentación calculadas
