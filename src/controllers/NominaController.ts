@@ -321,6 +321,77 @@ export const leerNominasResumenPorEmpleado: RequestHandler<
   }
 };
 
+export const descargarPlantillaPago: RequestHandler<
+  {},
+  Buffer,
+  {},
+  { empresaId?: string; codigoNomina?: string }
+> = async (req, res, next) => {
+  try {
+    const empresaId = req.query.empresaId
+      ? Number(req.query.empresaId)
+      : undefined;
+    const codigoNomina = req.query.codigoNomina;
+
+    if (!empresaId || !Number.isFinite(empresaId) || !codigoNomina) {
+      return res.status(400).json({
+        success: false,
+        message: "empresaId y codigoNomina son requeridos",
+        data: null,
+      } as any);
+    }
+
+    const xlsx = await NominaService.generarPlantillaPagoXlsx(
+      empresaId,
+      codigoNomina
+    );
+    const filename = `plantilla-pago-${codigoNomina}.xlsx`;
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    return res.send(xlsx);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const pagarPlanilla: RequestHandler<
+  {},
+  ApiResponse<{ actualizadas: number; total: number }>,
+  { empresaId?: number; codigoNomina?: string }
+> = async (req, res, next) => {
+  try {
+    const { empresaId, codigoNomina } = req.body ?? {};
+    if (!empresaId || !codigoNomina) {
+      return res.status(400).json({
+        success: false,
+        message: "empresaId y codigoNomina son requeridos",
+        data: null,
+      });
+    }
+
+    const user = (req as AuthRequest).user;
+    const result = await NominaService.pagarPlanilla(
+      Number(empresaId),
+      String(codigoNomina),
+      user?.id ?? null
+    );
+
+    return res.json({
+      success: true,
+      message: `${result.actualizadas} nómina(s) marcada(s) como pagada(s)`,
+      data: result,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const eliminarNomina: RequestHandler<
   { id: string },
   ApiResponse<Nomina>

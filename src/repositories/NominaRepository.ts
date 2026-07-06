@@ -59,6 +59,21 @@ export class NominaRepository {
     });
   }
 
+  static async findActiveByEmpleadoAndCodigo(
+    empleadoId: number,
+    codigoNomina: string,
+    excludeId?: number
+  ): Promise<Nomina | null> {
+    return prisma.nomina.findFirst({
+      where: {
+        empleadoId,
+        codigoNomina,
+        deletedAt: null,
+        ...(excludeId ? { id: { not: excludeId } } : {}),
+      },
+    });
+  }
+
   static async create(data: Prisma.NominaCreateInput): Promise<Nomina> {
     return prisma.nomina.create({ data });
   }
@@ -79,5 +94,48 @@ export class NominaRepository {
         deletedBy: deletedBy ?? null,
       },
     });
+  }
+
+  static async findManyWithEmpleadoForPeriodo(
+    empresaId: number,
+    codigoNomina: string
+  ) {
+    return prisma.nomina.findMany({
+      where: {
+        empresaId,
+        codigoNomina,
+        deletedAt: null,
+      },
+      include: {
+        empleado: {
+          select: {
+            nombre: true,
+            apellido: true,
+            numeroCuenta: true,
+          },
+        },
+      },
+      orderBy: [{ empleadoId: "asc" }],
+    });
+  }
+
+  static async marcarPagadasPorPeriodo(
+    empresaId: number,
+    codigoNomina: string,
+    updatedBy?: number | null
+  ): Promise<number> {
+    const result = await prisma.nomina.updateMany({
+      where: {
+        empresaId,
+        codigoNomina,
+        deletedAt: null,
+        pagado: false,
+      },
+      data: {
+        pagado: true,
+        updatedBy: updatedBy ?? null,
+      },
+    });
+    return result.count;
   }
 }

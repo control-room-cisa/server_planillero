@@ -1,5 +1,6 @@
 // src/services/NominaService.ts
 import type { Nomina } from "@prisma/client";
+import ExcelJS from "exceljs";
 import { NominaRepository } from "../repositories/NominaRepository";
 import type {
   CrearNominaDto,
@@ -166,6 +167,18 @@ export class NominaService {
         : new Date(payload.fechaFin);
     const codigoNomina = generarCodigoNomina(fechaInicioDate, fechaFinDate);
 
+    const duplicadaPorCodigo =
+      await NominaRepository.findActiveByEmpleadoAndCodigo(
+        payload.empleadoId,
+        codigoNomina
+      );
+    if (duplicadaPorCodigo) {
+      throw new AppError(
+        `Ya existe una nómina activa para este colaborador en el período ${codigoNomina}`,
+        400
+      );
+    }
+
     // Validar solapamientos: solo considerar nóminas no eliminadas (deletedAt IS NULL)
     const overlapping = await NominaRepository.findOverlapping(
       payload.empleadoId,
@@ -301,6 +314,20 @@ export class NominaService {
       payload.fechaFin ||
       (empleadoIdPayload && empleadoIdPayload !== existing.empleadoId)
     ) {
+      const codigoNomina = generarCodigoNomina(fechaInicio, fechaFin);
+      const duplicadaPorCodigo =
+        await NominaRepository.findActiveByEmpleadoAndCodigo(
+          empleadoId,
+          codigoNomina,
+          id
+        );
+      if (duplicadaPorCodigo) {
+        throw new AppError(
+          `Ya existe una nómina activa para este colaborador en el período ${codigoNomina}`,
+          400
+        );
+      }
+
       const overlapping = await NominaRepository.findOverlapping(
         empleadoId,
         fechaInicio,
@@ -316,8 +343,14 @@ export class NominaService {
     }
 
     // Prisma no acepta empleadoId como escalar en update; usar connect en la relación
+    const codigoNominaUpdate =
+      payload.fechaInicio || payload.fechaFin
+        ? generarCodigoNomina(fechaInicio, fechaFin)
+        : undefined;
+
     const updated = await NominaRepository.update(id, {
       ...restPayload,
+      ...(codigoNominaUpdate ? { codigoNomina: codigoNominaUpdate } : {}),
       ...(updatedBy
         ? { updatedByEmpleado: { connect: { id: updatedBy } } }
         : {}),
@@ -407,5 +440,110 @@ export class NominaService {
     );
 
     return deleted;
+  }
+
+  private static calcularTotalBruto(nomina: Nomina): number {
+    const horasExtra =
+      (nomina.montoHoras25 ?? 0) +
+      (nomina.montoHoras50 ?? 0) +
+      (nomina.montoHoras75 ?? 0) +
+      (nomina.montoHoras100 ?? 0);
+    return (
+      Math.round(
+        ((nomina.subtotalQuincena ?? 0) + horasExtra + (nomina.ajuste ?? 0)) *
+          100
+      ) / 100
+    );
+  }
+
+  private static calcularTotalDeducciones(nomina: Nomina): number {
+    if (nomina.totalDeducciones != null) {
+      return Number(nomina.totalDeducciones);
+    }
+    return (
+      Math.round(
+        ((nomina.deduccionIHSS ?? 0) +
+          (nomina.deduccionISR ?? 0) +
+          (nomina.deduccionRAP ?? 0) +
+          (nomina.deduccionAlimentacion ?? 0) +
+          (nomina.deduccionAlojamiento ?? 0) +
+          (nomina.cobroPrestamo ?? 0) +
+          (nomina.impuestoVecinal ?? 0) +
+          (nomina.otros ?? 0)) *
+          100
+      ) / 100
+    );
+  }
+
+  private static calcularTotalAPagar(nomina: Nomina): number {
+    return (
+      Math.round(
+        (this.calcularTotalBruto(nomina) -
+          this.calcularTotalDeducciones(nomina)) *
+          100
+      ) / 100
+    );
+  }
+
+  static async generarPlantillaPagoXlsx(
+    empresaId: number,
+    codigoNomina: string
+  ): Promise<Buffer> {
+    const nominas = await NominaRepository.findManyWithEmpleadoForPeriodo(
+      empresaId,
+      codigoNomina
+    );
+    if (nominas.length === 0) {
+      throw new AppError(
+        "No hay nóminas registradas para el período seleccionado",
+        404
+      );
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Plantilla");
+
+    nominas.forEach((n, index) => {
+      const emp = n.empleado;
+      const row = sheet.getRow(index + 1);
+      const cuentaCell = row.getCell(1);
+      cuentaCell.value = emp.numeroCuenta ?? "";
+      cuentaCell.numFmt = "@";
+      row.getCell(2).value = this.calcularTotalAPagar(n);
+      row.getCell(3).value = `${emp.nombre} ${emp.apellido ?? ""}`.trim();
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
+
+  static async pagarPlanilla(
+    empresaId: number,
+    codigoNomina: string,
+    updatedBy?: number | null
+  ): Promise<{ actualizadas: number; total: number }> {
+    const nominas = await NominaRepository.findMany({
+      empresaId,
+      codigoNomina,
+    });
+    if (nominas.length === 0) {
+      throw new AppError(
+        "No hay nóminas registradas para el período seleccionado",
+        404
+      );
+    }
+
+    const pendientes = nominas.filter((n) => !n.pagado);
+    if (pendientes.length === 0) {
+      throw new AppError("Todas las nóminas del período ya están pagadas", 400);
+    }
+
+    const actualizadas = await NominaRepository.marcarPagadasPorPeriodo(
+      empresaId,
+      codigoNomina,
+      updatedBy
+    );
+
+    return { actualizadas, total: nominas.length };
   }
 }

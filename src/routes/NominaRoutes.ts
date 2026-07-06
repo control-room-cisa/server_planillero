@@ -1,5 +1,5 @@
 // src/routes/NominaRoutes.ts
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { authenticateJWT } from "../middlewares/authMiddleware";
 import {
   leerNominas,
@@ -8,6 +8,8 @@ import {
   leerNominasResumenPorEmpleado,
   leerNominaPorId,
   eliminarNomina,
+  descargarPlantillaPago,
+  pagarPlanilla,
 } from "../controllers/NominaController";
 import { Roles } from "../enums/roles";
 
@@ -19,6 +21,21 @@ router.use(authenticateJWT);
 // Autorización por rol:
 // - Lectura: RRHH, SUPERVISOR_CONTABILIDAD o ASISTENTE_CONTABILIDAD
 // - Escritura/actualización: solo RRHH
+// - Plantilla de pago y pagar planilla: solo SUPERVISOR_CONTABILIDAD
+
+const soloSupervisorContabilidad = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const anyReq = req as any;
+  if (anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD) {
+    return res
+      .status(403)
+      .json({ success: false, message: "Solo supervisor de contabilidad", data: null });
+  }
+  next();
+};
 
 // GET /api/nominas (lectura)
 router.get(
@@ -57,6 +74,16 @@ router.get(
   },
   leerNominasResumenPorEmpleado
 );
+
+// GET /api/nominas/plantilla-pago?empresaId=&codigoNomina=
+router.get(
+  "/plantilla-pago",
+  soloSupervisorContabilidad,
+  descargarPlantillaPago
+);
+
+// POST /api/nominas/pagar-planilla
+router.post("/pagar-planilla", soloSupervisorContabilidad, pagarPlanilla);
 
 // GET /api/nominas/:id (lectura)
 router.get(
