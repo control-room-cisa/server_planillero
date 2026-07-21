@@ -166,6 +166,7 @@ model Empleado {
   accesosContabilidadComoAsistente AccesoContabilidad[] @relation("AccesoContabilidadEmpleadoTarget")
   accesosContabilidadCreados       AccesoContabilidad[] @relation("AccesoContabilidadCreatedBy")
   accesosContabilidadActualizados  AccesoContabilidad[] @relation("AccesoContabilidadUpdatedBy")
+  bancoCompensatoriasAcumuladas BancoCompensatoriasAcumuladas[]
 
   @@map("empleados")
 }
@@ -379,10 +380,27 @@ model Job {
   empresaMostrar Empresa? @relation("EmpresaMostrarJobs", fields: [mostrarEmpresaId], references: [id])
 
   actividades Actividad[]
+  bancoCompensatoriasAcumuladas BancoCompensatoriasAcumuladas[]
 
   @@index([empresaId], name: "fk_jobs_empresa_idx")
   @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa_idx")
   @@map("jobs")
+}
+
+/// Banco de horas compensatorias acumuladas por colaborador y job.
+model BancoCompensatoriasAcumuladas {
+  id              Int   @id @default(autoincrement())
+  jobId           Int   @map("id_job")
+  empleadoId      Int   @map("id_empleado")
+  horasAcumuladas Float @map("horas_acumuladas")
+
+  job      Job      @relation(fields: [jobId], references: [id])
+  empleado Empleado @relation(fields: [empleadoId], references: [id])
+
+  @@unique([empleadoId, jobId], name: "uq_banco_comp_empleado_job")
+  @@index([empleadoId], name: "idx_banco_comp_empleado")
+  @@index([jobId], name: "idx_banco_comp_job")
+  @@map("banco_compensatorias_acumuladas")
 }
 
 //Feriados

@@ -36,8 +36,10 @@ describe("subsidio-ihss", () => {
 
     expect(result.data.totalTecho3Meses).toBeCloseTo(35709.39, 2);
     expect(result.data.totalDias3Meses).toBe(89);
-    expect(result.data.salarioBaseDiario).toBeCloseTo(401.229, 3);
-    expect(result.data.subsidioDiario).toBe(264.81);
+    // Piso 1: salario base diario a 2 decimales
+    expect(result.data.salarioBaseDiario).toBe(401.22);
+    // Piso 2: subsidio = salarioBase × 0.66 a 2 decimales
+    expect(result.data.subsidioDiario).toBe(264.8);
   });
 
   it("error si falta techo en algún mes", async () => {
@@ -49,10 +51,16 @@ describe("subsidio-ihss", () => {
     expect(result.error).toContain("2025-03");
   });
 
-  it("redondea subsidio a 2 decimales antes de multiplicar", () => {
-    const salarioBase = 35709.39 / 89;
+  it("aplica piso a 2 decimales en salario base y subsidio (×0.66)", () => {
+    const salarioBase = roundTo2Decimals(35709.39 / 89);
+    expect(salarioBase).toBe(401.22);
     const subsidio = roundTo2Decimals(salarioBase * 0.66);
-    expect(subsidio).toBe(264.81);
-    expect(roundTo2Decimals(2 * subsidio)).toBe(529.62);
+    expect(subsidio).toBe(264.8);
+    expect(roundTo2Decimals(2 * subsidio)).toBe(529.6);
+
+    // Caso 92 días (abr+may+jun): alinea con Excel TRUNC/ROUNDDOWN
+    const salario92 = roundTo2Decimals(35709.39 / 92);
+    expect(salario92).toBe(388.14);
+    expect(roundTo2Decimals(salario92 * 0.66)).toBe(256.17);
   });
 });

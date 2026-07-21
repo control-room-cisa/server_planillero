@@ -16,8 +16,9 @@ export type SubsidioIhssCalculado = {
   totalDias3Meses: number;
 };
 
+/** Piso a 2 decimales (trunca hacia abajo; no redondea al .5). */
 export function roundTo2Decimals(value: number): number {
-  return Math.round(value * 100) / 100;
+  return Math.floor(value * 100 + 1e-8) / 100;
 }
 
 /** Días calendario de un mes (month 1–12). */
@@ -100,8 +101,10 @@ export async function calcularSubsidioDiarioIhss(
     totalDias3Meses += diasCalendarioDelMes(year, month);
   }
 
-  const salarioBaseDiario = totalTecho3Meses / totalDias3Meses;
-  const subsidioDiario = roundTo2Decimals(salarioBaseDiario * SUBSIDIO_IHSS_FACTOR);
+  const salarioBaseDiario = roundTo2Decimals(totalTecho3Meses / totalDias3Meses);
+  const subsidioDiario = roundTo2Decimals(
+    salarioBaseDiario * SUBSIDIO_IHSS_FACTOR
+  );
 
   console.log(`${LOG_PREFIX} Subsidio calculado`, {
     fechaInicioSecuencia,

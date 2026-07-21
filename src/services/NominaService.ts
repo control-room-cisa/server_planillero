@@ -348,6 +348,7 @@ export class NominaService {
         ? generarCodigoNomina(fechaInicio, fechaFin)
         : undefined;
 
+    // horasCompensatorias es inmutable en actualización (solo se fija al crear).
     const updated = await NominaRepository.update(id, {
       ...restPayload,
       ...(codigoNominaUpdate ? { codigoNomina: codigoNominaUpdate } : {}),
@@ -359,12 +360,10 @@ export class NominaService {
         : {}),
     });
 
-    // Recalcular y ajustar saldos en Empleado para mantener consistencia.
+    // Recalcular saldos de vacaciones si cambian. Compensatorias no se tocan en update.
     const oldEmpleadoId = existing.empleadoId;
     const newEmpleadoId = empleadoIdPayload ?? existing.empleadoId;
-
-    const oldComp = Number(existing.horasCompensatorias ?? 0);
-    const newComp = Number(payload.horasCompensatorias ?? existing.horasCompensatorias ?? 0);
+    const compFijo = Number(existing.horasCompensatorias ?? 0);
 
     const oldVacHoras = this.horasVacacionesFromDias(existing.diasVacaciones);
     const newVacHoras = this.horasVacacionesFromDias(
@@ -372,18 +371,11 @@ export class NominaService {
     );
 
     if (oldEmpleadoId === newEmpleadoId) {
-      // Mismo empleado: aplicar solo delta
-      const deltaComp = newComp - oldComp;
-      // Vacaciones se descuentan del saldo, por eso el delta es old - new
       const deltaVac = oldVacHoras - newVacHoras;
-      await this.ajustarSaldosEmpleado(newEmpleadoId, deltaComp, deltaVac);
+      await this.ajustarSaldosEmpleado(newEmpleadoId, 0, deltaVac);
     } else {
-      // Caso raro: el registro de nómina pasaría a otro empleadoId (API permite
-      // empleadoId en el body; el modal RRHH no reasigna colaborador al editar).
-      // Si ocurriera: deshacer saldos en el colaborador que tenía la nómina y
-      // aplicarlos al nuevo — no es “transferir” datos de nómina, solo corregir acumulados.
-      await this.ajustarSaldosEmpleado(oldEmpleadoId, -oldComp, oldVacHoras);
-      await this.ajustarSaldosEmpleado(newEmpleadoId, newComp, -newVacHoras);
+      await this.ajustarSaldosEmpleado(oldEmpleadoId, -compFijo, oldVacHoras);
+      await this.ajustarSaldosEmpleado(newEmpleadoId, compFijo, -newVacHoras);
     }
 
     return updated;

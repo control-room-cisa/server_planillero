@@ -300,3 +300,72 @@ export const updateJobBySupervisor: RequestHandler<
     next(err);
   }
 };
+
+/**
+ * GET /api/registrodiario/tiempo-compensatorio?idEmpleado=
+ * Lista actividades compensatorias (acumuladas/tomadas) y banco por job.
+ * Roles: SUPERVISOR, RRHH, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
+ */
+export const getTiempoCompensatorio: RequestHandler<
+  {},
+  ApiResponse<Awaited<
+    ReturnType<typeof RegistroDiarioService.getTiempoCompensatorio>
+  > | null>,
+  {},
+  { idEmpleado?: string }
+> = async (req, res, next) => {
+  try {
+    const { id: usuarioId, rolId } = (req as AuthRequest).user;
+    const { idEmpleado } = req.query;
+
+    const rolesPermitidos = [
+      Roles.SUPERVISOR,
+      Roles.RRHH,
+      Roles.SUPERVISOR_CONTABILIDAD,
+      Roles.ASISTENTE_CONTABILIDAD,
+    ];
+    if (!rolesPermitidos.some((r) => r === rolId)) {
+      return res.status(403).json({
+        success: false,
+        message: "No autorizado para consultar tiempo compensatorio",
+        data: null,
+      });
+    }
+
+    if (typeof idEmpleado !== "string") {
+      return res.status(400).json({
+        success: false,
+        message: "El query param 'idEmpleado' es requerido",
+        data: null,
+      });
+    }
+
+    const empleadoIdNum = parseInt(idEmpleado, 10);
+    if (isNaN(empleadoIdNum)) {
+      return res.status(400).json({
+        success: false,
+        message: "El query param 'idEmpleado' debe ser un número válido",
+        data: null,
+      });
+    }
+
+    if (empleadoIdNum !== usuarioId && rolId === Roles.EMPLEADO) {
+      return res.status(403).json({
+        success: false,
+        message: "No tienes permisos para ver datos de otros empleados",
+        data: null,
+      });
+    }
+
+    const data =
+      await RegistroDiarioService.getTiempoCompensatorio(empleadoIdNum);
+
+    return res.json({
+      success: true,
+      message: "Tiempo compensatorio acumulado",
+      data,
+    });
+  } catch (err) {
+    next(err);
+  }
+};

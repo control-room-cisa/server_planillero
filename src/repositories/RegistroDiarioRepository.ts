@@ -582,4 +582,45 @@ export class RegistroDiarioRepository {
       esIncapacidad: r.esIncapacidad === true,
     }));
   }
+
+  /**
+   * Actividades con esCompensatorio=true del empleado (no eliminadas).
+   * Incluye fecha del registro diario y job.
+   */
+  static async findActividadesCompensatoriasByEmpleado(empleadoId: number) {
+    return prisma.actividad.findMany({
+      where: {
+        deletedAt: null,
+        esCompensatorio: true,
+        registroDiario: {
+          empleadoId,
+          deletedAt: null,
+        },
+      },
+      include: {
+        job: true,
+        registroDiario: {
+          select: {
+            id: true,
+            fecha: true,
+            empleadoId: true,
+          },
+        },
+      },
+      orderBy: [{ registroDiario: { fecha: "desc" } }, { id: "desc" }],
+    });
+  }
+
+  /**
+   * Filas del banco de compensatorias acumuladas por empleado (con job).
+   */
+  static async findBancoCompensatoriasByEmpleado(empleadoId: number) {
+    return prisma.bancoCompensatoriasAcumuladas.findMany({
+      where: { empleadoId },
+      include: {
+        job: true,
+      },
+      orderBy: { id: "asc" },
+    });
+  }
 }

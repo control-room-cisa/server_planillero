@@ -172,4 +172,78 @@ export class RegistroDiarioService {
       dto
     );
   }
+
+  /**
+   * Tiempo compensatorio del empleado:
+   * - actividades acumuladas (esExtra=true)
+   * - actividades tomadas (esExtra=false)
+   * - saldo por job desde banco_compensatorias_acumuladas
+   */
+  static async getTiempoCompensatorio(empleadoId: number) {
+    const [actividades, porJob, empleado] = await Promise.all([
+      RegistroDiarioRepository.findActividadesCompensatoriasByEmpleado(
+        empleadoId
+      ),
+      RegistroDiarioRepository.findBancoCompensatoriasByEmpleado(empleadoId),
+      prisma.empleado.findFirst({
+        where: { id: empleadoId, deletedAt: null },
+        select: {
+          tiempoVacacionesHoras: true,
+          tiempoCompensatorioHoras: true,
+        },
+      }),
+    ]);
+
+    const mapActividad = (a: (typeof actividades)[number]) => ({
+      id: a.id,
+      fecha: a.registroDiario.fecha,
+      empleadoId: a.registroDiario.empleadoId,
+      jobId: a.jobId,
+      jobCodigo: a.job?.codigo ?? null,
+      jobNombre: a.job?.nombre ?? null,
+      duracionHoras: a.duracionHoras,
+      esExtra: a.esExtra === true,
+      esCompensatorio: a.esCompensatorio === true,
+      descripcion: a.descripcion,
+      horaInicio: a.horaInicio,
+      horaFin: a.horaFin,
+    });
+
+    const acumuladas = actividades
+      .filter((a) => a.esExtra === true)
+      .map(mapActividad);
+    const tomadas = actividades
+      .filter((a) => a.esExtra !== true)
+      .map(mapActividad);
+
+    return {
+      empleadoId,
+      tiempoVacacionesHoras: empleado?.tiempoVacacionesHoras ?? null,
+      tiempoCompensatorioHoras: empleado?.tiempoCompensatorioHoras ?? null,
+      acumuladas,
+      tomadas,
+      porJob: porJob.map((row) => ({
+        id: row.id,
+        empleadoId: row.empleadoId,
+        jobId: row.jobId,
+        jobCodigo: row.job?.codigo ?? null,
+        jobNombre: row.job?.nombre ?? null,
+        horasAcumuladas: row.horasAcumuladas,
+      })),
+      totales: {
+        horasAcumuladasActividades: acumuladas.reduce(
+          (s, a) => s + (a.duracionHoras || 0),
+          0
+        ),
+        horasTomadasActividades: tomadas.reduce(
+          (s, a) => s + (a.duracionHoras || 0),
+          0
+        ),
+        horasAcumuladasPorJob: porJob.reduce(
+          (s, r) => s + (r.horasAcumuladas || 0),
+          0
+        ),
+      },
+    };
+  }
 }

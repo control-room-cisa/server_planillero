@@ -6,6 +6,7 @@ import {
   aprobacionRrhh,
   aprobacionSupervisor,
   updateJobBySupervisor,
+  getTiempoCompensatorio,
 } from "../controllers/RegistroDiarioController";
 
 const router = Router();
@@ -18,6 +19,9 @@ router.post("/", upsertRegistroDiario);
 
 // GET  /registros?date=YYYY-MM-DD  → obtiene el registro con actividades→job
 router.get("/", getRegistroDiarioByDate);
+
+// GET /registrodiario/tiempo-compensatorio?idEmpleado=
+router.get("/tiempo-compensatorio", getTiempoCompensatorio);
 
 router.patch("/aprobacion-supervisor/:id", aprobacionSupervisor);
 

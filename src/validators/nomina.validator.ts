@@ -137,5 +137,8 @@ export const crearNominaSchema = z.object({
 
 export type CrearNominaDto = z.infer<typeof crearNominaSchema>;
 
-export const actualizarNominaSchema = crearNominaSchema.partial();
+/** En actualización no se permite modificar horas compensatorias (quedan fijas desde la creación). */
+export const actualizarNominaSchema = crearNominaSchema
+  .partial()
+  .omit({ horasCompensatorias: true });
 export type ActualizarNominaDto = z.infer<typeof actualizarNominaSchema>;
