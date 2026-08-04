@@ -197,6 +197,10 @@ model Nomina {
   diasIncapacidadIHSS    Float? @map("dias_incapacidad_ihss")
   horasCompensatorias Float? @map("horas_compensatorias")
 
+  /// Snapshot inmutable de horas acumuladas por job aplicadas al banco al crear la nómina.
+  /// Formato: [{ jobId: number | null, horas: number }, ...]
+  bancoCompensatoriasAplicadas Json? @map("banco_compensatorias_aplicadas")
+
   // Subtotales y montos
   subtotalQuincena             Float? @map("subtotal_quincena")
   montoVacaciones              Float? @map("monto_vacaciones")
@@ -244,12 +248,55 @@ model Nomina {
   updatedAt DateTime? @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
+  prorrateos Prorrateo[]
+
   // Índice único que incluye deletedAt: permite múltiples registros eliminados pero solo uno activo
   // por combinación de empleadoId, fechaInicio, fechaFin
   @@unique([empleadoId, fechaInicio, fechaFin, deletedAt], name: "uq_nomina_empleado_periodo_activa")
   @@index([empleadoId], name: "idx_nominas_empleado")
   @@index([empresaId], name: "idx_nominas_empresa")
   @@map("nominas")
+}
+
+/// Snapshot inmutable del prorrateo de una nómina (job × class × tipo de hora).
+/// Se persiste solo cuando la nómina está pagada; una vez guardado no se vuelve a escribir.
+enum TipoProrrateo {
+  normal
+  extra25
+  extra50
+  extra75
+  extra100
+  compensatoriaTomada
+  compensatoriaAcumulada
+}
+
+model Prorrateo {
+  id Int @id @default(autoincrement())
+
+  nominaId Int    @map("nomina_id")
+  nomina   Nomina @relation(fields: [nominaId], references: [id])
+
+  /// FK opcional: puede ser null (p. ej. compensatorias sin job o job ya inexistente).
+  jobId Int? @map("job_id")
+  job   Job? @relation(fields: [jobId], references: [id])
+
+  /// Código denormalizado del job al momento del snapshot
+  codigoJob String? @map("codigo_job") @db.VarChar(10)
+
+  /// Código denormalizado de class de vehículo (sin FK); null = sin class
+  codigoClass String? @map("codigo_class") @db.VarChar(20)
+
+  cantidadHoras Float @map("cantidad_horas")
+  monto         Float @default(0)
+
+  tipo TipoProrrateo
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  @@index([nominaId], name: "idx_prorrateos_nomina")
+  @@index([jobId], name: "idx_prorrateos_job")
+  @@map("prorrateos")
 }
 
 // ---- planilla accesos ----
@@ -381,6 +428,7 @@ model Job {
 
   actividades Actividad[]
   bancoCompensatoriasAcumuladas BancoCompensatoriasAcumuladas[]
+  prorrateos Prorrateo[]
 
   @@index([empresaId], name: "fk_jobs_empresa_idx")
   @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa_idx")
@@ -388,13 +436,14 @@ model Job {
 }
 
 /// Banco de horas compensatorias acumuladas por colaborador y job.
+/// jobId nullable: actividades acumuladas sin job identificado.
 model BancoCompensatoriasAcumuladas {
-  id              Int   @id @default(autoincrement())
-  jobId           Int   @map("id_job")
-  empleadoId      Int   @map("id_empleado")
+  id              Int  @id @default(autoincrement())
+  jobId           Int? @map("id_job")
+  empleadoId      Int  @map("id_empleado")
   horasAcumuladas Float @map("horas_acumuladas")
 
-  job      Job      @relation(fields: [jobId], references: [id])
+  job      Job?     @relation(fields: [jobId], references: [id])
   empleado Empleado @relation(fields: [empleadoId], references: [id])
 
   @@unique([empleadoId, jobId], name: "uq_banco_comp_empleado_job")

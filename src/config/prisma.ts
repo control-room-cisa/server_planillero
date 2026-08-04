@@ -29,9 +29,31 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     }
   }
 
-  // 2) Para operaciones de creación, fijar createdAt si no viene
+  // 2) Para operaciones de creación, fijar createdAt solo en modelos que lo tienen
+  const modelsWithCreatedAt = new Set([
+    "Rol",
+    "Empresa",
+    "Departamento",
+    "Empleado",
+    "Nomina",
+    "PlanillaAcceso",
+    "AccesoContabilidad",
+    "RegistroDiario",
+    "Actividad",
+    "Job",
+    "Feriado",
+    "GlobalConfig",
+    "RangosFechasAlimentacion",
+    "Vehiculo",
+    "TechoIhss",
+    "Prorrateo",
+  ]);
   const writeCreateActions = ["create", "createMany"];
-  if (writeCreateActions.includes(params.action) && params.model) {
+  if (
+    writeCreateActions.includes(params.action) &&
+    params.model &&
+    modelsWithCreatedAt.has(params.model)
+  ) {
     if (params.action === "create") {
       // params.args.data es un objeto único
       if (!("createdAt" in (params.args.data as any))) {

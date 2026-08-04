@@ -56,6 +56,25 @@ export const crearNominaSchema = z.object({
     .optional()
     .nullable(),
 
+  /** Desglose de horas acumuladas por job a aplicar al banco. Snapshot inmutable tras crear. */
+  bancoCompensatoriasAplicadas: z
+    .array(
+      z.object({
+        jobId: z
+          .number({ invalid_type_error: "El jobId debe ser un número válido" })
+          .int("El jobId debe ser un entero")
+          .positive("El jobId debe ser positivo")
+          .nullable(),
+        horas: z
+          .number({
+            required_error: "Las horas del desglose son requeridas",
+            invalid_type_error: "Las horas del desglose deben ser un número válido",
+          })
+          .positive("Las horas del desglose deben ser mayores a 0"),
+      })
+    )
+    .default([]),
+
   subtotalQuincena: z
     .number({ invalid_type_error: "El subtotal de quincena debe ser un número válido" })
     .default(0),
@@ -137,8 +156,16 @@ export const crearNominaSchema = z.object({
 
 export type CrearNominaDto = z.infer<typeof crearNominaSchema>;
 
-/** En actualización no se permite modificar horas compensatorias (quedan fijas desde la creación). */
+/**
+ * En actualización:
+ * - horasCompensatorias y bancoCompensatoriasAplicadas son inmutables (fijas desde la creación).
+ * - empleadoId no puede cambiarse (cada nómina pertenece a un solo empleado).
+ */
 export const actualizarNominaSchema = crearNominaSchema
   .partial()
-  .omit({ horasCompensatorias: true });
+  .omit({
+    horasCompensatorias: true,
+    bancoCompensatoriasAplicadas: true,
+    empleadoId: true,
+  });
 export type ActualizarNominaDto = z.infer<typeof actualizarNominaSchema>;

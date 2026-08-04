@@ -19,6 +19,7 @@ import rangosFechasAlimentacionRoutes from "./routes/rangosFechasAlimentacionRou
 import techoIhssRoutes from "./routes/techoIhssRoutes";
 import vehiculoRoutes from "./routes/VehiculoRoutes";
 import accesoContabilidadRoutes from "./routes/accesoContabilidadRoutes";
+import prorrateoRoutes from "./routes/ProrrateoRoutes";
 import { startFlotaUsuarioSyncCron } from "./jobs/flotaUsuarioSyncCron";
 
 import path from "path";
@@ -68,6 +69,7 @@ app.use("/api/rangos-fechas-alimentacion", rangosFechasAlimentacionRoutes);
 app.use("/api/techo-ihss", techoIhssRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/accesos-contabilidad", accesoContabilidadRoutes);
+app.use("/api/prorrateos", prorrateoRoutes);
 
 app.use(errorHandler);
 

@@ -1,6 +1,6 @@
 // src/repositories/RegistroDiarioRepository.ts
 import { prisma } from "../config/prisma";
-import type { RegistroDiario, Actividad, Job } from "@prisma/client";
+import type { RegistroDiario, Actividad, Job, Prisma } from "@prisma/client";
 import { Roles } from "../enums/roles";
 
 /** DTO reutilizable para cada actividad */
@@ -330,9 +330,10 @@ export class RegistroDiarioRepository {
     empleadoId: number,
     fechaInicio: string,
     fechaFin: string,
-    codigoRrhh?: string
+    codigoRrhh?: string,
+    tx: Prisma.TransactionClient | typeof prisma = prisma
   ): Promise<{ count: number }> {
-    return prisma.registroDiario.updateMany({
+    return tx.registroDiario.updateMany({
       where: {
         empleadoId,
         fecha: {
@@ -352,9 +353,10 @@ export class RegistroDiarioRepository {
   static async revertirRrhhApprovalByDateRange(
     empleadoId: number,
     fechaInicio: string,
-    fechaFin: string
+    fechaFin: string,
+    tx: Prisma.TransactionClient | typeof prisma = prisma
   ): Promise<{ count: number }> {
-    return prisma.registroDiario.updateMany({
+    return tx.registroDiario.updateMany({
       where: {
         empleadoId,
         fecha: {
@@ -586,12 +588,25 @@ export class RegistroDiarioRepository {
   /**
    * Actividades con esCompensatorio=true del empleado (no eliminadas).
    * Incluye fecha del registro diario y job.
+   * Opcional: filtrar por esExtra y paginar (skip/take).
    */
-  static async findActividadesCompensatoriasByEmpleado(empleadoId: number) {
+  static async findActividadesCompensatoriasByEmpleado(
+    empleadoId: number,
+    options?: {
+      esExtra?: boolean;
+      skip?: number;
+      take?: number;
+    }
+  ) {
     return prisma.actividad.findMany({
       where: {
         deletedAt: null,
         esCompensatorio: true,
+        ...(options?.esExtra === true
+          ? { esExtra: true }
+          : options?.esExtra === false
+            ? { OR: [{ esExtra: false }, { esExtra: null }] }
+            : {}),
         registroDiario: {
           empleadoId,
           deletedAt: null,
@@ -608,19 +623,86 @@ export class RegistroDiarioRepository {
         },
       },
       orderBy: [{ registroDiario: { fecha: "desc" } }, { id: "desc" }],
+      ...(options?.skip != null ? { skip: options.skip } : {}),
+      ...(options?.take != null ? { take: options.take } : {}),
+    });
+  }
+
+  static async countActividadesCompensatoriasByEmpleado(
+    empleadoId: number,
+    esExtra?: boolean
+  ): Promise<number> {
+    return prisma.actividad.count({
+      where: {
+        deletedAt: null,
+        esCompensatorio: true,
+        ...(esExtra === true
+          ? { esExtra: true }
+          : esExtra === false
+            ? { OR: [{ esExtra: false }, { esExtra: null }] }
+            : {}),
+        registroDiario: {
+          empleadoId,
+          deletedAt: null,
+        },
+      },
     });
   }
 
   /**
    * Filas del banco de compensatorias acumuladas por empleado (con job).
    */
-  static async findBancoCompensatoriasByEmpleado(empleadoId: number) {
+  static async findBancoCompensatoriasByEmpleado(
+    empleadoId: number,
+    options?: { skip?: number; take?: number }
+  ) {
     return prisma.bancoCompensatoriasAcumuladas.findMany({
       where: { empleadoId },
       include: {
         job: true,
       },
       orderBy: { id: "asc" },
+      ...(options?.skip != null ? { skip: options.skip } : {}),
+      ...(options?.take != null ? { take: options.take } : {}),
     });
+  }
+
+  static async countBancoCompensatoriasByEmpleado(
+    empleadoId: number
+  ): Promise<number> {
+    return prisma.bancoCompensatoriasAcumuladas.count({
+      where: { empleadoId },
+    });
+  }
+
+  static async sumHorasBancoCompensatoriasByEmpleado(
+    empleadoId: number
+  ): Promise<number> {
+    const agg = await prisma.bancoCompensatoriasAcumuladas.aggregate({
+      where: { empleadoId },
+      _sum: { horasAcumuladas: true },
+    });
+    return agg._sum.horasAcumuladas ?? 0;
+  }
+
+  static async sumHorasActividadesCompensatoriasByEmpleado(
+    empleadoId: number,
+    esExtra: boolean
+  ): Promise<number> {
+    const agg = await prisma.actividad.aggregate({
+      where: {
+        deletedAt: null,
+        esCompensatorio: true,
+        ...(esExtra
+          ? { esExtra: true }
+          : { OR: [{ esExtra: false }, { esExtra: null }] }),
+        registroDiario: {
+          empleadoId,
+          deletedAt: null,
+        },
+      },
+      _sum: { duracionHoras: true },
+    });
+    return agg._sum.duracionHoras ?? 0;
   }
 }

@@ -1,5 +1,5 @@
 // src/services/NominaService.ts
-import type { Nomina } from "@prisma/client";
+import type { Nomina, Prisma } from "@prisma/client";
 import ExcelJS from "exceljs";
 import { NominaRepository } from "../repositories/NominaRepository";
 import type {
@@ -9,6 +9,34 @@ import type {
 import { AppError } from "../errors/AppError";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { RegistroDiarioService } from "./RegistroDiarioService";
+import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
+import { prisma } from "../config/prisma";
+
+type BancoCompensatoriaAplicada = { jobId: number | null; horas: number };
+
+function parseBancoCompensatoriasAplicadas(
+  value: unknown
+): BancoCompensatoriaAplicada[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const jobId =
+        item?.jobId === null || item?.jobId === undefined
+          ? null
+          : Number(item.jobId);
+      const horas = Number(item?.horas);
+      return {
+        jobId: jobId !== null && Number.isFinite(jobId) ? jobId : null,
+        horas: Number.isFinite(horas) ? horas : 0,
+      };
+    })
+    .filter((item) => item.horas !== 0);
+}
+
+function toFechaStr(fecha: Date | string): string {
+  if (fecha instanceof Date) return fecha.toISOString().split("T")[0];
+  return String(fecha).split("T")[0];
+}
 
 // Función para generar código de nómina: YYYYMMP
 // YYYY = año, MM = mes (01-12), P = período (A primera quincena, B segunda quincena)
@@ -53,28 +81,27 @@ export class NominaService {
   }
 
   /**
-   * Ajusta saldos acumulados en Empleado:
-   * - tiempoCompensatorioHoras: suma deltaComp
-   * - tiempoVacacionesHoras:    suma deltaVacHoras (negativo para descontar)
+   * Ajusta solo vacaciones en Empleado (tiempoVacacionesHoras).
+   * tiempoCompensatorioHoras queda aislado: el banco por job es la fuente actual.
    */
-  private static async ajustarSaldosEmpleado(
+  private static async ajustarVacacionesEmpleado(
     empleadoId: number,
-    deltaComp: number,
-    deltaVacHoras: number
+    deltaVacHoras: number,
+    tx: Prisma.TransactionClient | typeof prisma = prisma
   ): Promise<void> {
-    const dComp = Number(deltaComp || 0);
     const dVac = Number(deltaVacHoras || 0);
-    if (dComp === 0 && dVac === 0) return;
+    if (dVac === 0) return;
 
-    const empleado = await EmpleadoRepository.findById(empleadoId);
+    const empleado = await tx.empleado.findFirst({
+      where: { id: empleadoId, deletedAt: null },
+      select: { tiempoVacacionesHoras: true },
+    });
     if (!empleado) return;
 
-    const compActual = empleado.tiempoCompensatorioHoras ?? 0;
     const vacActual = empleado.tiempoVacacionesHoras ?? 0;
-
-    await EmpleadoRepository.updateEmpleado(empleadoId, {
-      tiempoCompensatorioHoras: compActual + dComp,
-      tiempoVacacionesHoras: vacActual + dVac,
+    await tx.empleado.update({
+      where: { id: empleadoId },
+      data: { tiempoVacacionesHoras: vacActual + dVac },
     });
   }
 
@@ -193,12 +220,16 @@ export class NominaService {
     }
 
     // Prisma types: map DTO to create input usando spread para reducir código
+    const bancoAplicadas = parseBancoCompensatoriasAplicadas(
+      payload.bancoCompensatoriasAplicadas
+    );
     const camposOpcionales = {
       diasLaborados: payload.diasLaborados ?? null,
       diasVacaciones: payload.diasVacaciones ?? null,
       diasIncapacidadEmpresa: payload.diasIncapacidadEmpresa ?? null,
       diasIncapacidadIHSS: payload.diasIncapacidadIHSS ?? null,
       horasCompensatorias: payload.horasCompensatorias ?? null,
+      bancoCompensatoriasAplicadas: bancoAplicadas,
       subtotalQuincena: payload.subtotalQuincena ?? null,
       montoVacaciones: payload.montoVacaciones ?? null,
       montoDiasLaborados: payload.montoDiasLaborados ?? null,
@@ -225,60 +256,51 @@ export class NominaService {
       comentario: payload.comentario ?? null,
     };
 
-    const created = await NominaRepository.create({
-      empleado: { connect: { id: payload.empleadoId } },
-      empresa: { connect: { id: empresaId } },
-      nombrePeriodoNomina: payload.nombrePeriodoNomina ?? null,
-      codigoNomina: codigoNomina,
-      fechaInicio: payload.fechaInicio,
-      fechaFin: payload.fechaFin,
-      sueldoMensual: payload.sueldoMensual,
-      ...(createdBy
-        ? { createdByEmpleado: { connect: { id: createdBy } } }
-        : {}),
-      ...camposOpcionales,
-    });
-
-    // Ajustar acumulados en Empleado al crear nómina:
-    // - Compensatorio: sumar horas de la nómina
-    // - Vacaciones: descontar horas (diasVacaciones * 8)
-    const compAplicado = Number(payload.horasCompensatorias ?? 0);
+    const fechaInicioStr = toFechaStr(payload.fechaInicio);
+    const fechaFinStr = toFechaStr(payload.fechaFin);
     const vacHorasAplicadas = this.horasVacacionesFromDias(payload.diasVacaciones);
-    await this.ajustarSaldosEmpleado(
-      payload.empleadoId,
-      compAplicado,
-      -vacHorasAplicadas
-    );
 
-    // Actualizar aprobacionRrhh a true para todos los registros diarios
-    // del empleado en el rango de fechas de la nómina
-    try {
-      // Convertir fechas a formato "YYYY-MM-DD" para el filtro de registros diarios
-      const fechaInicioStr =
-        payload.fechaInicio instanceof Date
-          ? payload.fechaInicio.toISOString().split("T")[0]
-          : String(payload.fechaInicio).split("T")[0];
-      const fechaFinStr =
-        payload.fechaFin instanceof Date
-          ? payload.fechaFin.toISOString().split("T")[0]
-          : String(payload.fechaFin).split("T")[0];
+    return prisma.$transaction(async (tx) => {
+      const created = await tx.nomina.create({
+        data: {
+          empleado: { connect: { id: payload.empleadoId } },
+          empresa: { connect: { id: empresaId } },
+          nombrePeriodoNomina: payload.nombrePeriodoNomina ?? null,
+          codigoNomina: codigoNomina,
+          fechaInicio: payload.fechaInicio,
+          fechaFin: payload.fechaFin,
+          sueldoMensual: payload.sueldoMensual,
+          ...(createdBy
+            ? { createdByEmpleado: { connect: { id: createdBy } } }
+            : {}),
+          ...camposOpcionales,
+        },
+      });
+
+      await this.ajustarVacacionesEmpleado(
+        payload.empleadoId,
+        -vacHorasAplicadas,
+        tx
+      );
+
+      if (bancoAplicadas.length > 0) {
+        await BancoCompensatoriasRepository.aplicarDeltas(
+          payload.empleadoId,
+          bancoAplicadas,
+          tx
+        );
+      }
 
       await RegistroDiarioService.aprobarRrhhByDateRange(
         payload.empleadoId,
         fechaInicioStr,
         fechaFinStr,
-        undefined // Ya no usamos código, solo ID
+        undefined,
+        tx
       );
-    } catch (error) {
-      // Si falla la actualización de registros, loguear el error pero no fallar la creación de la nómina
-      console.error(
-        "Error al actualizar aprobación RRHH en registros diarios:",
-        error
-      );
-      // Podrías optar por hacer rollback de la nómina si es crítico, pero por ahora solo logueamos
-    }
 
-    return created;
+      return created;
+    });
   }
 
   static async update(
@@ -289,10 +311,19 @@ export class NominaService {
     const existing = await NominaRepository.findById(id);
     if (!existing) throw new AppError("Nómina no encontrada", 404);
 
-    const { empleadoId: empleadoIdPayload, ...restPayload } = payload;
+    // empleadoId es inmutable: cada nómina pertenece solo al empleado con el que se creó.
+    if (
+      "empleadoId" in (payload as object) &&
+      (payload as { empleadoId?: number }).empleadoId != null &&
+      (payload as { empleadoId?: number }).empleadoId !== existing.empleadoId
+    ) {
+      throw new AppError(
+        "No se puede cambiar el colaborador de una nómina existente",
+        400
+      );
+    }
 
-    // Validar solapamientos si se están actualizando las fechas o el empleado
-    const empleadoId = empleadoIdPayload ?? existing.empleadoId;
+    const empleadoId = existing.empleadoId;
     const fechaInicio = payload.fechaInicio
       ? payload.fechaInicio instanceof Date
         ? payload.fechaInicio
@@ -308,12 +339,7 @@ export class NominaService {
       ? existing.fechaFin
       : new Date(existing.fechaFin);
 
-    // Solo validar si se están cambiando fechas o empleado
-    if (
-      payload.fechaInicio ||
-      payload.fechaFin ||
-      (empleadoIdPayload && empleadoIdPayload !== existing.empleadoId)
-    ) {
+    if (payload.fechaInicio || payload.fechaFin) {
       const codigoNomina = generarCodigoNomina(fechaInicio, fechaFin);
       const duplicadaPorCodigo =
         await NominaRepository.findActiveByEmpleadoAndCodigo(
@@ -332,7 +358,7 @@ export class NominaService {
         empleadoId,
         fechaInicio,
         fechaFin,
-        id // Excluir la nómina actual
+        id
       );
       if (overlapping.length > 0) {
         throw new AppError(
@@ -342,50 +368,38 @@ export class NominaService {
       }
     }
 
-    // Prisma no acepta empleadoId como escalar en update; usar connect en la relación
     const codigoNominaUpdate =
       payload.fechaInicio || payload.fechaFin
         ? generarCodigoNomina(fechaInicio, fechaFin)
         : undefined;
 
-    // horasCompensatorias es inmutable en actualización (solo se fija al crear).
-    const updated = await NominaRepository.update(id, {
-      ...restPayload,
-      ...(codigoNominaUpdate ? { codigoNomina: codigoNominaUpdate } : {}),
-      ...(updatedBy
-        ? { updatedByEmpleado: { connect: { id: updatedBy } } }
-        : {}),
-      ...(empleadoIdPayload
-        ? { empleado: { connect: { id: empleadoIdPayload } } }
-        : {}),
-    });
-
-    // Recalcular saldos de vacaciones si cambian. Compensatorias no se tocan en update.
-    const oldEmpleadoId = existing.empleadoId;
-    const newEmpleadoId = empleadoIdPayload ?? existing.empleadoId;
-    const compFijo = Number(existing.horasCompensatorias ?? 0);
-
     const oldVacHoras = this.horasVacacionesFromDias(existing.diasVacaciones);
     const newVacHoras = this.horasVacacionesFromDias(
       payload.diasVacaciones ?? existing.diasVacaciones
     );
+    const deltaVac = oldVacHoras - newVacHoras;
 
-    if (oldEmpleadoId === newEmpleadoId) {
-      const deltaVac = oldVacHoras - newVacHoras;
-      await this.ajustarSaldosEmpleado(newEmpleadoId, 0, deltaVac);
-    } else {
-      await this.ajustarSaldosEmpleado(oldEmpleadoId, -compFijo, oldVacHoras);
-      await this.ajustarSaldosEmpleado(newEmpleadoId, compFijo, -newVacHoras);
-    }
+    return prisma.$transaction(async (tx) => {
+      const updated = await tx.nomina.update({
+        where: { id },
+        data: {
+          ...payload,
+          ...(codigoNominaUpdate ? { codigoNomina: codigoNominaUpdate } : {}),
+          ...(updatedBy
+            ? { updatedByEmpleado: { connect: { id: updatedBy } } }
+            : {}),
+        },
+      });
 
-    return updated;
+      await this.ajustarVacacionesEmpleado(empleadoId, deltaVac, tx);
+      return updated;
+    });
   }
 
   static async delete(id: number, deletedBy?: number | null): Promise<Nomina> {
     const existing = await NominaRepository.findById(id);
     if (!existing) throw new AppError("Nómina no encontrada", 404);
 
-    // Validar que la nómina no esté pagada
     if (existing.pagado) {
       throw new AppError(
         "No se puede eliminar una nómina que ya ha sido pagada",
@@ -393,45 +407,51 @@ export class NominaService {
       );
     }
 
-    // Revertir aprobacionRrhh a null para todos los registros diarios
-    // del empleado en el rango de fechas de la nómina
-    try {
-      // Convertir fechas a formato "YYYY-MM-DD" para el filtro de registros diarios
-      const fechaInicioStr =
-        existing.fechaInicio instanceof Date
-          ? existing.fechaInicio.toISOString().split("T")[0]
-          : String(existing.fechaInicio).split("T")[0];
-      const fechaFinStr =
-        existing.fechaFin instanceof Date
-          ? existing.fechaFin.toISOString().split("T")[0]
-          : String(existing.fechaFin).split("T")[0];
+    const fechaInicioStr = toFechaStr(existing.fechaInicio);
+    const fechaFinStr = toFechaStr(existing.fechaFin);
+    const vacHorasAplicadas = this.horasVacacionesFromDias(
+      existing.diasVacaciones
+    );
+    const bancoAplicadas = parseBancoCompensatoriasAplicadas(
+      existing.bancoCompensatoriasAplicadas
+    );
+    const deltasReverso = bancoAplicadas.map((item) => ({
+      jobId: item.jobId,
+      horas: -item.horas,
+    }));
+
+    return prisma.$transaction(async (tx) => {
+      const deleted = await tx.nomina.update({
+        where: { id },
+        data: {
+          deletedAt: new Date(),
+          deletedBy: deletedBy ?? null,
+        },
+      });
+
+      await this.ajustarVacacionesEmpleado(
+        existing.empleadoId,
+        vacHorasAplicadas,
+        tx
+      );
+
+      if (deltasReverso.length > 0) {
+        await BancoCompensatoriasRepository.aplicarDeltas(
+          existing.empleadoId,
+          deltasReverso,
+          tx
+        );
+      }
 
       await RegistroDiarioService.revertirRrhhApprovalByDateRange(
         existing.empleadoId,
         fechaInicioStr,
-        fechaFinStr
+        fechaFinStr,
+        tx
       );
-    } catch (error) {
-      // Si falla la actualización de registros, loguear el error pero no fallar la eliminación de la nómina
-      console.error(
-        "Error al revertir aprobación RRHH en registros diarios:",
-        error
-      );
-    }
 
-    // Eliminar lógicamente la nómina
-    const deleted = await NominaRepository.delete(id, deletedBy);
-
-    // Revertir el efecto que tuvo la creación de esta nómina en saldos del empleado
-    const compAplicado = Number(existing.horasCompensatorias ?? 0);
-    const vacHorasAplicadas = this.horasVacacionesFromDias(existing.diasVacaciones);
-    await this.ajustarSaldosEmpleado(
-      existing.empleadoId,
-      -compAplicado,
-      vacHorasAplicadas
-    );
-
-    return deleted;
+      return deleted;
+    });
   }
 
   private static calcularTotalBruto(nomina: Nomina): number {

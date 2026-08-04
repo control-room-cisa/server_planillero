@@ -13,6 +13,10 @@ export interface NominaDto {
   diasIncapacidadEmpresa?: number | null;
   diasIncapacidadIHSS?: number | null;
   horasCompensatorias?: number | null;
+  bancoCompensatoriasAplicadas?: Array<{
+    jobId: number | null;
+    horas: number;
+  }> | null;
 
   subtotalQuincena?: number | null;
   montoVacaciones?: number | null;

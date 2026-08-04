@@ -303,6 +303,7 @@ export const updateJobBySupervisor: RequestHandler<
 
 /**
  * GET /api/registrodiario/tiempo-compensatorio?idEmpleado=
+ * Opcional: seccion=porJob|acumuladas|tomadas|vacaciones&page=1&limit=10
  * Lista actividades compensatorias (acumuladas/tomadas) y banco por job.
  * Roles: SUPERVISOR, RRHH, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
  */
@@ -312,11 +313,16 @@ export const getTiempoCompensatorio: RequestHandler<
     ReturnType<typeof RegistroDiarioService.getTiempoCompensatorio>
   > | null>,
   {},
-  { idEmpleado?: string }
+  {
+    idEmpleado?: string;
+    seccion?: string;
+    page?: string;
+    limit?: string;
+  }
 > = async (req, res, next) => {
   try {
     const { id: usuarioId, rolId } = (req as AuthRequest).user;
-    const { idEmpleado } = req.query;
+    const { idEmpleado, seccion, page, limit } = req.query;
 
     const rolesPermitidos = [
       Roles.SUPERVISOR,
@@ -357,8 +363,58 @@ export const getTiempoCompensatorio: RequestHandler<
       });
     }
 
-    const data =
-      await RegistroDiarioService.getTiempoCompensatorio(empleadoIdNum);
+    const seccionesValidas = [
+      "porJob",
+      "acumuladas",
+      "tomadas",
+      "vacaciones",
+    ] as const;
+    type Seccion = (typeof seccionesValidas)[number];
+    let seccionParsed: Seccion | undefined;
+    if (typeof seccion === "string" && seccion.trim() !== "") {
+      if (!seccionesValidas.includes(seccion as Seccion)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "El query param 'seccion' debe ser porJob, acumuladas, tomadas o vacaciones",
+          data: null,
+        });
+      }
+      seccionParsed = seccion as Seccion;
+    }
+
+    const pageNum =
+      typeof page === "string" && page.trim() !== ""
+        ? parseInt(page, 10)
+        : undefined;
+    const limitNum =
+      typeof limit === "string" && limit.trim() !== ""
+        ? parseInt(limit, 10)
+        : undefined;
+
+    if (pageNum != null && (isNaN(pageNum) || pageNum < 1)) {
+      return res.status(400).json({
+        success: false,
+        message: "El query param 'page' debe ser un entero >= 1",
+        data: null,
+      });
+    }
+    if (limitNum != null && (isNaN(limitNum) || limitNum < 1)) {
+      return res.status(400).json({
+        success: false,
+        message: "El query param 'limit' debe ser un entero >= 1",
+        data: null,
+      });
+    }
+
+    const data = await RegistroDiarioService.getTiempoCompensatorio(
+      empleadoIdNum,
+      {
+        seccion: seccionParsed,
+        page: pageNum,
+        limit: limitNum,
+      }
+    );
 
     return res.json({
       success: true,
