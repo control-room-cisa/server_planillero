@@ -14,7 +14,7 @@ prisma.$use(async (params: Prisma.MiddlewareParams, next) => {
     readActions.includes(params.action) &&
     params.model &&
     // ajusta esta lista a tus modelos “soft-delete”
-    ["Empresa", "Job", "Empleado", "Departamento" /*…*/].includes(params.model)
+    ["Empresa", "Job", "Empleado", "Departamento"].includes(params.model)
   ) {
     // Inyecta deletedAt: null en el where
     if (!params.args) {

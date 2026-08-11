@@ -10,6 +10,7 @@ async function main() {
     { id: 2, nombre: "Supervisor" },
     { id: 3, nombre: "Recursos Humanos" },
     { id: 4, nombre: "Contabilidad" },
+    { id: 8, nombre: "Logística" },
   ] as const;
 
   for (const { id, nombre } of roles) {
