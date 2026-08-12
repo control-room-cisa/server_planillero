@@ -12,18 +12,23 @@ import { RegistroDiarioRepository } from "../repositories/RegistroDiarioReposito
 import { PlanillaAccesoRevisionRepository } from "../repositories/PlanillaAccesoRevisionRepository";
 import { FileService } from "./FileService";
 import { mapTipoContrato, mapTipoCuenta } from "../utils/prismaEnumMapper";
+import { rolIdsFromRelations } from "../utils/roles";
 
 const SALT_ROUNDS = 10;
 
+type EmpleadoWithRoles = Empleado & {
+  roles?: Array<{ rolId: number }>;
+};
+
 export class EmpleadoService {
-  static toDtoBase(emp: Empleado): EmployeeDto {
+  static toDtoBase(emp: EmpleadoWithRoles): EmployeeDto {
     return {
       id: emp.id,
       nombre: emp.nombre,
       apellido: emp.apellido ?? undefined,
       codigo: emp.codigo ?? undefined,
       cargo: emp.cargo ?? undefined,
-      rolId: emp.rolId ?? undefined,
+      rolIds: rolIdsFromRelations(emp.roles),
       sueldoMensual: emp.sueldoMensual ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         emp.id,
@@ -34,7 +39,7 @@ export class EmpleadoService {
   }
 
   static toDtoDetail(
-    emp: Empleado & {
+    emp: EmpleadoWithRoles & {
       departamento?: {
         nombre: string | null;
         empresaId: number;
@@ -83,7 +88,7 @@ export class EmpleadoService {
       direccion: emp.direccion ?? undefined,
       fechaInicioIngreso: emp.fechaInicioIngreso ?? undefined,
       editTime: emp.editTime ?? undefined,
-      rolId: emp.rolId,
+      rolIds: rolIdsFromRelations(emp.roles),
       departamentoId: emp.departamentoId,
       tiempoCompensatorioHoras: emp.tiempoCompensatorioHoras ?? undefined,
       tiempoVacacionesHoras: emp.tiempoVacacionesHoras ?? undefined,
@@ -156,7 +161,7 @@ export class EmpleadoService {
             ? { nombre: e.departamento.empresa.nombre }
             : undefined,
           cargo: e.cargo ?? undefined,
-          rolId: e.rolId ?? undefined,
+          rolIds: rolIdsFromRelations(e.roles),
           urlFotoPerfil: FileService.buildFotoUrl(
             e.id,
             e.urlFotoPerfil ?? undefined
@@ -196,7 +201,7 @@ export class EmpleadoService {
         ? { nombre: e.departamento.empresa.nombre }
         : undefined,
       cargo: e.cargo ?? undefined,
-      rolId: e.rolId ?? undefined,
+      rolIds: rolIdsFromRelations(e.roles),
       sueldoMensual: e.sueldoMensual ?? undefined,
       urlFotoPerfil: FileService.buildFotoUrl(
         e.id,
@@ -358,10 +363,18 @@ export class EmpleadoService {
       rest.contrasena = await this.hashPassword(rest.contrasena);
     }
 
+    const { rolIds, ...updateFields } = rest;
+
     let emp = await EmpleadoRepository.updateEmpleado(
       id,
-      rest as Prisma.EmpleadoUpdateInput
+      updateFields as Prisma.EmpleadoUpdateInput
     );
+
+    if (rolIds !== undefined) {
+      await EmpleadoRepository.setRoles(id, rolIds);
+      const refreshed = await EmpleadoRepository.findById(id);
+      if (refreshed) emp = refreshed;
+    }
 
     let newFotoFilename: string | undefined;
     let newCvFilename: string | undefined;

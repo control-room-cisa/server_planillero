@@ -12,6 +12,7 @@ import {
   pagarPlanilla,
 } from "../controllers/NominaController";
 import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
 
 const router = Router();
 
@@ -29,7 +30,7 @@ const soloSupervisorContabilidad = (
   next: NextFunction
 ) => {
   const anyReq = req as any;
-  if (anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD) {
+  if (!hasAnyRole(anyReq.user?.rolIds, Roles.SUPERVISOR_CONTABILIDAD)) {
     return res
       .status(403)
       .json({ success: false, message: "Solo supervisor de contabilidad", data: null });
@@ -37,43 +38,42 @@ const soloSupervisorContabilidad = (
   next();
 };
 
+const puedeLeerNominas = (
+  req: Request,
+  res: Response,
+  next: NextFunction
+) => {
+  const anyReq: any = req;
+  if (
+    !hasAnyRole(
+      anyReq.user?.rolIds,
+      Roles.RRHH,
+      Roles.SUPERVISOR_CONTABILIDAD,
+      Roles.ASISTENTE_CONTABILIDAD
+    )
+  ) {
+    return res
+      .status(403)
+      .json({ success: false, message: "No autorizado", data: null });
+  }
+  next();
+};
+
+const soloRrhh = (req: Request, res: Response, next: NextFunction) => {
+  const anyReq: any = req;
+  if (!hasAnyRole(anyReq.user?.rolIds, Roles.RRHH)) {
+    return res
+      .status(403)
+      .json({ success: false, message: "Solo RRHH", data: null });
+  }
+  next();
+};
+
 // GET /api/nominas (lectura)
-router.get(
-  "/",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (
-      anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
-      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
-    ) {
-      return res
-        .status(403)
-        .json({ success: false, message: "No autorizado", data: null });
-    }
-    next();
-  },
-  leerNominas
-);
+router.get("/", puedeLeerNominas, leerNominas);
 
 // GET /api/nominas/resumen?empleadoId=... (lectura)
-router.get(
-  "/resumen",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (
-      anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
-      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
-    ) {
-      return res
-        .status(403)
-        .json({ success: false, message: "No autorizado", data: null });
-    }
-    next();
-  },
-  leerNominasResumenPorEmpleado
-);
+router.get("/resumen", puedeLeerNominas, leerNominasResumenPorEmpleado);
 
 // GET /api/nominas/plantilla-pago?empresaId=&codigoNomina=
 router.get(
@@ -86,67 +86,15 @@ router.get(
 router.post("/pagar-planilla", soloSupervisorContabilidad, pagarPlanilla);
 
 // GET /api/nominas/:id (lectura)
-router.get(
-  "/:id",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (
-      anyReq.user?.rolId !== Roles.RRHH &&
-      anyReq.user?.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
-      anyReq.user?.rolId !== Roles.ASISTENTE_CONTABILIDAD
-    ) {
-      return res
-        .status(403)
-        .json({ success: false, message: "No autorizado", data: null });
-    }
-    next();
-  },
-  leerNominaPorId
-);
+router.get("/:id", puedeLeerNominas, leerNominaPorId);
 
 // POST /api/nominas
-router.post(
-  "/",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (anyReq.user?.rolId !== Roles.RRHH) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Solo RRHH", data: null });
-    }
-    next();
-  },
-  crearNomina
-);
+router.post("/", soloRrhh, crearNomina);
 
 // PUT /api/nominas/:id
-router.put(
-  "/:id",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (anyReq.user?.rolId !== Roles.RRHH) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Solo RRHH", data: null });
-    }
-    next();
-  },
-  actualizarNomina
-);
+router.put("/:id", soloRrhh, actualizarNomina);
 
 // DELETE /api/nominas/:id
-router.delete(
-  "/:id",
-  (req, res, next) => {
-    const anyReq: any = req;
-    if (anyReq.user?.rolId !== Roles.RRHH) {
-      return res
-        .status(403)
-        .json({ success: false, message: "Solo RRHH", data: null });
-    }
-    next();
-  },
-  eliminarNomina
-);
+router.delete("/:id", soloRrhh, eliminarNomina);
 
 export default router;

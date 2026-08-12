@@ -173,13 +173,9 @@ const empleadoFields = {
       z.undefined(),
     ])
     .optional(),
-  rolId: z
-    .number({
-      required_error: "El rol es requerido",
-      invalid_type_error: "El rol debe ser un número",
-    })
-    .int("El rol debe ser un número entero")
-    .positive("El rol debe ser positivo"),
+  rolIds: z
+    .array(z.number().int().positive())
+    .min(1, "Debe indicar al menos un rol"),
   departamentoId: z
     .number({
       required_error: "El departamento es requerido",
@@ -368,11 +364,7 @@ export const updateEmpleadoSchema = z.object({
       z.undefined(),
     ])
     .optional(),
-  rolId: z
-    .number({ invalid_type_error: "El rol debe ser un número" })
-    .int("El rol debe ser un número entero")
-    .positive("El rol debe ser positivo")
-    .optional(),
+  rolIds: z.array(z.number().int().positive()).min(1).optional(),
   departamentoId: z
     .number({ invalid_type_error: "El departamento debe ser un número" })
     .int("El departamento debe ser un número entero")

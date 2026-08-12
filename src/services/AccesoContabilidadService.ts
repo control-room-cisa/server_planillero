@@ -9,6 +9,7 @@ import type {
   CreateAccesoContabilidadDto,
   UpdateAccesoContabilidadDto,
 } from "../validators/accesoContabilidad.validator";
+import { hasAnyRole } from "../utils/roles";
 
 export class AccesoContabilidadService {
   static async listActive(): Promise<AccesoContabilidadWithRelations[]> {
@@ -29,7 +30,7 @@ export class AccesoContabilidadService {
       where: {
         deletedAt: null,
         activo: true,
-        rolId: Roles.ASISTENTE_CONTABILIDAD,
+        roles: { some: { rolId: Roles.ASISTENTE_CONTABILIDAD } },
       },
       select: {
         id: true,
@@ -77,7 +78,7 @@ export class AccesoContabilidadService {
       where: {
         id: empleadoId,
         deletedAt: null,
-        rolId: Roles.ASISTENTE_CONTABILIDAD,
+        roles: { some: { rolId: Roles.ASISTENTE_CONTABILIDAD } },
       },
       select: { id: true },
     });
@@ -185,10 +186,10 @@ export class AccesoContabilidadService {
    */
   static async assertViewerCanAccessProrrateoEmpleado(
     viewerEmpleadoId: number,
-    viewerRolId: number,
+    viewerRolIds: number[],
     targetEmpleadoId: number
   ): Promise<void> {
-    if (viewerRolId === Roles.SUPERVISOR_CONTABILIDAD) {
+    if (hasAnyRole(viewerRolIds, Roles.SUPERVISOR_CONTABILIDAD)) {
       return;
     }
     if (viewerEmpleadoId === targetEmpleadoId) {

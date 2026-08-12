@@ -24,9 +24,22 @@ model Rol {
   updatedAt DateTime? @map("updated_at")
   deletedAt DateTime? @map("deleted_at")
 
-  empleados Empleado[]
+  empleadoRoles EmpleadoRol[]
 
   @@map("roles")
+}
+
+/// Relación M:N Empleado ↔ Rol
+model EmpleadoRol {
+  empleadoId Int @map("empleado_id")
+  rolId      Int @map("rol_id")
+
+  empleado Empleado @relation(fields: [empleadoId], references: [id], onDelete: Cascade)
+  rol      Rol      @relation(fields: [rolId], references: [id], onDelete: Restrict)
+
+  @@id([empleadoId, rolId])
+  @@index([rolId], name: "fk_empleado_roles_rol_idx")
+  @@map("empleado_roles")
 }
 
 // --------- empresas ---------
@@ -151,11 +164,10 @@ model Empleado {
   updatedAt                DateTime?     @map("updated_at")
   deletedAt                DateTime?     @map("deleted_at")
 
-  rolId Int
-  rol   Rol @relation(fields: [rolId], references: [id])
-
   departamentoId Int          @map("departamento_id")
   departamento   Departamento @relation(fields: [departamentoId], references: [id])
+
+  roles EmpleadoRol[]
 
   nominas               Nomina[]
   nominasCreadas        Nomina[]         @relation("NominaCreatedBy")

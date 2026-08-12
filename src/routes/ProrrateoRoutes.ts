@@ -6,6 +6,7 @@ import {
   estadoProrrateoPorNomina,
 } from "../controllers/ProrrateoController";
 import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
 
 const router = Router();
 
@@ -17,11 +18,13 @@ const puedeGestionarProrrateo = (
   next: NextFunction
 ) => {
   const anyReq = req as any;
-  const rolId = anyReq.user?.rolId;
   if (
-    rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
-    rolId !== Roles.ASISTENTE_CONTABILIDAD &&
-    rolId !== Roles.RRHH
+    !hasAnyRole(
+      anyReq.user?.rolIds,
+      Roles.SUPERVISOR_CONTABILIDAD,
+      Roles.ASISTENTE_CONTABILIDAD,
+      Roles.RRHH
+    )
   ) {
     return res.status(403).json({
       success: false,

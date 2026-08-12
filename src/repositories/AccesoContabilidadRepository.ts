@@ -8,7 +8,7 @@ const includeDefault = {
       nombre: true,
       apellido: true,
       codigo: true,
-      rolId: true,
+      roles: { select: { rolId: true } },
     },
   },
   empresa: {

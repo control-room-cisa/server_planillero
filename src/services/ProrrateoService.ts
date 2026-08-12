@@ -156,7 +156,7 @@ export class ProrrateoService {
   static async existePorNomina(
     nominaId: number,
     viewerEmpleadoId: number,
-    viewerRolId: number
+    viewerRolIds: number[]
   ): Promise<{
     guardado: boolean;
     cantidadFilas: number;
@@ -168,7 +168,7 @@ export class ProrrateoService {
 
     await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
       viewerEmpleadoId,
-      viewerRolId,
+      viewerRolIds,
       nomina.empleadoId
     );
 
@@ -185,7 +185,7 @@ export class ProrrateoService {
   static async guardarDesdeNomina(
     nominaId: number,
     viewerEmpleadoId: number,
-    viewerRolId: number,
+    viewerRolIds: number[],
     asignacionesCompensatoriasTomadas: AsignacionCompensatoriaTomadaDto[] = []
   ): Promise<{ cantidadFilas: number; nominaId: number }> {
     const nomina = await NominaRepository.findById(nominaId);
@@ -195,7 +195,7 @@ export class ProrrateoService {
 
     await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
       viewerEmpleadoId,
-      viewerRolId,
+      viewerRolIds,
       nomina.empleadoId
     );
 

@@ -1,7 +1,6 @@
 // src/controllers/RegistroDiarioController.ts
 import { RequestHandler } from "express";
 import { RegistroDiarioService } from "../services/RegistroDiarioService";
-import { EmpleadoService } from "../services/EmpleadoService";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { Roles } from "../enums/roles";
@@ -14,6 +13,7 @@ import {
   RrhhApprovalDto,
   SupervisorApprovalDto,
 } from "../dtos/RegistroDiarioApproval.dto";
+import { hasAnyRole, hasOnlyEmpleado } from "../utils/roles";
 
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -65,9 +65,8 @@ export const upsertRegistroDiario: RequestHandler<
 
       // Si intenta actuar sobre otro empleado, validar permisos por rol
       if (empleadoTargetId !== usuarioId) {
-        const empleado = await EmpleadoService.getById(usuarioId);
-        // Mantengo tu convención: rolId === EMPLEADO no puede actuar sobre terceros
-        if (empleado?.rolId === Roles.EMPLEADO) {
+        // Solo EMPLEADO (sin roles privilegiados) no puede actuar sobre terceros
+        if (hasOnlyEmpleado((req as AuthRequest).user.rolIds)) {
           return res.status(403).json({
             success: false,
             message:
@@ -128,9 +127,11 @@ export const getRegistroDiarioByDate: RequestHandler<
         });
       }
 
-      const empleado = await EmpleadoService.getById(usuarioId);
       // Si intenta ver otro empleado, validar rol
-      if (empleadoIdNum !== usuarioId && empleado?.rolId === Roles.EMPLEADO) {
+      if (
+        empleadoIdNum !== usuarioId &&
+        hasOnlyEmpleado((req as AuthRequest).user.rolIds)
+      ) {
         return res.status(403).json({
           success: false,
           message: "No tienes permisos para ver registros de otros empleados",
@@ -321,16 +322,18 @@ export const getTiempoCompensatorio: RequestHandler<
   }
 > = async (req, res, next) => {
   try {
-    const { id: usuarioId, rolId } = (req as AuthRequest).user;
+    const { id: usuarioId, rolIds } = (req as AuthRequest).user;
     const { idEmpleado, seccion, page, limit } = req.query;
 
-    const rolesPermitidos = [
-      Roles.SUPERVISOR,
-      Roles.RRHH,
-      Roles.SUPERVISOR_CONTABILIDAD,
-      Roles.ASISTENTE_CONTABILIDAD,
-    ];
-    if (!rolesPermitidos.some((r) => r === rolId)) {
+    if (
+      !hasAnyRole(
+        rolIds,
+        Roles.SUPERVISOR,
+        Roles.RRHH,
+        Roles.SUPERVISOR_CONTABILIDAD,
+        Roles.ASISTENTE_CONTABILIDAD
+      )
+    ) {
       return res.status(403).json({
         success: false,
         message: "No autorizado para consultar tiempo compensatorio",
@@ -355,7 +358,7 @@ export const getTiempoCompensatorio: RequestHandler<
       });
     }
 
-    if (empleadoIdNum !== usuarioId && rolId === Roles.EMPLEADO) {
+    if (empleadoIdNum !== usuarioId && hasOnlyEmpleado(rolIds)) {
       return res.status(403).json({
         success: false,
         message: "No tienes permisos para ver datos de otros empleados",

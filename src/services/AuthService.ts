@@ -4,6 +4,7 @@ import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import { EmpleadoService } from "../services/EmpleadoService";
 import { CreateEmpleadoDto } from "../dtos/employee.dto";
 import { AppError } from "../errors/AppError";
+import { rolIdsFromRelations } from "../utils/roles";
 const SALT_ROUNDS = 10;
 const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
@@ -14,7 +15,7 @@ export class AuthService {
     correoElectronico: string,
     contrasena: string,
     departamentoId: number,
-    rolId: number
+    rolIds: number[]
   ) {
     // 1) Verificar si ya existe
     //const existing = await EmpleadoService.getByEmail(correoElectronico);
@@ -36,12 +37,12 @@ export class AuthService {
       correoElectronico,
       contrasena: hash,
       departamentoId,
-      rolId,
+      rolIds,
       activo: true, // campo obligatorio en el DTO
       // el resto de campos opcionales puedes omitirlos aquí
     };
 
-    // 5) Delegar al servicio (ahí ocurre el connect de departamento y rol)
+    // 5) Delegar al servicio (ahí ocurre el connect de departamento y roles)
     const empleado = await EmpleadoService.createEmpleado(dto);
 
     // 6) (Opcional) Generar token o devolver el empleado
@@ -92,6 +93,8 @@ export class AuthService {
       { expiresIn: "1d" }
     );
 
+    const roles = (empleado as { roles?: Array<{ rolId: number }> }).roles;
+
     // Devolver token y datos esenciales del empleado
     return {
       token,
@@ -102,7 +105,7 @@ export class AuthService {
         apellido: empleado.apellido,
         correoElectronico: empleado.correoElectronico,
         departamentoId: empleado.departamentoId,
-        rolId: empleado.rolId,
+        rolIds: rolIdsFromRelations(roles),
         tipoHorario: empleado.tipoHorario,
         editTime: empleado.editTime,
         activo: empleado.activo,

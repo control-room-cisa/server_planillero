@@ -3,6 +3,7 @@ import { RequestHandler, Response } from "express";
 import { AuthRequest } from "./authMiddleware";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
 
 /**
  * Middleware para autorizar acceso basado en roles
@@ -22,7 +23,7 @@ export const authorizeRoles = (...allowedRoles: Roles[]): RequestHandler => {
       } as ApiResponse<null>);
     }
 
-    if (!allowedRoles.includes(user.rolId as Roles)) {
+    if (!hasAnyRole(user.rolIds, ...allowedRoles)) {
       return res.status(403).json({
         success: false,
         message: "No autorizado. No tienes permisos para realizar esta acción",

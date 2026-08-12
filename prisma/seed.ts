@@ -4,12 +4,15 @@ import { PrismaClient } from "@prisma/client";
 const prisma = new PrismaClient();
 
 async function main() {
-  // 1) Seed Roles
+  // 1) Seed Roles (ids alineados con src/enums/roles.ts)
   const roles = [
     { id: 1, nombre: "Empleado" },
     { id: 2, nombre: "Supervisor" },
     { id: 3, nombre: "Recursos Humanos" },
     { id: 4, nombre: "Contabilidad" },
+    { id: 5, nombre: "Gerencia" },
+    { id: 6, nombre: "Sistemas" },
+    { id: 7, nombre: "Asistente Contabilidad" },
     { id: 8, nombre: "Logística" },
   ] as const;
 

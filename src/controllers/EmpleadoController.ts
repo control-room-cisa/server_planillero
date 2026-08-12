@@ -4,7 +4,6 @@ import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
 import { AccesoContabilidadService } from "../services/AccesoContabilidadService";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
-import { Roles } from "../enums/roles";
 import {
   CreateEmpleadoDto,
   EmployeeDto,
@@ -308,7 +307,7 @@ export const getByCodigoForProrrateo: RequestHandler<
 
     await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
       authReq.user.id,
-      authReq.user.rolId,
+      authReq.user.rolIds,
       empleado.id
     );
 

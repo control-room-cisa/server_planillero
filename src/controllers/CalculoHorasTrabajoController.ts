@@ -284,7 +284,7 @@ export const getProrrateo: RequestHandler<
     const authReq = req as AuthRequest;
     await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
       authReq.user.id,
-      authReq.user.rolId,
+      authReq.user.rolIds,
       targetId
     );
 

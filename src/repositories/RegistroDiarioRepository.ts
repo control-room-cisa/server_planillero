@@ -2,6 +2,7 @@
 import { prisma } from "../config/prisma";
 import type { RegistroDiario, Actividad, Job, Prisma } from "@prisma/client";
 import { Roles } from "../enums/roles";
+import { hasAnyRole, rolIdsFromRelations } from "../utils/roles";
 
 /** DTO reutilizable para cada actividad */
 export type ActividadInput = {
@@ -397,12 +398,15 @@ export class RegistroDiarioRepository {
       where: {
         id: supervisorId,
       },
-      select: { rolId: true },
+      select: { roles: { select: { rolId: true } } },
     });
 
     if (
       !supervisor ||
-      !ROLES_PUEDEN_EDITAR_JOB.includes(supervisor.rolId as Roles)
+      !hasAnyRole(
+        rolIdsFromRelations(supervisor.roles),
+        ...ROLES_PUEDEN_EDITAR_JOB
+      )
     ) {
       throw new Error(
         "No tiene permiso para actualizar jobs de actividades de otros empleados"

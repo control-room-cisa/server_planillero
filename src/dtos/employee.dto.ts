@@ -16,7 +16,7 @@ export interface EmployeeDto {
   empresa?: { nombre: string };
   activo?: boolean;
   cargo?: string;
-  rolId?: number;
+  rolIds?: number[];
   sueldoMensual?: number;
   urlFotoPerfil?: string;
   urlCv?: string;
@@ -71,7 +71,7 @@ export interface EmployeeDetailDto {
   direccion?: string;
   fechaInicioIngreso?: Date;
   editTime?: Date | null;
-  rolId?: number;
+  rolIds?: number[];
   departamentoId?: number;
   tiempoCompensatorioHoras?: number;
   tiempoVacacionesHoras?: number;
@@ -111,7 +111,7 @@ export interface CreateEmpleadoDto {
   contrasena?: string;
   urlFotoPerfil?: string | null;
   urlCv?: string | null;
-  rolId: number;
+  rolIds: number[];
   departamentoId: number;
 }
 
@@ -150,7 +150,7 @@ export interface UpdateEmpleadoDto {
   contrasena?: string;
   urlFotoPerfil?: string | null;
   urlCv?: string | null;
-  rolId?: number;
+  rolIds?: number[];
   departamentoId?: number;
 }
 

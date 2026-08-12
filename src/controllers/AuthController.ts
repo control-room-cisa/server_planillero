@@ -24,7 +24,7 @@ export class AuthController {
         correoElectronico,
         contrasena,
         departamentoId,
-        Roles.EMPLEADO // Establecer rol de Empleado
+        [Roles.EMPLEADO]
       );
 
       res.status(201).json({

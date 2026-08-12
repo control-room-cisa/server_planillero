@@ -7,6 +7,7 @@ import { createJobSchema, updateJobSchema } from "../validators/job.validator";
 import { z } from "zod";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
 
 export const listJobs: RequestHandler<
   {}, // params
@@ -48,8 +49,11 @@ export const listJobs: RequestHandler<
     // Si el usuario NO es SUPERVISOR_CONTABILIDAD ni RRHH, usar su propio empleadoId
     // (SUPERVISOR_CONTABILIDAD y RRHH pueden ver todos los jobs)
     else if (
-      user.rolId !== Roles.SUPERVISOR_CONTABILIDAD &&
-      user.rolId !== Roles.RRHH
+      !hasAnyRole(
+        user.rolIds,
+        Roles.SUPERVISOR_CONTABILIDAD,
+        Roles.RRHH
+      )
     ) {
       empleadoIdParaFiltro = user.id;
     }

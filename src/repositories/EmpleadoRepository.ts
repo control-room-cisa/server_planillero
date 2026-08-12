@@ -2,19 +2,27 @@
 import { prisma } from "../config/prisma";
 import type { Empleado, Prisma } from "@prisma/client";
 import { CreateEmpleadoDto } from "../dtos/employee.dto";
+import { normalizeRolIdsList } from "../utils/roles";
+
+const rolesInclude = {
+  roles: { select: { rolId: true } },
+} as const;
+
+const departamentoInclude = {
+  departamento: {
+    include: {
+      empresa: { select: { nombre: true, codigo: true } },
+    },
+  },
+  ...rolesInclude,
+} as const;
 
 export class EmpleadoRepository {
   /** Busca un empleado por su código (ahora marcado @unique) */
   static async findById(id: number): Promise<Empleado | null> {
     return prisma.empleado.findFirst({
       where: { id },
-      include: {
-        departamento: {
-          include: {
-            empresa: { select: { nombre: true, codigo: true } },
-          },
-        },
-      },
+      include: departamentoInclude,
     });
   }
 
@@ -30,6 +38,7 @@ export class EmpleadoRepository {
             empresa: { select: { id: true, nombre: true } },
           },
         },
+        ...rolesInclude,
       },
     });
   }
@@ -54,7 +63,7 @@ export class EmpleadoRepository {
   static async findByUsername(nombreUsuario: string): Promise<Empleado | null> {
     // Normalizar a minúsculas para la búsqueda
     const usernameLower = nombreUsuario.toLowerCase().trim();
-    
+
     // Buscar todos los empleados activos y filtrar por comparación case-insensitive
     // Nota: Prisma no soporta directamente búsqueda case-insensitive en MySQL sin raw queries
     // Por eficiencia, buscamos todos y filtramos en memoria (alternativa: usar raw query con LOWER())
@@ -63,8 +72,9 @@ export class EmpleadoRepository {
         deletedAt: null,
         nombreUsuario: { not: null },
       },
+      include: rolesInclude,
     });
-    
+
     // Comparación case-insensitive
     return (
       empleados.find(
@@ -82,6 +92,7 @@ export class EmpleadoRepository {
 
     const byCodigo = await prisma.empleado.findFirst({
       where: { codigo: trimmed, deletedAt: null },
+      include: rolesInclude,
     });
     if (byCodigo) return byCodigo;
 
@@ -94,6 +105,7 @@ export class EmpleadoRepository {
           { nombreUsuario: trimmed },
         ],
       },
+      include: rolesInclude,
     });
     if (direct) return direct;
 
@@ -102,15 +114,16 @@ export class EmpleadoRepository {
 
   /** Crea un nuevo empleado */
   static async createEmpleado(data: CreateEmpleadoDto): Promise<Empleado> {
-    const { rolId, departamentoId, ...rest } = data;
+    const { rolIds, departamentoId, ...rest } = data;
+    const ids = normalizeRolIdsList(rolIds);
 
     return prisma.empleado.create({
       data: {
         ...rest,
-        rol: { connect: { id: rolId } },
+        roles: { create: ids.map((rolId) => ({ rolId })) },
         departamento: { connect: { id: departamentoId } },
       },
-      include: { departamento: true },
+      include: { departamento: true, ...rolesInclude },
     });
   }
 
@@ -121,9 +134,21 @@ export class EmpleadoRepository {
     return prisma.empleado.update({
       where: { id },
       data,
-      include: { departamento: true },
+      include: { departamento: true, ...rolesInclude },
     });
   }
+
+  /** Reemplaza los roles del empleado. */
+  static async setRoles(empleadoId: number, rolIds: number[]): Promise<void> {
+    const ids = normalizeRolIdsList(rolIds);
+    await prisma.$transaction([
+      prisma.empleadoRol.deleteMany({ where: { empleadoId } }),
+      prisma.empleadoRol.createMany({
+        data: ids.map((rolId) => ({ empleadoId, rolId })),
+      }),
+    ]);
+  }
+
   static async findLastCodigo(): Promise<{ codigo: string | null } | null> {
     return prisma.empleado.findFirst({
       where: {
@@ -140,39 +165,21 @@ export class EmpleadoRepository {
   static async findByDepartment(departamentoId: number): Promise<Empleado[]> {
     return prisma.empleado.findMany({
       where: { departamentoId, deletedAt: null },
-      include: {
-        departamento: {
-          include: {
-            empresa: { select: { nombre: true, codigo: true } },
-          },
-        },
-      },
+      include: departamentoInclude,
     });
   }
 
   static async findByCompany(empresaId: number): Promise<Empleado[]> {
     return prisma.empleado.findMany({
       where: { deletedAt: null, departamento: { empresaId } },
-      include: {
-        departamento: {
-          include: {
-            empresa: { select: { nombre: true, codigo: true } },
-          },
-        },
-      },
+      include: departamentoInclude,
     });
   }
 
   static async findAllWithDepartment(): Promise<Empleado[]> {
     return prisma.empleado.findMany({
       where: { deletedAt: null },
-      include: {
-        departamento: {
-          include: {
-            empresa: { select: { nombre: true, codigo: true } },
-          },
-        },
-      },
+      include: departamentoInclude,
     });
   }
 
@@ -184,13 +191,7 @@ export class EmpleadoRepository {
         id: { in: ids },
         deletedAt: null,
       },
-      include: {
-        departamento: {
-          include: {
-            empresa: { select: { nombre: true, codigo: true } },
-          },
-        },
-      },
+      include: departamentoInclude,
     });
   }
 

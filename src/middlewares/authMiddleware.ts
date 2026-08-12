@@ -3,6 +3,7 @@ import { RequestHandler, Request, Response } from "express";
 import jwt from "jsonwebtoken";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { prisma } from "../config/prisma";
+import { rolIdsFromRelations } from "../utils/roles";
 
 interface JwtPayload {
   id: number;
@@ -18,7 +19,7 @@ export interface AuthRequest<B = any> extends Request<any, any, B> {
     apellido: string | null;
     correoElectronico: string | null;
     departamentoId: number;
-    rolId: number;
+    rolIds: number[];
   };
 }
 
@@ -52,7 +53,7 @@ export const authenticateJWT: RequestHandler = async (req, res, next) => {
         apellido: true,
         correoElectronico: true,
         departamentoId: true,
-        rolId: true,
+        roles: { select: { rolId: true } },
       },
     });
     if (!empleado) {
@@ -63,8 +64,11 @@ export const authenticateJWT: RequestHandler = async (req, res, next) => {
       } as ApiResponse<null>);
     }
 
-    // 2) Asignamos req.user con todos los datos necesarios
-    (req as AuthRequest).user = empleado;
+    const { roles, ...rest } = empleado;
+    (req as AuthRequest).user = {
+      ...rest,
+      rolIds: rolIdsFromRelations(roles),
+    };
 
     next();
   } catch {

@@ -26,7 +26,7 @@ export const guardarProrrateo: RequestHandler = async (req, res, next) => {
     const result = await ProrrateoService.guardarDesdeNomina(
       parsed.data.nominaId,
       authReq.user.id,
-      authReq.user.rolId,
+      authReq.user.rolIds,
       parsed.data.asignacionesCompensatoriasTomadas ?? []
     );
 
@@ -60,7 +60,7 @@ export const estadoProrrateoPorNomina: RequestHandler = async (
     const data = await ProrrateoService.existePorNomina(
       nominaId,
       authReq.user.id,
-      authReq.user.rolId
+      authReq.user.rolIds
     );
     return res.json({
       success: true,

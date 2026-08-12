@@ -61,7 +61,6 @@ describe("FlotaUsuarioSyncService — POST al webhook", () => {
       nombreUsuario: "jperez",
       correoElectronico: "juan@test.com",
       departamentoId: 1,
-      rolId: 1,
       activo: true,
       departamento: {
         id: 1,

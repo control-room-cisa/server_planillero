@@ -16,7 +16,6 @@ function makeEmpleado(
     correoElectronico: "Juan.Perez@Empresa.COM",
     contrasena: "$2b$10$abcdefghijklmnopqrstuv",
     departamentoId: 1,
-    rolId: 1,
     activo: true,
     departamento: {
       id: 1,
