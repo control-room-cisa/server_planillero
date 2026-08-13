@@ -86,6 +86,12 @@ export class RegistroDiarioRepository {
             act.esExtra === null ||
             act.esExtra === undefined);
 
+        if (typeof act.descripcion === "string" && act.descripcion.length > 250) {
+          throw new Error(
+            "La descripción de la actividad no puede exceder 250 caracteres"
+          );
+        }
+
         // Si no es compensatorio en hora normal, jobId es requerido
         if (
           !esCompensatorioHoraNormal &&
@@ -472,6 +478,10 @@ export class RegistroDiarioRepository {
 
     if (!nuevoJob || !nuevoJob.activo) {
       throw new Error("Job no encontrado o no está activo");
+    }
+
+    if (dto.descripcion !== undefined && dto.descripcion.length > 250) {
+      throw new Error("La descripción no puede exceder 250 caracteres");
     }
 
     // Actualizar job, descripción y className de la actividad

@@ -273,6 +273,13 @@ export const updateJobBySupervisor: RequestHandler<
         data: null,
       });
     }
+    if (typeof descripcion === "string" && descripcion.length > 250) {
+      return res.status(400).json({
+        success: false,
+        message: "El campo descripcion no puede exceder 250 caracteres",
+        data: null,
+      });
+    }
     if (
       className !== undefined &&
       className !== null &&
