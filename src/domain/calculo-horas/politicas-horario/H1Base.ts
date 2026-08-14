@@ -15,12 +15,21 @@ import {
   jobMapKey,
   prorrateoMapToHorasPorJob,
   upsertProrrateoJob,
+  aplicarDiasLaboradosSinHorasAJobFeriados,
+  CODIGO_JOB_FERIADOS,
+  NOMBRE_JOB_FERIADOS,
+  horasFeriadoParaProrrateo,
   type ProrrateoJobAccum,
 } from "./prorrateo-class";
 import { JobRepository } from "../../../repositories/JobRepository";
 import { SegmentadorTiempo } from "../segmentador-tiempo";
 import { addDaysYmd } from "../../../utils/dateTime";
 import type { ClasificacionIncapacidadDia } from "./incapacidad-secuencias";
+import {
+  horasE02Contables,
+  minutosLaborablesDesdeRegistro,
+  reinterpretE02VacacionesMin,
+} from "./e02Vacaciones";
 
 /**
  * Clase base abstracta para políticas H1 y sus subtipos (H1.1, H1.2, H1.3)
@@ -239,6 +248,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
   private static DayResultType: {
     buckets: Buckets;
     addVacacionesMin: number;
+    /** Minutos E02 ocupados en el timesheet (antes de reinterpretar 8h/4h). */
+    addVacacionesOcupacionMin: number;
     addPermisoCSMin: number;
     addPermisoSSMin: number;
     addInasistenciasMin: number;
@@ -381,6 +392,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       return {
         buckets: b,
         addVacacionesMin: 0,
+        addVacacionesOcupacionMin: 0,
         addPermisoCSMin: 0,
         addPermisoSSMin: 0,
         addInasistenciasMin: 0,
@@ -526,23 +538,25 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       /* ignore */
     }
 
-    // Regla: si la totalidad de horas normales del día son de vacaciones (E02),
-    // se limita a 8h (jornada legal ordinaria). El exceso se transfiere a libre
-    // para mantener el cuadre de 24h.
-    const totalVacActivMin = b.vacacionesMin + addVacacionesMin;
-    if (totalVacActivMin > 0 && b.normalMin > 0 && totalVacActivMin >= b.normalMin) {
-      const capMin = Math.min(b.normalMin, 8 * 60);
-      const excessMin = b.normalMin - capMin;
-      if (excessMin > 0) {
-        b.normalMin = capMin;
-        b.libreMin += excessMin;
-      }
-      addVacacionesMin = Math.max(0, capMin - b.vacacionesMin);
-    }
+    // E02: ocupación del timesheet (9h, 4.5h, 12h…) vs conteo de nómina (8h o 4h).
+    // El resto de horas del día sigue en jobs normales; no se recorta el bucket NORMAL.
+    const ocupacionVacMin = b.vacacionesMin + addVacacionesMin;
+    const minutosLaborables = minutosLaborablesDesdeRegistro({
+      horaEntrada: registroDelDia?.horaEntrada,
+      horaSalida: registroDelDia?.horaSalida,
+      restarAlmuerzoMin: registroDelDia?.esHoraCorrida ? 0 : 60,
+    });
+    const vacacionesContablesMin = reinterpretE02VacacionesMin(
+      ocupacionVacMin,
+      minutosLaborables
+    );
+    b.vacacionesMin = 0;
+    addVacacionesMin = vacacionesContablesMin;
 
     return {
       buckets: b,
       addVacacionesMin,
+      addVacacionesOcupacionMin: ocupacionVacMin,
       addPermisoCSMin,
       addPermisoSSMin,
       addInasistenciasMin,
@@ -764,6 +778,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     };
 
     let addVacacionesMin = 0;
+    let addVacacionesOcupacionMin = 0;
     let addPermisoCSMin = 0;
     let addPermisoSSMin = 0;
     let addInasistenciasMin = 0;
@@ -791,6 +806,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       b.compExtrasMin += resultado.buckets.compExtrasMin;
 
       addVacacionesMin += resultado.addVacacionesMin;
+      addVacacionesOcupacionMin += resultado.addVacacionesOcupacionMin;
       addPermisoCSMin += resultado.addPermisoCSMin;
       addPermisoSSMin += resultado.addPermisoSSMin;
       addInasistenciasMin += resultado.addInasistenciasMin;
@@ -829,7 +845,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
     // Mapear a interfaz (horas)
     const totalEspecialesAddMin =
-      addVacacionesMin +
+      addVacacionesOcupacionMin +
       addPermisoCSMin +
       addPermisoSSMin +
       addCompensatorioMin;
@@ -1035,14 +1051,16 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
     racha.bloquearMixta = esDiaLibreContrato;
 
-    const horasFeriadoDia = Number(registroDiario?.horasFeriado ?? 0);
+    const horasFeriadoDia = horasFeriadoParaProrrateo(
+      Number(registroDiario?.horasFeriado ?? 0)
+    );
     if (horasFeriadoDia > 0) {
       upsertProrrateoJob(
         maps.normal,
-        jobMapKey(baseKey, "00"),
+        jobMapKey(baseKey, CODIGO_JOB_FERIADOS),
         baseKey,
-        "00",
-        "Feriados",
+        CODIGO_JOB_FERIADOS,
+        NOMBRE_JOB_FERIADOS,
         "null",
         horasFeriadoDia
       );
@@ -1193,7 +1211,14 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
 
       if (!act?.esExtra) {
         if (act?.horaInicio && act?.horaFin) continue;
-        const horas = Number(act?.duracionHoras ?? 0);
+        let horas = Number(act?.duracionHoras ?? 0);
+        if (codigo.toUpperCase() === "E02") {
+          horas = horasE02Contables(
+            horas,
+            registroDiario,
+            registroDiario?.esHoraCorrida ? 0 : 60
+          );
+        }
         if (horas > 0) {
           upsertProrrateoJob(
             maps.normal,
@@ -1317,6 +1342,13 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       }
       currentDate = PoliticaH1Base.addDays(currentDate, 1);
     }
+
+    aplicarDiasLaboradosSinHorasAJobFeriados(
+      horasPorJobNormal,
+      conteoHoras.conteoDias?.diasLaborados ?? 0,
+      conteoHoras.conteoDias?.vacaciones ?? 0,
+      baseKey
+    );
 
     const resultado: ConteoHorasProrrateo = {
       fechaInicio,

@@ -12,9 +12,18 @@ import {
   jobMapKey,
   prorrateoMapToHorasPorJob,
   upsertProrrateoJob,
+  aplicarDiasLaboradosSinHorasAJobFeriados,
   type ProrrateoJobAccum,
+  CODIGO_JOB_FERIADOS,
+  NOMBRE_JOB_FERIADOS,
+  horasFeriadoParaProrrateo,
 } from "./prorrateo-class";
 import { addDaysYmd } from "../../../utils/dateTime";
+import {
+  horasE02Contables,
+  minutosLaborablesDesdeRegistro,
+  reinterpretE02VacacionesMin,
+} from "./e02Vacaciones";
 
 /**
  * Política H2Base — Base para turnos rotativos de 12h, sin almuerzo.
@@ -435,6 +444,17 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         /* ignore */
       }
 
+      const minutosLaborables = minutosLaborablesDesdeRegistro({
+        horaEntrada: reg?.horaEntrada,
+        horaSalida: reg?.horaSalida,
+        restarAlmuerzoMin:
+          this.permiteAlmuerzo() && !reg?.esHoraCorrida ? 60 : 0,
+      });
+      addVacacionesMinDia = reinterpretE02VacacionesMin(
+        addVacacionesMinDia,
+        minutosLaborables
+      );
+
       // Acumular totales
       normalMin += normalMinDia;
       p25Min += extraMinDia; // todas extras a p25
@@ -622,6 +642,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
     const horasPorJobP25 = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompTomadas = new Map<number, ProrrateoJobAccum>();
     const horasPorJobCompAcumuladas = new Map<number, ProrrateoJobAccum>();
+    let totalHorasFeriado = 0;
 
     // Recorrer cada día del período y procesar actividades
     let currentDate = fechaInicio;
@@ -636,6 +657,22 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
         if (!registroDiario) {
           currentDate = PoliticaH2Base.addDays(currentDate, 1);
           continue;
+        }
+
+        const horasFeriadoDia = horasFeriadoParaProrrateo(
+          Number((registroDiario as any)?.horasFeriado ?? 0)
+        );
+        if (horasFeriadoDia > 0) {
+          totalHorasFeriado += horasFeriadoDia;
+          upsertProrrateoJob(
+            horasPorJobNormal,
+            jobMapKey(0, CODIGO_JOB_FERIADOS),
+            0,
+            CODIGO_JOB_FERIADOS,
+            NOMBRE_JOB_FERIADOS,
+            "null",
+            horasFeriadoDia
+          );
         }
 
         // Procesar actividades directamente (sin depender del segmentador para jobId)
@@ -685,7 +722,16 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           const mapKey = jobMapKey(id, codigo || String(id));
 
           if (!act?.esExtra) {
-            const horas = Number(act?.duracionHoras ?? 0);
+            let horas = Number(act?.duracionHoras ?? 0);
+            if (String(codigo).toUpperCase() === "E02") {
+              horas = horasE02Contables(
+                horas,
+                registroDiario,
+                this.permiteAlmuerzo() && !(registroDiario as any)?.esHoraCorrida
+                  ? 60
+                  : 0
+              );
+            }
             if (horas > 0) {
               upsertProrrateoJob(
                 horasPorJobNormal,
@@ -736,6 +782,12 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
       currentDate = PoliticaH2Base.addDays(currentDate, 1);
     }
 
+    aplicarDiasLaboradosSinHorasAJobFeriados(
+      horasPorJobNormal,
+      conteoHoras.conteoDias?.diasLaborados ?? 0,
+      conteoHoras.conteoDias?.vacaciones ?? 0
+    );
+
     const resultado: ConteoHorasProrrateo = {
       fechaInicio,
       fechaFin,
@@ -761,7 +813,7 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           horasPorJobCompAcumuladas,
           resolveNombreClass
         ),
-        horasFeriado: 0,
+        horasFeriado: totalHorasFeriado,
         deduccionesISR: 0,
         deduccionesRAP: 0,
         deduccionesAlimentacion: 0,

@@ -12,8 +12,12 @@ import {
 import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
 import { AccesoContabilidadService } from "./AccesoContabilidadService";
 import type { AsignacionCompensatoriaTomadaDto } from "../validators/prorrateo.validator";
+import {
+  roundNomina2,
+  calcMontoFilaProrrateo,
+} from "../domain/calculo-horas/nominaMontos";
 
-const PERIODO_NOMINA = 15;
+const round2 = roundNomina2;
 
 function toFechaStr(fecha: Date | string): string {
   if (fecha instanceof Date) return fecha.toISOString().split("T")[0];
@@ -21,36 +25,8 @@ function toFechaStr(fecha: Date | string): string {
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
 function isE02(codigo?: string | null): boolean {
   return (codigo ?? "").trim().toUpperCase() === "E02";
-}
-
-function montoPorDiasQuincena(
-  salarioQuincenal: number,
-  dias: number,
-  periodoNomina: number
-): number {
-  return round2(
-    (salarioQuincenal * dias) / (periodoNomina > 0 ? periodoNomina : 15)
-  );
-}
-
-function calcMontoFila(
-  codigoJob: string | null | undefined,
-  horas: number,
-  totalMonto: number,
-  horasProrrateables: number,
-  salarioQuincenal: number
-): number {
-  if (isE02(codigoJob)) {
-    return montoPorDiasQuincena(salarioQuincenal, horas / 8, PERIODO_NOMINA);
-  }
-  if (totalMonto <= 0 || horasProrrateables <= 0) return 0;
-  return (horas / horasProrrateables) * totalMonto;
 }
 
 function normalizeJobId(jobId: number | null | undefined): number | null {
@@ -88,7 +64,7 @@ function expandJobsToRows(
       return round2(horas * montoPorHora);
     }
     return round2(
-      calcMontoFila(
+      calcMontoFilaProrrateo(
         codigoJob,
         horas,
         totalMontoBanda,

@@ -665,7 +665,7 @@ const expectedByDate: Record<string, any> = {
         jobId: 0,
         codigoJob: "00",
         nombreJob: "Feriados",
-        cantidadHoras: 9,
+        cantidadHoras: 8,
       },
     ],
     p25: [],
@@ -673,7 +673,7 @@ const expectedByDate: Record<string, any> = {
     p75: [],
     p100: [{ jobId: 0, codigoJob: "100", nombreJob: "100", cantidadHoras: 4 }],
     totalHorasLaborables: 0,
-    horasFeriado: 9,
+    horasFeriado: 8,
   },
   "2025-09-20": {
     normal: [
@@ -681,7 +681,7 @@ const expectedByDate: Record<string, any> = {
         jobId: 0,
         codigoJob: "00",
         nombreJob: "Feriados",
-        cantidadHoras: 9,
+        cantidadHoras: 8,
       },
     ],
     p25: [],
@@ -689,7 +689,7 @@ const expectedByDate: Record<string, any> = {
     p75: [],
     p100: [],
     totalHorasLaborables: 0,
-    horasFeriado: 9,
+    horasFeriado: 8,
   },
 };
 
@@ -1353,5 +1353,77 @@ describe("PoliticaH1_1 - Prorrateo: hora corrida 07–19 + extra 19–22:30", ()
       totalHorasLaborables: 12,
       horasFeriado: 0,
     });
+  });
+});
+
+describe("PoliticaH1_1 - Prorrateo: días laborados sin horas van a job 00", () => {
+  const FECHA = "2026-02-02"; // lunes 07–17
+
+  it("solo E02 jornada completa: 1d vacaciones, 14d laborados → 112h en job 00 (Feriados)", async () => {
+    const p = new H1Test();
+    p.seedRegistro(FECHA, {
+      fecha: FECHA,
+      horaEntrada: makeDateUTC(FECHA, "13:00"),
+      horaSalida: makeDateUTC(FECHA, "23:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Vacaciones jornada completa",
+          esExtra: false,
+          esCompensatorio: false,
+          job: { codigo: "E02", nombre: "Vacaciones" },
+          duracionHoras: 9,
+        },
+      ],
+    });
+
+    const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    const normal = res.cantidadHoras.normal ?? [];
+    const e02 = normal.find((j) => j.codigoJob === "E02");
+    const feriados = normal.find((j) => j.codigoJob === "00");
+
+    expect(e02?.cantidadHoras).toBe(8);
+    expect(res.cantidadHoras.vacacionesHoras).toBe(8);
+    expect(feriados?.nombreJob).toBe("Feriados");
+    expect(feriados?.cantidadHoras).toBe(14 * 8);
+  });
+
+  it("E02 media + job normal: hay horas prorrateables, no se agrega job 00", async () => {
+    const p = new H1Test();
+    p.seedRegistro(FECHA, {
+      fecha: FECHA,
+      horaEntrada: makeDateUTC(FECHA, "13:00"),
+      horaSalida: makeDateUTC(FECHA, "23:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Vacaciones media",
+          esExtra: false,
+          job: { codigo: "E02", nombre: "Vacaciones" },
+          duracionHoras: 4.5,
+        },
+        {
+          descripcion: "Job 100",
+          esExtra: false,
+          job: { codigo: "100", nombre: "100" },
+          duracionHoras: 4.5,
+        },
+      ],
+    });
+
+    const res = await p.getProrrateoHorasPorJobByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    const normal = res.cantidadHoras.normal ?? [];
+    expect(normal.some((j) => j.codigoJob === "00")).toBe(false);
+    expect(normal.find((j) => j.codigoJob === "100")?.cantidadHoras).toBe(4.5);
   });
 });

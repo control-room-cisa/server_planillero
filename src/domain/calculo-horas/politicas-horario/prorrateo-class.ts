@@ -158,6 +158,55 @@ export function prorrateoMapToHorasPorJob(
     .filter((item) => item.cantidadHoras > 0);
 }
 
+export const CODIGO_JOB_FERIADOS = "00";
+export const NOMBRE_JOB_FERIADOS = "Feriados";
+/** Un día feriado siempre prorratea 8h legales en job 00, da igual la jornada (9h, 12h…). */
+export const HORAS_DIA_FERIADO = 8;
+
+export function horasFeriadoParaProrrateo(horasFeriadoRegistro: number): number {
+  if (!Number.isFinite(horasFeriadoRegistro) || horasFeriadoRegistro <= 0) {
+    return 0;
+  }
+  return HORAS_DIA_FERIADO;
+}
+
+export function isCodigoJobE02(codigo?: string | null): boolean {
+  return (codigo ?? "").trim().toUpperCase() === "E02";
+}
+
+/**
+ * Si hay vacaciones en el período, quedan días laborados en la base 15
+ * y no hay horas prorrateables (solo E02), esas horas legales (días × 8)
+ * se cargan al mismo job que los feriados (`00`).
+ */
+export function aplicarDiasLaboradosSinHorasAJobFeriados(
+  map: Map<number, ProrrateoJobAccum>,
+  diasLaborados: number,
+  diasVacaciones = 0,
+  baseKey = 0
+): void {
+  if (!Number.isFinite(diasLaborados) || diasLaborados <= 0) return;
+  if (!Number.isFinite(diasVacaciones) || diasVacaciones <= 0) return;
+
+  const horasProrrateables = Array.from(map.values()).reduce((acc, j) => {
+    if (isCodigoJobE02(j.codigoJob)) return acc;
+    return acc + Number(j.horas ?? 0);
+  }, 0);
+
+  if (horasProrrateables > 0.001) return;
+
+  const horas = Math.round(diasLaborados * 8 * 100) / 100;
+  upsertProrrateoJob(
+    map,
+    jobMapKey(baseKey, CODIGO_JOB_FERIADOS),
+    baseKey,
+    CODIGO_JOB_FERIADOS,
+    NOMBRE_JOB_FERIADOS,
+    "null",
+    horas
+  );
+}
+
 export async function createClassNameResolver(): Promise<
   (classValue: number | null) => string | null
 > {

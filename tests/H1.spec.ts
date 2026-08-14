@@ -1055,6 +1055,7 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p100: 0,
       vacaciones: 8,
     });
+    expect(res.conteoDias?.vacaciones).toBe(1);
   });
 
   // -------------------- Calculo vacaciones 2 (03/02/2026, martes) --------------------
@@ -1080,6 +1081,53 @@ describe("PoliticaH1_1 - Casos 11–18/09/2025 (con logs y libre)", () => {
       p100: 0,
       vacaciones: 6,
     });
+  });
+
+  // -------------------- Calculo vacaciones 3 (04/02/2026, miércoles) --------------------
+  // Miércoles 07:00–17:00 (9h laborables), E02 media jornada 4.5h + job 4.5h
+  // Nómina: 4h vacaciones (0.5d). Las 4.5h del job siguen en normal.
+  it("Calculo vacaciones 3: miércoles 07–17 con E02 media (4.5h) + job 4.5h ⇒ 4h vacaciones, 4.5h normal", async () => {
+    const fecha = "2026-02-04";
+    const p = new H1Test();
+    p.seedRegistro(fecha, {
+      fecha,
+      horaEntrada: makeDateUTC(fecha, "13:00"),
+      horaSalida: makeDateUTC(fecha, "23:00"),
+      esHoraCorrida: false,
+      esDiaLibre: false,
+      actividades: [
+        {
+          descripcion: "Vacaciones media jornada",
+          esExtra: false,
+          esCompensatorio: false,
+          job: { codigo: "E02" },
+          duracionHoras: 4.5,
+        },
+        {
+          descripcion: "Job 100 4.5h",
+          esExtra: false,
+          esCompensatorio: false,
+          job: { codigo: "100" },
+          duracionHoras: 4.5,
+        },
+      ],
+    });
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      fecha,
+      fecha,
+      "1",
+    );
+    logAndAssert(fecha, res.cantidadHoras as HorasExt, {
+      almuerzo: 1,
+      normal: 4.5,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      vacaciones: 4,
+    });
+    expect(res.conteoDias?.vacaciones).toBe(0.5);
   });
 });
 
@@ -1142,5 +1190,93 @@ describe("PoliticaH1_1 - Hora corrida 07–19 + extra 19–22:30", () => {
       p75: 0.5,
       p100: 0,
     });
+  });
+});
+
+describe("PoliticaH1_1 - Vacaciones en día de 12h (hora corrida 07–19)", () => {
+  const FECHA = "2026-03-11";
+  const FECHA_SIG = "2026-03-12";
+
+  function seedDia12h(p: H1Test, actividades: any[]) {
+    p.seedHorario(FECHA, {
+      inicio: "07:00",
+      fin: "19:00",
+      incluyeAlmuerzo: false,
+      cantidadHorasLaborables: 12,
+      esDiaLibre: false,
+    });
+    p.seedRegistro(FECHA, {
+      fecha: FECHA,
+      horaEntrada: makeDateUTC(FECHA, "13:00"),
+      horaSalida: makeDateUTC(FECHA_SIG, "01:00"),
+      esHoraCorrida: true,
+      esDiaLibre: false,
+      actividades,
+    });
+  }
+
+  it("E02 jornada completa 12h ⇒ 8h vacaciones (1.0d), 0h normal", async () => {
+    const p = new H1Test();
+    seedDia12h(p, [
+      {
+        descripcion: "Vacaciones jornada completa",
+        esExtra: false,
+        esCompensatorio: false,
+        job: { codigo: "E02" },
+        duracionHoras: 12,
+      },
+    ]);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    logAndAssert(FECHA, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 0,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      vacaciones: 8,
+    });
+    expect(res.conteoDias?.vacaciones).toBe(1);
+  });
+
+  it("E02 media 6h + job 6h ⇒ 4h vacaciones (0.5d), 6h normal", async () => {
+    const p = new H1Test();
+    seedDia12h(p, [
+      {
+        descripcion: "Vacaciones media jornada",
+        esExtra: false,
+        esCompensatorio: false,
+        job: { codigo: "E02" },
+        duracionHoras: 6,
+      },
+      {
+        descripcion: "Job 100 6h",
+        esExtra: false,
+        esCompensatorio: false,
+        job: { codigo: "100" },
+        duracionHoras: 6,
+      },
+    ]);
+
+    const res = await p.getConteoHorasTrabajajadasByDateAndEmpleado(
+      FECHA,
+      FECHA,
+      "1",
+    );
+    logAndAssert(FECHA, res.cantidadHoras as HorasExt, {
+      almuerzo: 0,
+      normal: 6,
+      p25: 0,
+      p50: 0,
+      p75: 0,
+      p100: 0,
+      vacaciones: 4,
+    });
+    expect(res.conteoDias?.vacaciones).toBe(0.5);
   });
 });

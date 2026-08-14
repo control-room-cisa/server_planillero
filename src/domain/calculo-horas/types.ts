@@ -68,7 +68,7 @@ export interface ConteoHorasTrabajadas {
   conteoDias?: {
     totalPeriodo: number; // siempre 15
     diasLaborados: number;
-    vacaciones: number; // E02 horas / 8
+    vacaciones: number; // E02: 8h (1d) o 4h (0.5d) si es jornada completa/media; si no, horas / 8
     permisoConSueldo: number; // E03 horas / 8
     permisoSinSueldo: number; // E04 horas / 8
     inasistencias: number; // E05 horas / 8
