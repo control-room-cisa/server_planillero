@@ -321,6 +321,75 @@ export const leerNominasResumenPorEmpleado: RequestHandler<
   }
 };
 
+export const descargarDetalleNomina: RequestHandler<
+  { id: string },
+  Buffer
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "id inválido",
+        data: null,
+      } as any);
+    }
+
+    const { buffer, filename } =
+      await NominaService.generarDetalleNominaXlsx(id);
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
+export const descargarTablaDetallesNominas: RequestHandler<
+  {},
+  Buffer,
+  {},
+  { empresaId?: string; codigoNomina?: string }
+> = async (req, res, next) => {
+  try {
+    const empresaId = req.query.empresaId
+      ? Number(req.query.empresaId)
+      : undefined;
+    const codigoNomina = req.query.codigoNomina;
+
+    if (!empresaId || !Number.isFinite(empresaId) || !codigoNomina) {
+      return res.status(400).json({
+        success: false,
+        message: "empresaId y codigoNomina son requeridos",
+        data: null,
+      } as any);
+    }
+
+    const { buffer, filename } =
+      await NominaService.generarTablaDetallesNominasXlsx(
+        empresaId,
+        codigoNomina
+      );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename}"`
+    );
+    return res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
+};
+
 export const descargarPlantillaPago: RequestHandler<
   {},
   Buffer,

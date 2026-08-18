@@ -56,7 +56,7 @@ export const crearNominaSchema = z.object({
     .optional()
     .nullable(),
 
-  /** Desglose de horas acumuladas por job a aplicar al banco. Snapshot inmutable tras crear. */
+  /** Desglose de horas acumuladas por job a aplicar al banco. */
   bancoCompensatoriasAplicadas: z
     .array(
       z.object({
@@ -158,14 +158,14 @@ export type CrearNominaDto = z.infer<typeof crearNominaSchema>;
 
 /**
  * En actualización:
- * - horasCompensatorias y bancoCompensatoriasAplicadas son inmutables (fijas desde la creación).
- * - empleadoId no puede cambiarse (cada nómina pertenece a un solo empleado).
+ * - Se archiva la nómina anterior y se crea una nueva (misma transacción).
+ * - empleadoId no puede cambiarse.
+ * - Vacaciones, banco de acumuladas y horas compensatorias (neto) sí se pueden
+ *   reenviar; si no vienen, se copian de la archivada.
  */
 export const actualizarNominaSchema = crearNominaSchema
   .partial()
   .omit({
-    horasCompensatorias: true,
-    bancoCompensatoriasAplicadas: true,
     empleadoId: true,
   });
 export type ActualizarNominaDto = z.infer<typeof actualizarNominaSchema>;

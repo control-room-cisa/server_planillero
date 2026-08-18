@@ -8,6 +8,8 @@ import {
   leerNominasResumenPorEmpleado,
   leerNominaPorId,
   eliminarNomina,
+  descargarDetalleNomina,
+  descargarTablaDetallesNominas,
   descargarPlantillaPago,
   pagarPlanilla,
 } from "../controllers/NominaController";
@@ -75,6 +77,13 @@ router.get("/", puedeLeerNominas, leerNominas);
 // GET /api/nominas/resumen?empleadoId=... (lectura)
 router.get("/resumen", puedeLeerNominas, leerNominasResumenPorEmpleado);
 
+// GET /api/nominas/detalle-tabla?empresaId=&codigoNomina=
+router.get(
+  "/detalle-tabla",
+  puedeLeerNominas,
+  descargarTablaDetallesNominas
+);
+
 // GET /api/nominas/plantilla-pago?empresaId=&codigoNomina=
 router.get(
   "/plantilla-pago",
@@ -84,6 +93,9 @@ router.get(
 
 // POST /api/nominas/pagar-planilla
 router.post("/pagar-planilla", soloSupervisorContabilidad, pagarPlanilla);
+
+// GET /api/nominas/:id/detalle-excel (lectura)
+router.get("/:id/detalle-excel", puedeLeerNominas, descargarDetalleNomina);
 
 // GET /api/nominas/:id (lectura)
 router.get("/:id", puedeLeerNominas, leerNominaPorId);
