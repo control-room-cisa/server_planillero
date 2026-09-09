@@ -8,23 +8,15 @@ import { HorarioTrabajo } from "../types";
  * - Mar–Jue: 07:00–17:00 (9h, incluye almuerzo) - corresponde a Lun–Mié de H1_1
  * - Vie:     07:00–16:00 (8h, incluye almuerzo) - corresponde a Jue de H1_1
  * - Sáb:     07:00–17:00 (9h, incluye almuerzo) - corresponde a Vie de H1_1
- * - Lun:     07:00–07:00 (0h, sin almuerzo) - corresponde a Sáb de H1_1
- * - Dom:     07:00–07:00 (0h, sin almuerzo, día libre) - corresponde a Dom de H1_1
+ * - Lun:     07:00–07:00 (0h, sin almuerzo; extras con escalera y mixta) - Sáb de H1_1
+ * - Dom:     07:00–07:00 (0h, día libre; extras al 100%) - Dom de H1_1
  */
 export class PoliticaH1_2 extends PoliticaH1 {
-  async getHorarioTrabajoByDateAndEmpleado(
+  protected calcularHorarioTrabajoSinConsultas(
     fecha: string,
-    empleadoId: string
-  ): Promise<HorarioTrabajo> {
-    if (!this.validarFormatoFecha(fecha)) {
-      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
-    }
-
-    const empleado = await this.getEmpleado(empleadoId);
-    if (!empleado)
-      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
-
-    const feriadoInfo = await this.esFeriado(fecha);
+    empleadoId: string,
+    feriadoInfo: { esFeriado: boolean; nombre: string }
+  ): HorarioTrabajo {
     const dia = new Date(`${fecha}T00:00:00`).getDay(); // 0=Dom
 
     let inicio = "07:00";
@@ -33,48 +25,39 @@ export class PoliticaH1_2 extends PoliticaH1 {
     let cantidadHorasLaborables = 0;
     let esDiaLibre = false;
 
-    // Los feriados marcan el día como "día libre"
     if (feriadoInfo.esFeriado) {
       esDiaLibre = true;
     } else {
-      // H1_2: Desfase de 1 día respecto a H1_1
-      // Lunes (1) → Sábado de H1_1: 0h pero NO día libre
-      // Martes (2) → Lunes de H1_1: 07:00-17:00 (9h)
-      // Miércoles (3) → Martes de H1_1: 07:00-17:00 (9h)
-      // Jueves (4) → Miércoles de H1_1: 07:00-17:00 (9h)
-      // Viernes (5) → Jueves de H1_1: 07:00-16:00 (8h)
-      // Sábado (6) → Viernes de H1_1: 07:00-17:00 (9h)
-      // Domingo (0) → Domingo de H1_1: 0h y día libre
       switch (dia) {
-        case 1: // Lunes: 0h pero NO día libre (es laborable) - corresponde a Sáb de H1_1
+        case 1: // Lunes: 0h, NO día libre (extras con escalera/mixta)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;
           cantidadHorasLaborables = 0;
           esDiaLibre = false;
           break;
-        case 5: // Viernes: 07:00-16:00 (8h, incluye almuerzo) - corresponde a Jue de H1_1
+        case 5: // Viernes: 07:00-16:00 (8h)
           inicio = "07:00";
           fin = "16:00";
           incluyeAlmuerzo = true;
           cantidadHorasLaborables = 8;
           esDiaLibre = false;
           break;
-        case 6: // Sábado: 07:00-17:00 (9h, incluye almuerzo) - corresponde a Vie de H1_1
+        case 6: // Sábado: 07:00-17:00 (9h)
           inicio = "07:00";
           fin = "17:00";
           incluyeAlmuerzo = true;
           cantidadHorasLaborables = 9;
           esDiaLibre = false;
           break;
-        case 0: // Domingo: 0h y día libre (no laborable) - corresponde a Dom de H1_1
+        case 0: // Domingo: día libre (extras al 100%)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;
           cantidadHorasLaborables = 0;
           esDiaLibre = true;
           break;
-        default: // Martes a Jueves: 07:00-17:00 (9h, incluye almuerzo) - corresponde a Lun–Mié de H1_1
+        default: // Martes a Jueves: 07:00-17:00 (9h)
           inicio = "07:00";
           fin = "17:00";
           incluyeAlmuerzo = true;
@@ -95,5 +78,21 @@ export class PoliticaH1_2 extends PoliticaH1 {
       nombreDiaFestivo: feriadoInfo.nombre,
       cantidadHorasLaborables,
     };
+  }
+
+  async getHorarioTrabajoByDateAndEmpleado(
+    fecha: string,
+    empleadoId: string
+  ): Promise<HorarioTrabajo> {
+    if (!this.validarFormatoFecha(fecha)) {
+      throw new Error("Formato de fecha inválido. Use YYYY-MM-DD");
+    }
+
+    const empleado = await this.getEmpleado(empleadoId);
+    if (!empleado)
+      throw new Error(`Empleado con ID ${empleadoId} no encontrado`);
+
+    const feriadoInfo = await this.esFeriado(fecha);
+    return this.calcularHorarioTrabajoSinConsultas(fecha, empleadoId, feriadoInfo);
   }
 }

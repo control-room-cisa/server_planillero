@@ -5,10 +5,6 @@ export function roundNomina2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
-function isE02(codigo?: string | null): boolean {
-  return (codigo ?? "").trim().toUpperCase() === "E02";
-}
-
 /** Monto proporcional al salario quincenal por N días del período. */
 export function montoPorDiasQuincena(
   salarioQuincenal: number,
@@ -21,20 +17,16 @@ export function montoPorDiasQuincena(
 }
 
 /**
- * Monto de una fila de prorrateo:
- * - E02: proporcional a horas/8 sobre la quincena
- * - resto: reparte totalMonto entre horasProrrateables
+ * Monto de una fila de prorrateo: reparte totalMonto entre horasProrrateables.
+ * Jobs especiales (E01–E05) no deben llegar aquí; se tratan fuera del prorrateo.
  */
 export function calcMontoFilaProrrateo(
-  codigoJob: string | null | undefined,
+  _codigoJob: string | null | undefined,
   horas: number,
   totalMonto: number,
   horasProrrateables: number,
-  salarioQuincenal: number
+  _salarioQuincenal: number
 ): number {
-  if (isE02(codigoJob)) {
-    return montoPorDiasQuincena(salarioQuincenal, horas / 8, PERIODO_NOMINA);
-  }
   if (totalMonto <= 0 || horasProrrateables <= 0) return 0;
   return (horas / horasProrrateables) * totalMonto;
 }

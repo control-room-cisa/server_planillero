@@ -44,7 +44,7 @@ export class PoliticaH1_1 extends PoliticaH1 {
           cantidadHorasLaborables = 0;
           esDiaLibre = true;
           break;
-        case 6: // Sábado: 0h laborables pero NO día libre (es laborable)
+        case 6: // Sábado: 0h laborables, NO día libre; extras con escalera y mixta (p75)
           inicio = "07:00";
           fin = "07:00";
           incluyeAlmuerzo = false;

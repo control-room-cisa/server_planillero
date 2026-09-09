@@ -373,7 +373,7 @@ describe("Vacaciones: conteo de nómina (días 8h / 9h / 12h)", () => {
 });
 
 describe("Vacaciones: prorrateo por job y montos", () => {
-  it("día 9h completo: E02 8h; resto de laborados (14d) en job 00 a 112h", async () => {
+  it("día 9h completo: E02 solo informativo; resto de laborados (14d) en job 00 a 112h", async () => {
     const fecha = "2026-02-02";
     const p = new H1Test();
     seedH1Dia(p, fecha, {
@@ -396,34 +396,24 @@ describe("Vacaciones: prorrateo por job y montos", () => {
     const e02 = normal.find((j) => j.codigoJob === "E02");
     const job00 = normal.find((j) => j.codigoJob === "00");
 
-    expect(e02?.cantidadHoras).toBe(8);
+    expect(e02).toBeUndefined();
     expect(res.cantidadHoras.vacacionesHoras).toBe(8);
     expect(job00?.cantidadHoras).toBe(112);
 
-    const { salarioQuincenal, montoVacaciones, montoDiasLaborados } =
-      montosDesdeConteo(conteo);
-    const horasProrrateables = job00!.cantidadHoras;
-    expect(
-      montoFila(
-        "E02",
-        e02!.cantidadHoras,
-        horasProrrateables,
-        montoDiasLaborados,
-        salarioQuincenal
-      )
-    ).toBe(montoVacaciones);
+    const { montoVacaciones, montoDiasLaborados } = montosDesdeConteo(conteo);
+    expect(montoVacaciones).toBe(1000);
     expect(
       montoFila(
         "00",
         job00!.cantidadHoras,
-        horasProrrateables,
+        job00!.cantidadHoras,
         montoDiasLaborados,
-        salarioQuincenal
+        15000
       )
     ).toBe(montoDiasLaborados);
   });
 
-  it("día 9h medio: E02 4h y job 100 4.5h; no se agrega job 00", async () => {
+  it("día 9h medio: E02 solo informativo; job 100 4.5h recibe montoDiasLaborados; no job 00", async () => {
     const fecha = "2026-02-03";
     const p = new H1Test();
     seedH1Dia(p, fecha, {
@@ -443,23 +433,20 @@ describe("Vacaciones: prorrateo por job y montos", () => {
       "1"
     );
     const normal = res.cantidadHoras.normal ?? [];
-    const e02H = normal.find((j) => j.codigoJob === "E02")!.cantidadHoras;
+    expect(normal.some((j) => j.codigoJob === "E02")).toBe(false);
+    expect(res.cantidadHoras.vacacionesHoras).toBe(4);
     const job100H = normal.find((j) => j.codigoJob === "100")!.cantidadHoras;
-    expect(e02H).toBe(4);
     expect(job100H).toBe(4.5);
     expect(normal.some((j) => j.codigoJob === "00")).toBe(false);
 
-    const { salarioQuincenal, montoVacaciones, montoDiasLaborados } =
-      montosDesdeConteo(conteo);
+    const { montoVacaciones, montoDiasLaborados } = montosDesdeConteo(conteo);
+    expect(montoVacaciones).toBe(500);
     expect(
-      montoFila("E02", e02H, job100H, montoDiasLaborados, salarioQuincenal)
-    ).toBe(montoVacaciones);
-    expect(
-      montoFila("100", job100H, job100H, montoDiasLaborados, salarioQuincenal)
+      montoFila("100", job100H, job100H, montoDiasLaborados, 15000)
     ).toBe(montoDiasLaborados);
   });
 
-  it("día 12h medio: E02 4h y job 100 6h en prorrateo", async () => {
+  it("día 12h medio: E02 no en tabla; job 100 6h en prorrateo", async () => {
     const fecha = "2026-03-11";
     const p = new H1Test();
     seedH1Dia(p, fecha, {
@@ -482,12 +469,13 @@ describe("Vacaciones: prorrateo por job y montos", () => {
       "1"
     );
     const normal = res.cantidadHoras.normal ?? [];
-    expect(normal.find((j) => j.codigoJob === "E02")?.cantidadHoras).toBe(4);
+    expect(normal.find((j) => j.codigoJob === "E02")).toBeUndefined();
+    expect(res.cantidadHoras.vacacionesHoras).toBe(4);
     expect(normal.find((j) => j.codigoJob === "100")?.cantidadHoras).toBe(6);
     expect(normal.some((j) => j.codigoJob === "00")).toBe(false);
   });
 
-  it("11 días E02 completos 9h: 11d vacaciones, 4d laborados → 32h en job 00", async () => {
+  it("11 días E02 completos 9h: 11d vacaciones informativas, 4d laborados → 32h en job 00", async () => {
     const inicio = "2026-02-02";
     const p = new H1Test();
     const fechas: string[] = [];
@@ -523,20 +511,16 @@ describe("Vacaciones: prorrateo por job y montos", () => {
       "1"
     );
     const normal = prorrateo.cantidadHoras.normal ?? [];
-    const e02H = normal.find((j) => j.codigoJob === "E02")!.cantidadHoras;
+    expect(normal.find((j) => j.codigoJob === "E02")).toBeUndefined();
+    expect(prorrateo.cantidadHoras.vacacionesHoras).toBe(88);
     const job00H = normal.find((j) => j.codigoJob === "00")!.cantidadHoras;
-    expect(e02H).toBe(88);
     expect(job00H).toBe(32);
 
-    const { salarioQuincenal, montoVacaciones, montoDiasLaborados } =
-      montosDesdeConteo(conteo);
+    const { montoVacaciones, montoDiasLaborados } = montosDesdeConteo(conteo);
     expect(montoVacaciones).toBe(11000);
     expect(montoDiasLaborados).toBe(4000);
     expect(
-      montoFila("E02", e02H, job00H, montoDiasLaborados, salarioQuincenal)
-    ).toBe(montoVacaciones);
-    expect(
-      montoFila("00", job00H, job00H, montoDiasLaborados, salarioQuincenal)
+      montoFila("00", job00H, job00H, montoDiasLaborados, 15000)
     ).toBe(montoDiasLaborados);
   });
 });
@@ -556,7 +540,7 @@ describe("Vacaciones H2 12h: conteo y prorrateo", () => {
     });
   }
 
-  it("jornada completa E02 12h → 8h / 1.0d", async () => {
+  it("jornada completa E02 12h → 8h / 1.0d informativo; no en tabla normal", async () => {
     const p = new H2Test();
     seedH2(p, [actE02(12)]);
 
@@ -578,11 +562,11 @@ describe("Vacaciones H2 12h: conteo y prorrateo", () => {
     );
     expect(
       (prorrateo.cantidadHoras.normal ?? []).find((j) => j.codigoJob === "E02")
-        ?.cantidadHoras
-    ).toBe(8);
+    ).toBeUndefined();
+    expect(prorrateo.cantidadHoras.vacacionesHoras).toBe(8);
   });
 
-  it("media E02 6h + job 6h → 4h vacaciones; job 6h en prorrateo", async () => {
+  it("media E02 6h + job 6h → vacaciones informativas; solo job 6h en prorrateo", async () => {
     const p = new H2Test();
     seedH2(p, [actE02(6), actJob("100", 6)]);
 
@@ -600,7 +584,8 @@ describe("Vacaciones H2 12h: conteo y prorrateo", () => {
       "1"
     );
     const normal = prorrateo.cantidadHoras.normal ?? [];
-    expect(normal.find((j) => j.codigoJob === "E02")?.cantidadHoras).toBe(4);
+    expect(normal.find((j) => j.codigoJob === "E02")).toBeUndefined();
+    expect(prorrateo.cantidadHoras.vacacionesHoras).toBe(4);
     expect(normal.find((j) => j.codigoJob === "100")?.cantidadHoras).toBe(6);
   });
 });

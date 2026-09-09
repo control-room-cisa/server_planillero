@@ -25,10 +25,6 @@ function toFechaStr(fecha: Date | string): string {
   return s.length >= 10 ? s.slice(0, 10) : s;
 }
 
-function isE02(codigo?: string | null): boolean {
-  return (codigo ?? "").trim().toUpperCase() === "E02";
-}
-
 function normalizeJobId(jobId: number | null | undefined): number | null {
   if (jobId == null || !Number.isFinite(jobId) || jobId <= 0) return null;
   return Number(jobId);
@@ -52,12 +48,7 @@ function expandJobsToRows(
     (acc, j) => acc + Number(j.cantidadHoras ?? 0),
     0
   );
-  const horasE02Total = (jobs ?? []).reduce(
-    (acc, j) =>
-      acc + (isE02(j.codigoJob) ? Number(j.cantidadHoras ?? 0) : 0),
-    0
-  );
-  const horasProrrateables = Math.max(0, totalHoras - horasE02Total);
+  const horasProrrateables = totalHoras;
 
   const resolveMonto = (codigoJob: string | null | undefined, horas: number) => {
     if (montoPorHora != null) {

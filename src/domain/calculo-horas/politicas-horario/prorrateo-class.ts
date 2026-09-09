@@ -175,8 +175,26 @@ export function isCodigoJobE02(codigo?: string | null): boolean {
 }
 
 /**
+ * Jobs especiales de incidencia (nómina): no se prorratean por job.
+ * Quedan solo como dato informativo en el dashboard (vacaciones, permisos, falta, incapacidad).
+ * E06/E07 son compensatorio y van por otra vía.
+ */
+export function isCodigoJobEspecialNoProrrateable(
+  codigo?: string | null
+): boolean {
+  const code = (codigo ?? "").trim().toUpperCase();
+  return (
+    code === "E01" ||
+    code === "E02" ||
+    code === "E03" ||
+    code === "E04" ||
+    code === "E05"
+  );
+}
+
+/**
  * Si hay vacaciones en el período, quedan días laborados en la base 15
- * y no hay horas prorrateables (solo E02), esas horas legales (días × 8)
+ * y no hay horas prorrateables (sin jobs reales), esas horas legales (días × 8)
  * se cargan al mismo job que los feriados (`00`).
  */
 export function aplicarDiasLaboradosSinHorasAJobFeriados(
@@ -189,7 +207,7 @@ export function aplicarDiasLaboradosSinHorasAJobFeriados(
   if (!Number.isFinite(diasVacaciones) || diasVacaciones <= 0) return;
 
   const horasProrrateables = Array.from(map.values()).reduce((acc, j) => {
-    if (isCodigoJobE02(j.codigoJob)) return acc;
+    if (isCodigoJobEspecialNoProrrateable(j.codigoJob)) return acc;
     return acc + Number(j.horas ?? 0);
   }, 0);
 

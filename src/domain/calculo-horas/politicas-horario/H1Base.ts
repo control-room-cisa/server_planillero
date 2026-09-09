@@ -19,6 +19,7 @@ import {
   CODIGO_JOB_FERIADOS,
   NOMBRE_JOB_FERIADOS,
   horasFeriadoParaProrrateo,
+  isCodigoJobEspecialNoProrrateable,
   type ProrrateoJobAccum,
 } from "./prorrateo-class";
 import { JobRepository } from "../../../repositories/JobRepository";
@@ -26,7 +27,6 @@ import { SegmentadorTiempo } from "../segmentador-tiempo";
 import { addDaysYmd } from "../../../utils/dateTime";
 import type { ClasificacionIncapacidadDia } from "./incapacidad-secuencias";
 import {
-  horasE02Contables,
   minutosLaborablesDesdeRegistro,
   reinterpretE02VacacionesMin,
 } from "./e02Vacaciones";
@@ -86,7 +86,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       vistoNocturna: false,
       piso: 0,
       domOFestActivo: false, // arrastre de C4 a través de medianoche
-      bloquearMixta: false, // deshabilitar p75 en días no laborables
+      bloquearMixta: false, // deshabilitar p75 en días libres de contrato
       existeDiurnaExtra: false, // indica si hay tramo extra diurno (5-19h) en la racha
       hayExtraDiurnaEnBloque: false, // diurna EXTRA pendiente en el bloque actual del día
     };
@@ -437,12 +437,9 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const esDiaLibreMarcado = registroDelDia?.esDiaLibre === true;
     const esLibreOFest = esDiaLibreMarcado || esFestivo;
 
-    // Bloquear mixta si es día libre de contrato
-    const esDiaLibreContrato =
-      hTrabajo.esDiaLibre ||
-      hTrabajo.cantidadHorasLaborables === 0 ||
-      hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
-    racha.bloquearMixta = esDiaLibreContrato;
+    // Bloquear mixta solo en días libres de contrato (p. ej. domingo H1_2, martes H1_3).
+    // Días sin jornada pero NO libres (p. ej. lunes H1_2/H1_3) sí pueden escalar a p75.
+    racha.bloquearMixta = hTrabajo.esDiaLibre;
 
     // Procesar segmentos del día
     for (let segIdx = 0; segIdx < segmentos.length; segIdx++) {
@@ -1045,11 +1042,8 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
     const esFestivo = feriadoInfo.esFeriado;
     const esLibreOFest =
       registroDiario?.esDiaLibre === true || esFestivo;
-    const esDiaLibreContrato =
-      hTrabajo.esDiaLibre ||
-      hTrabajo.cantidadHorasLaborables === 0 ||
-      hTrabajo.horarioTrabajo.inicio === hTrabajo.horarioTrabajo.fin;
-    racha.bloquearMixta = esDiaLibreContrato;
+    // Bloquear mixta solo en días libres de contrato (p. ej. domingo H1_2, martes H1_3).
+    racha.bloquearMixta = hTrabajo.esDiaLibre;
 
     const horasFeriadoDia = horasFeriadoParaProrrateo(
       Number(registroDiario?.horasFeriado ?? 0)
@@ -1099,10 +1093,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       if (seg.tipo === "NORMAL") {
         const code = codigo.toUpperCase();
         if (
-          code === "E02" ||
-          code === "E03" ||
-          code === "E04" ||
-          code === "E05" ||
+          isCodigoJobEspecialNoProrrateable(code) ||
           code === "E06" ||
           code === "E07"
         ) {
@@ -1122,6 +1113,7 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       }
 
       if (seg.tipo === "EXTRA") {
+        if (isCodigoJobEspecialNoProrrateable(codigo)) continue;
         const slots = durMin / SLOT_MIN;
         const esDiurna = PoliticaH1Base.isDiurna(seg);
         racha.hayExtraDiurnaEnBloque =
@@ -1207,18 +1199,13 @@ export abstract class PoliticaH1Base extends PoliticaHorarioBase {
       const codigo =
         act?.job?.codigo ?? act?.codigoJob ?? act?.jobCodigo ?? "";
       if (!codigo) continue;
+      // E01–E05: solo informativos (vacaciones/permisos/falta/incapacidad); no prorratear
+      if (isCodigoJobEspecialNoProrrateable(codigo)) continue;
       const nombre = act?.job?.nombre ?? String(codigo);
 
       if (!act?.esExtra) {
         if (act?.horaInicio && act?.horaFin) continue;
-        let horas = Number(act?.duracionHoras ?? 0);
-        if (codigo.toUpperCase() === "E02") {
-          horas = horasE02Contables(
-            horas,
-            registroDiario,
-            registroDiario?.esHoraCorrida ? 0 : 60
-          );
-        }
+        const horas = Number(act?.duracionHoras ?? 0);
         if (horas > 0) {
           upsertProrrateoJob(
             maps.normal,
@@ -1407,7 +1394,7 @@ type ExtraStreak = {
   vistoNocturna: boolean;
   piso: number; // 0 | 1.25 | 1.5 (no decrece)
   domOFestActivo: boolean; // arrastre de p100 entre días
-  bloquearMixta: boolean; // deshabilita p75 en no laborables
+  bloquearMixta: boolean; // deshabilita p75 en días libres de contrato
   existeDiurnaExtra: boolean; // indica si hay tramo extra diurno (5-19h) en la racha
   hayExtraDiurnaEnBloque: boolean; // extra diurna pendiente en el bloque actual (hasta LIBRE)
 };

@@ -17,10 +17,10 @@ import {
   CODIGO_JOB_FERIADOS,
   NOMBRE_JOB_FERIADOS,
   horasFeriadoParaProrrateo,
+  isCodigoJobEspecialNoProrrateable,
 } from "./prorrateo-class";
 import { addDaysYmd } from "../../../utils/dateTime";
 import {
-  horasE02Contables,
   minutosLaborablesDesdeRegistro,
   reinterpretE02VacacionesMin,
 } from "./e02Vacaciones";
@@ -717,21 +717,14 @@ export abstract class PoliticaH2Base extends PoliticaHorarioBase {
           const nombre = act?.job?.nombre ?? String(codigo);
 
           if (!jobId && !codigo) continue;
+          // E01–E05: solo informativos; no prorratear en normal/extras
+          if (isCodigoJobEspecialNoProrrateable(codigo)) continue;
 
           const id = jobId || 0;
           const mapKey = jobMapKey(id, codigo || String(id));
 
           if (!act?.esExtra) {
-            let horas = Number(act?.duracionHoras ?? 0);
-            if (String(codigo).toUpperCase() === "E02") {
-              horas = horasE02Contables(
-                horas,
-                registroDiario,
-                this.permiteAlmuerzo() && !(registroDiario as any)?.esHoraCorrida
-                  ? 60
-                  : 0
-              );
-            }
+            const horas = Number(act?.duracionHoras ?? 0);
             if (horas > 0) {
               upsertProrrateoJob(
                 horasPorJobNormal,
