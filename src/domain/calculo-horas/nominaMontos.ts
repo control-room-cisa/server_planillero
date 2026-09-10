@@ -31,6 +31,43 @@ export function calcMontoFilaProrrateo(
   return (horas / horasProrrateables) * totalMonto;
 }
 
+/**
+ * Separa montoDiasLaborados entre horas de jobs normales y permiso justificado
+ * con la misma tarifa horaria. El permiso no se prorratea por job; solo se informa.
+ */
+export function repartirMontoDiasLaboradosConPermisoJustificado(
+  montoDiasLaborados: number,
+  horasJobsNormales: number,
+  horasPermisoJustificado: number
+): {
+  precioHora: number;
+  montoJobsNormales: number;
+  montoPermisoJustificado: number;
+} {
+  const monto = Number(montoDiasLaborados) || 0;
+  const hJobs = Math.max(0, Number(horasJobsNormales) || 0);
+  const hPermiso = Math.max(0, Number(horasPermisoJustificado) || 0);
+  const hTotal = hJobs + hPermiso;
+
+  if (monto <= 0 || hTotal <= 0) {
+    return {
+      precioHora: 0,
+      montoJobsNormales: 0,
+      montoPermisoJustificado: 0,
+    };
+  }
+
+  const precioHora = monto / hTotal;
+  const montoPermisoJustificado = roundNomina2(hPermiso * precioHora);
+  const montoJobsNormales = roundNomina2(monto - montoPermisoJustificado);
+
+  return {
+    precioHora,
+    montoJobsNormales,
+    montoPermisoJustificado,
+  };
+}
+
 export function montosNominaDesdeDias(
   sueldoMensual: number,
   diasVacaciones: number,

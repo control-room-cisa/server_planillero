@@ -15,6 +15,7 @@ import type { AsignacionCompensatoriaTomadaDto } from "../validators/prorrateo.v
 import {
   roundNomina2,
   calcMontoFilaProrrateo,
+  repartirMontoDiasLaboradosConPermisoJustificado,
 } from "../domain/calculo-horas/nominaMontos";
 
 const round2 = roundNomina2;
@@ -330,12 +331,24 @@ export class ProrrateoService {
       jobId: f.jobId != null && validJobIds.has(f.jobId) ? f.jobId : null,
     }));
 
+    const horasJobsNormales = (ch.normal ?? []).reduce(
+      (acc, j) => acc + Number(j.cantidadHoras ?? 0),
+      0
+    );
+    const horasPermisoJustificado = Number(ch.permisoConSueldoHoras ?? 0);
+    const { montoJobsNormales } =
+      repartirMontoDiasLaboradosConPermisoJustificado(
+        Number(nomina.montoDiasLaborados ?? 0),
+        horasJobsNormales,
+        horasPermisoJustificado
+      );
+
     const rows: ProrrateoCreateRow[] = [
       ...expandJobsToRows(
         ch.normal ?? [],
         "normal",
         nominaId,
-        Number(nomina.montoDiasLaborados ?? 0),
+        montoJobsNormales,
         salarioQuincenal,
         null,
         validJobIds
