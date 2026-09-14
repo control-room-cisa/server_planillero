@@ -188,10 +188,13 @@ export class NominaService {
     deletedBy: number | null | undefined,
     tx: Prisma.TransactionClient
   ): Promise<Nomina> {
+    // deletedAt único por fila: el índice uq incluye deletedAt y MySQL
+    // puede colisionar si dos archivos del mismo período caen en el mismo segundo.
+    const deletedAt = new Date(Date.now() + nomina.id);
     const archived = await tx.nomina.update({
       where: { id: nomina.id },
       data: {
-        deletedAt: new Date(),
+        deletedAt,
         deletedBy: deletedBy ?? null,
       },
     });
@@ -387,7 +390,8 @@ export class NominaService {
    *
    * Vacaciones y compensatorias no se ajustan por delta sobre el registro vivo:
    * 1) se revierten los efectos de la nómina archivada
-   * 2) se aplican los de la nueva
+   * 2) se validan duplicados/traslapes solo contra activas (la archivada ya no cuenta)
+   * 3) se aplican los de la nueva
    *
    * Casos:
    * - Mismos días de vacaciones: +horas viejas −horas nuevas = 0.
@@ -434,32 +438,6 @@ export class NominaService {
     const fechaFin = toDate(coalesce(payload.fechaFin, existing.fechaFin));
     const codigoNomina = generarCodigoNomina(fechaInicio, fechaFin);
 
-    const duplicadaPorCodigo =
-      await NominaRepository.findActiveByEmpleadoAndCodigo(
-        empleadoId,
-        codigoNomina,
-        id
-      );
-    if (duplicadaPorCodigo) {
-      throw new AppError(
-        `Ya existe una nómina activa para este colaborador en el período ${codigoNomina}`,
-        400
-      );
-    }
-
-    const overlapping = await NominaRepository.findOverlapping(
-      empleadoId,
-      fechaInicio,
-      fechaFin,
-      id
-    );
-    if (overlapping.length > 0) {
-      throw new AppError(
-        "Ya existe una nómina activa que traslapa con el período seleccionado",
-        400
-      );
-    }
-
     const diasVacaciones = coalesce(
       payload.diasVacaciones,
       existing.diasVacaciones
@@ -475,7 +453,38 @@ export class NominaService {
     );
 
     return prisma.$transaction(async (tx) => {
+      // Archivar primero: la versión anterior queda con deletedAt y fuera de listados.
+      // Así la validación de unicidad no la considera (solo activas deletedAt IS NULL).
       await this.archivarNomina(existing, updatedBy, tx);
+
+      const duplicadaPorCodigo = await tx.nomina.findFirst({
+        where: {
+          empleadoId,
+          codigoNomina,
+          deletedAt: null,
+        },
+      });
+      if (duplicadaPorCodigo) {
+        throw new AppError(
+          `Ya existe una nómina activa para este colaborador en el período ${codigoNomina}`,
+          400
+        );
+      }
+
+      const overlapping = await tx.nomina.findMany({
+        where: {
+          empleadoId,
+          deletedAt: null,
+          fechaInicio: { lte: fechaFin },
+          fechaFin: { gte: fechaInicio },
+        },
+      });
+      if (overlapping.length > 0) {
+        throw new AppError(
+          "Ya existe una nómina activa que traslapa con el período seleccionado",
+          400
+        );
+      }
 
       const created = await tx.nomina.create({
         data: {
