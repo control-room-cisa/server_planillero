@@ -8,6 +8,7 @@ import type {
 } from "../validators/nomina.validator";
 import { AppError } from "../errors/AppError";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
+import { EmpresaRepository } from "../repositories/EmpresaRepository";
 import { RegistroDiarioService } from "./RegistroDiarioService";
 import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
 import { prisma } from "../config/prisma";
@@ -853,6 +854,11 @@ export class NominaService {
       return nombreA.localeCompare(nombreB, "es", { sensitivity: "base" });
     });
 
+    const empresa = await EmpresaRepository.findById(empresaId);
+    const nombreEmpresa = empresa?.nombre?.trim() || `Empresa ${empresaId}`;
+    const nombrePeriodo =
+      ordenadas[0]?.nombrePeriodoNomina?.trim() || codigoNomina;
+
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Detalles");
     const currencyFmt = '"L" #,##0.00';
@@ -861,7 +867,10 @@ export class NominaService {
       "Fecha de Corte",
       "Sueldo Quincenal",
       "Subtotal",
-      "Total Horas Extra",
+      "Extra 25%",
+      "Extra 50%",
+      "Extra 75%",
+      "Extra 100%",
       "Ajustes",
       "Total Bruto",
       "Deducción IHSS",
@@ -876,41 +885,99 @@ export class NominaService {
       "Total a Pagar",
       "Estado",
     ];
+    const lastCol = headers.length;
 
-    sheet.columns = headers.map((header, index) => ({
-      header,
+    sheet.columns = headers.map((_, index) => ({
       width: index === 0 ? 32 : index === 1 ? 24 : 18,
     }));
 
-    const headerRow = sheet.getRow(1);
-    headerRow.font = { bold: true };
-    headerRow.alignment = { vertical: "middle", wrapText: true };
+    sheet.mergeCells(1, 1, 1, lastCol);
+    const titleRow = sheet.getRow(1);
+    titleRow.getCell(1).value = nombreEmpresa;
+    titleRow.getCell(1).font = { bold: true, size: 18 };
+    titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
+    titleRow.height = 28;
+
+    sheet.mergeCells(2, 1, 2, lastCol);
+    const subtitleRow = sheet.getRow(2);
+    subtitleRow.getCell(1).value = nombrePeriodo;
+    subtitleRow.getCell(1).font = { bold: true, size: 12, italic: true };
+    subtitleRow.getCell(1).alignment = {
+      horizontal: "center",
+      vertical: "middle",
+    };
+    subtitleRow.height = 20;
+
+    const headerRow = sheet.getRow(3);
+    headers.forEach((header, index) => {
+      const cell = headerRow.getCell(index + 1);
+      cell.value = header;
+      cell.font = { bold: true };
+      cell.alignment = { vertical: "middle", wrapText: true };
+    });
+    headerRow.height = 30;
 
     const totals = {
       sueldoQuincenal: 0,
       subtotal: 0,
-      horasExtra: 0,
+      extra25: 0,
+      extra50: 0,
+      extra75: 0,
+      extra100: 0,
       ajustes: 0,
       totalBruto: 0,
+      deduccionIHSS: 0,
+      deduccionISR: 0,
+      deduccionRAP: 0,
+      deduccionAlimentacion: 0,
+      deduccionAlojamiento: 0,
+      cobroPrestamo: 0,
+      impuestoVecinal: 0,
+      otros: 0,
       totalDeducciones: 0,
       totalAPagar: 0,
     };
+
+    const firstAmountCol = 3;
+    const lastAmountCol = 20;
 
     ordenadas.forEach((n) => {
       const nombre = `${n.empleado.nombre} ${n.empleado.apellido ?? ""}`.trim();
       const sueldoQuincenal = this.round2((n.sueldoMensual ?? 0) / 2);
       const subtotal = n.subtotalQuincena ?? 0;
-      const horasExtra = this.calcularTotalHorasExtra(n);
+      const extra25 = n.montoHoras25 ?? 0;
+      const extra50 = n.montoHoras50 ?? 0;
+      const extra75 = n.montoHoras75 ?? 0;
+      const extra100 = n.montoHoras100 ?? 0;
       const ajustes = n.ajuste ?? 0;
       const totalBruto = this.calcularTotalBruto(n);
+      const deduccionIHSS = n.deduccionIHSS ?? 0;
+      const deduccionISR = n.deduccionISR ?? 0;
+      const deduccionRAP = n.deduccionRAP ?? 0;
+      const deduccionAlimentacion = n.deduccionAlimentacion ?? 0;
+      const deduccionAlojamiento = n.deduccionAlojamiento ?? 0;
+      const cobroPrestamo = n.cobroPrestamo ?? 0;
+      const impuestoVecinal = n.impuestoVecinal ?? 0;
+      const otros = n.otros ?? 0;
       const totalDeducciones = this.calcularTotalDeducciones(n);
       const totalAPagar = this.calcularTotalAPagar(n);
 
       totals.sueldoQuincenal += sueldoQuincenal;
       totals.subtotal += subtotal;
-      totals.horasExtra += horasExtra;
+      totals.extra25 += extra25;
+      totals.extra50 += extra50;
+      totals.extra75 += extra75;
+      totals.extra100 += extra100;
       totals.ajustes += ajustes;
       totals.totalBruto += totalBruto;
+      totals.deduccionIHSS += deduccionIHSS;
+      totals.deduccionISR += deduccionISR;
+      totals.deduccionRAP += deduccionRAP;
+      totals.deduccionAlimentacion += deduccionAlimentacion;
+      totals.deduccionAlojamiento += deduccionAlojamiento;
+      totals.cobroPrestamo += cobroPrestamo;
+      totals.impuestoVecinal += impuestoVecinal;
+      totals.otros += otros;
       totals.totalDeducciones += totalDeducciones;
       totals.totalAPagar += totalAPagar;
 
@@ -919,23 +986,26 @@ export class NominaService {
         `${this.formatFechaUtc(n.fechaInicio)} - ${this.formatFechaUtc(n.fechaFin)}`,
         sueldoQuincenal,
         subtotal,
-        horasExtra,
+        extra25,
+        extra50,
+        extra75,
+        extra100,
         ajustes,
         totalBruto,
-        n.deduccionIHSS ?? 0,
-        n.deduccionISR ?? 0,
-        n.deduccionRAP ?? 0,
-        n.deduccionAlimentacion ?? 0,
-        n.deduccionAlojamiento ?? 0,
-        n.cobroPrestamo ?? 0,
-        n.impuestoVecinal ?? 0,
-        n.otros ?? 0,
+        deduccionIHSS,
+        deduccionISR,
+        deduccionRAP,
+        deduccionAlimentacion,
+        deduccionAlojamiento,
+        cobroPrestamo,
+        impuestoVecinal,
+        otros,
         totalDeducciones,
         totalAPagar,
         n.pagado ? "Pagado" : "Pendiente",
       ]);
 
-      for (let col = 3; col <= 17; col++) {
+      for (let col = firstAmountCol; col <= lastAmountCol; col++) {
         row.getCell(col).numFmt = currencyFmt;
       }
     });
@@ -945,27 +1015,30 @@ export class NominaService {
       "",
       this.round2(totals.sueldoQuincenal),
       this.round2(totals.subtotal),
-      this.round2(totals.horasExtra),
+      this.round2(totals.extra25),
+      this.round2(totals.extra50),
+      this.round2(totals.extra75),
+      this.round2(totals.extra100),
       this.round2(totals.ajustes),
       this.round2(totals.totalBruto),
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
+      this.round2(totals.deduccionIHSS),
+      this.round2(totals.deduccionISR),
+      this.round2(totals.deduccionRAP),
+      this.round2(totals.deduccionAlimentacion),
+      this.round2(totals.deduccionAlojamiento),
+      this.round2(totals.cobroPrestamo),
+      this.round2(totals.impuestoVecinal),
+      this.round2(totals.otros),
       this.round2(totals.totalDeducciones),
       this.round2(totals.totalAPagar),
       "",
     ]);
     totalRow.font = { bold: true };
-    for (const col of [3, 4, 5, 6, 7, 16, 17]) {
+    for (let col = firstAmountCol; col <= lastAmountCol; col++) {
       totalRow.getCell(col).numFmt = currencyFmt;
     }
 
-    sheet.views = [{ state: "frozen", ySplit: 1 }];
+    sheet.views = [{ state: "frozen", ySplit: 3 }];
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `detalles-nominas-${codigoNomina}.xlsx`;
