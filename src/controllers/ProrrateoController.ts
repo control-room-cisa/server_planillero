@@ -72,3 +72,67 @@ export const estadoProrrateoPorNomina: RequestHandler = async (
     return next(err);
   }
 };
+
+export const listarProrrateosPorEmpleado: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const empleadoId = Number(req.params.empleadoId);
+    if (!Number.isFinite(empleadoId) || empleadoId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "empleadoId inválido",
+        data: null,
+      } satisfies ApiResponse<null>);
+    }
+
+    const authReq = req as AuthRequest;
+    const data = await ProrrateoService.listarGuardadosPorEmpleado(
+      empleadoId,
+      authReq.user.id,
+      authReq.user.rolIds
+    );
+    return res.json({
+      success: true,
+      message: "Prorrateos guardados obtenidos",
+      data,
+    } satisfies ApiResponse<typeof data>);
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    return next(err);
+  }
+};
+
+export const obtenerProrrateoPorNomina: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const nominaId = Number(req.params.nominaId);
+    if (!Number.isFinite(nominaId) || nominaId <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "nominaId inválido",
+        data: null,
+      } satisfies ApiResponse<null>);
+    }
+
+    const authReq = req as AuthRequest;
+    const data = await ProrrateoService.obtenerPorNomina(
+      nominaId,
+      authReq.user.id,
+      authReq.user.rolIds
+    );
+    return res.json({
+      success: true,
+      message: "Prorrateo obtenido",
+      data,
+    } satisfies ApiResponse<typeof data>);
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    return next(err);
+  }
+};

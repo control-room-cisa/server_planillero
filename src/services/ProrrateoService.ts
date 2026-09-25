@@ -3,7 +3,10 @@ import type { TipoProrrateo } from "@prisma/client";
 import { prisma } from "../config/prisma";
 import { AppError } from "../errors/AppError";
 import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
-import type { HorasPorJob } from "../domain/calculo-horas/types";
+import type {
+  HorasPorJob,
+  ConteoHorasValidationError,
+} from "../domain/calculo-horas/types";
 import { NominaRepository } from "../repositories/NominaRepository";
 import {
   ProrrateoRepository,
@@ -24,6 +27,16 @@ function toFechaStr(fecha: Date | string): string {
   if (fecha instanceof Date) return fecha.toISOString().split("T")[0];
   const s = String(fecha);
   return s.length >= 10 ? s.slice(0, 10) : s;
+}
+
+/** True solo si hay al menos una lista de validación con elementos. */
+function hasPendingValidations(
+  ve?: ConteoHorasValidationError | null
+): boolean {
+  if (!ve) return false;
+  return Object.values(ve).some(
+    (arr) => Array.isArray(arr) && arr.length > 0
+  );
 }
 
 function normalizeJobId(jobId: number | null | undefined): number | null {
@@ -144,6 +157,74 @@ export class ProrrateoService {
     return { guardado: cantidadFilas > 0, cantidadFilas };
   }
 
+  static async listarGuardadosPorEmpleado(
+    empleadoId: number,
+    viewerEmpleadoId: number,
+    viewerRolIds: number[]
+  ) {
+    if (!Number.isFinite(empleadoId) || empleadoId <= 0) {
+      throw new AppError("empleadoId inválido", 400);
+    }
+
+    await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
+      viewerEmpleadoId,
+      viewerRolIds,
+      empleadoId
+    );
+
+    const rows =
+      await ProrrateoRepository.listNominasGuardadasPorEmpleado(empleadoId);
+
+    return rows.map((r) => ({
+      nominaId: r.nominaId,
+      nombrePeriodoNomina: r.nombrePeriodoNomina,
+      fechaInicio: toFechaStr(r.fechaInicio),
+      fechaFin: toFechaStr(r.fechaFin),
+      codigoNomina: r.codigoNomina,
+      cantidadFilas: r.cantidadFilas,
+    }));
+  }
+
+  static async obtenerPorNomina(
+    nominaId: number,
+    viewerEmpleadoId: number,
+    viewerRolIds: number[]
+  ) {
+    const nomina = await NominaRepository.findById(nominaId);
+    if (!nomina || nomina.deletedAt) {
+      throw new AppError("Nómina no encontrada", 404);
+    }
+
+    await AccesoContabilidadService.assertViewerCanAccessProrrateoEmpleado(
+      viewerEmpleadoId,
+      viewerRolIds,
+      nomina.empleadoId
+    );
+
+    const filas = await ProrrateoRepository.findByNominaId(nominaId);
+    if (filas.length === 0) {
+      throw new AppError("No hay prorrateo guardado para esta nómina", 404);
+    }
+
+    return {
+      nominaId: nomina.id,
+      empleadoId: nomina.empleadoId,
+      nombrePeriodoNomina: nomina.nombrePeriodoNomina,
+      fechaInicio: toFechaStr(nomina.fechaInicio),
+      fechaFin: toFechaStr(nomina.fechaFin),
+      codigoNomina: nomina.codigoNomina,
+      filas: filas.map((f) => ({
+        id: f.id,
+        jobId: f.jobId,
+        codigoJob: f.codigoJob,
+        codigoClass: f.codigoClass,
+        cantidadHoras: f.cantidadHoras,
+        monto: f.monto,
+        tipo: f.tipo,
+      })),
+    };
+  }
+
   /**
    * Calcula el prorrateo en vivo y lo persiste como snapshot cerrado.
    * Requisitos: nómina pagada, cálculo válido, aún no guardado.
@@ -208,7 +289,9 @@ export class ProrrateoService {
       );
     }
 
-    if (conteo.validationErrors) {
+    // validationErrors suele venir siempre como objeto (p. ej. arrays vacíos);
+    // solo bloquear si hay fechas/mensajes reales pendientes.
+    if (hasPendingValidations(conteo.validationErrors)) {
       throw new AppError(
         "No se puede guardar el prorrateo: hay validaciones pendientes",
         422,

@@ -4,6 +4,8 @@ import { authenticateJWT } from "../middlewares/authMiddleware";
 import {
   guardarProrrateo,
   estadoProrrateoPorNomina,
+  listarProrrateosPorEmpleado,
+  obtenerProrrateoPorNomina,
 } from "../controllers/ProrrateoController";
 import { Roles } from "../enums/roles";
 import { hasAnyRole } from "../utils/roles";
@@ -49,5 +51,17 @@ router.post("/", guardarProrrateo);
  * @desc Indica si el prorrateo de la nómina ya fue guardado
  */
 router.get("/nomina/:nominaId/estado", estadoProrrateoPorNomina);
+
+/**
+ * @route GET /api/prorrateos/nomina/:nominaId
+ * @desc Obtiene el snapshot de prorrateo guardado de una nómina
+ */
+router.get("/nomina/:nominaId", obtenerProrrateoPorNomina);
+
+/**
+ * @route GET /api/prorrateos/empleado/:empleadoId
+ * @desc Lista nóminas con prorrateo guardado del colaborador
+ */
+router.get("/empleado/:empleadoId", listarProrrateosPorEmpleado);
 
 export default router;

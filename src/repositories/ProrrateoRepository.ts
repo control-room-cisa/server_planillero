@@ -37,4 +37,54 @@ export class ProrrateoRepository {
       orderBy: [{ tipo: "asc" }, { id: "asc" }],
     });
   }
+
+  /** Nóminas del colaborador que ya tienen snapshot de prorrateo guardado. */
+  static async listNominasGuardadasPorEmpleado(empleadoId: number) {
+    const groups = await prisma.prorrateo.groupBy({
+      by: ["nominaId"],
+      _count: { _all: true },
+      where: {
+        nomina: {
+          empleadoId,
+          deletedAt: null,
+        },
+      },
+      orderBy: { nominaId: "desc" },
+    });
+
+    if (groups.length === 0) return [];
+
+    const nominaIds = groups.map((g) => g.nominaId);
+    const nominas = await prisma.nomina.findMany({
+      where: { id: { in: nominaIds }, deletedAt: null },
+      select: {
+        id: true,
+        nombrePeriodoNomina: true,
+        fechaInicio: true,
+        fechaFin: true,
+        codigoNomina: true,
+      },
+    });
+    const byId = new Map(nominas.map((n) => [n.id, n]));
+
+    return groups
+      .map((g) => {
+        const n = byId.get(g.nominaId);
+        if (!n) return null;
+        return {
+          nominaId: n.id,
+          nombrePeriodoNomina: n.nombrePeriodoNomina,
+          fechaInicio: n.fechaInicio,
+          fechaFin: n.fechaFin,
+          codigoNomina: n.codigoNomina,
+          cantidadFilas: g._count._all,
+        };
+      })
+      .filter((x): x is NonNullable<typeof x> => x != null)
+      .sort((a, b) => {
+        const fa = a.fechaInicio instanceof Date ? a.fechaInicio.getTime() : 0;
+        const fb = b.fechaInicio instanceof Date ? b.fechaInicio.getTime() : 0;
+        return fb - fa;
+      });
+  }
 }
