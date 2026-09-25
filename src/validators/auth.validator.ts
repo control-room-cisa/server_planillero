@@ -27,6 +27,9 @@ export const loginSchema = z.object({
       correoElectronico: z.string().optional(),
       dni: z.string().optional(),
       contrasena: z.string().min(1, "La contraseña es obligatoria"),
+      turnstileToken: z
+        .string()
+        .min(1, "Debe completar la verificación de seguridad"),
     })
     .refine(
       (data) => {

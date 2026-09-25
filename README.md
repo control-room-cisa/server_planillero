@@ -30,6 +30,8 @@ Aplicación RESTful construida con Node.js, TypeScript, Express y Prisma ORM sob
    Aplicar configuraciones de base de datos y clave de jwt token.
    `DATABASE_URL="mysql://USER:PASS@HOST:PORT/planillero"
 JWT_SECRET="una_clave_secreta_para_jwt"
+CORS_ORIGINS="http://localhost:5173,https://tu-frontend.com"
+TRUST_PROXY="1"
 `
 
    **Sincronización de usuarios hacia Gestión de Flota** (mismo servidor, solo localhost):

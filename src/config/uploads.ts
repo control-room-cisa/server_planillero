@@ -1,5 +1,5 @@
 // src/config/uploads.ts
-export const UPLOADS_PUBLIC_BASE = "/uploads"; // servido estático por Express
+export const UPLOADS_PUBLIC_BASE = "/uploads"; // ruta base; acceso requiere JWT
 export const EMP_BASE_DIR = "empleados";
 export const FOTO_DIR = "foto";
 export const CV_DIR = "cv";

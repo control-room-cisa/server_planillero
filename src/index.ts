@@ -1,9 +1,12 @@
+import "./config/loadEnv";
 import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { authRouter } from "./routes/authRoutes";
 import { errorHandler } from "./middlewares/errorHandler";
 import { requestContext } from "./middlewares/requestContext";
 import { httpLogger } from "./middlewares/httpLogger";
+import { authenticateJWTOrQueryToken } from "./middlewares/authenticateJWTOrQueryToken";
 import jobRoutes from "./routes/JobRoutes";
 import empresaRoutes from "./routes/empresaRoutes";
 import departamentoRoutes from "./routes/departamentoRoutes";
@@ -21,25 +24,37 @@ import vehiculoRoutes from "./routes/VehiculoRoutes";
 import accesoContabilidadRoutes from "./routes/accesoContabilidadRoutes";
 import prorrateoRoutes from "./routes/ProrrateoRoutes";
 import { startFlotaUsuarioSyncCron } from "./jobs/flotaUsuarioSyncCron";
+import { assertJwtSecretConfigured } from "./config/jwt";
+import { assertCorsConfigured, getCorsOrigins } from "./config/cors";
 
 import path from "path";
-import { config } from "dotenv";
+
+assertJwtSecretConfigured();
+assertCorsConfigured();
 
 const app = express();
 
-const ROOT = path.resolve(__dirname, "..");
-config({ path: path.join(ROOT, ".env") });
+// Necesario para rate-limit por IP real detrás de nginx/proxy
+if (process.env.TRUST_PROXY === "1" || process.env.TRUST_PROXY === "true") {
+  app.set("trust proxy", 1);
+}
 
-app.use("/uploads", express.static(path.join(process.cwd(), "uploads")));
+app.use(helmet());
 
 // Correlation id (X-Request-Id) and request logging (one line per request)
 app.use(requestContext);
 app.use(httpLogger);
 
-// Configurar CORS para permitir requests desde el frontend
+const corsOrigins = getCorsOrigins();
 app.use(
   cors({
-    origin: true, // Permitir todos los orígenes en desarrollo
+    origin: (origin, callback) => {
+      // Requests sin Origin (Postman, same-origin server-side, etc.)
+      if (!origin || corsOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+      return callback(null, false);
+    },
     credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: [
@@ -53,6 +68,14 @@ app.use(
 );
 
 app.use(express.json());
+
+// Uploads: requieren sesión (Bearer o ?token= para <img>/<a>)
+app.use(
+  "/uploads",
+  authenticateJWTOrQueryToken,
+  express.static(path.join(process.cwd(), "uploads"))
+);
+
 app.use("/api/auth", authRouter);
 app.use("/api/jobs", jobRoutes);
 app.use("/api/empresas", empresaRoutes);
@@ -76,5 +99,6 @@ app.use(errorHandler);
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`CORS orígenes: ${corsOrigins.join(", ")}`);
   startFlotaUsuarioSyncCron();
 });

@@ -5,8 +5,8 @@ import { EmpleadoService } from "../services/EmpleadoService";
 import { CreateEmpleadoDto } from "../dtos/employee.dto";
 import { AppError } from "../errors/AppError";
 import { rolIdsFromRelations } from "../utils/roles";
+import { getJwtSecret } from "../config/jwt";
 const SALT_ROUNDS = 10;
-const JWT_SECRET = process.env.JWT_SECRET || "supersecretkey";
 
 export class AuthService {
   static async register(
@@ -46,7 +46,7 @@ export class AuthService {
     const empleado = await EmpleadoService.createEmpleado(dto);
 
     // 6) (Opcional) Generar token o devolver el empleado
-    const token = jwt.sign({ sub: empleado.id }, JWT_SECRET, {
+    const token = jwt.sign({ sub: empleado.id }, getJwtSecret(), {
       expiresIn: "1h",
     });
 
@@ -54,23 +54,25 @@ export class AuthService {
   }
 
   static async login(identifier: string, contrasena: string) {
+    const CREDENCIALES_INVALIDAS = "Usuario o contraseña incorrecta";
+
     // Buscar empleado por correo, DNI, nombre de usuario o código
     const empleado = await EmpleadoRepository.findByEmailDniOrUsername(
       identifier
     );
     if (!empleado) {
-      throw new Error("Usuario no encontrado");
+      throw new AppError(CREDENCIALES_INVALIDAS, 401);
     }
 
     // Validar que tenga contraseña configurada
     if (!empleado.contrasena) {
-      throw new Error("El usuario no tiene contraseña configurada");
+      throw new AppError(CREDENCIALES_INVALIDAS, 401);
     }
 
     // Comparar contraseñas
     const valid = await bcrypt.compare(contrasena, empleado.contrasena);
     if (!valid) {
-      throw new Error("Contraseña incorrecta");
+      throw new AppError(CREDENCIALES_INVALIDAS, 401);
     }
 
     if (!empleado.activo) {
@@ -89,7 +91,7 @@ export class AuthService {
           empleado.correoElectronico || empleado.nombreUsuario || empleado.dni,
         name: empleado.nombre + (empleado.apellido || ""),
       },
-      JWT_SECRET,
+      getJwtSecret(),
       { expiresIn: "1d" }
     );
 

@@ -1,33 +1,29 @@
-// src/middlewares/authMiddleware.ts
-import { RequestHandler, Request, Response } from "express";
+import type { RequestHandler } from "express";
 import jwt from "jsonwebtoken";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { prisma } from "../config/prisma";
 import { rolIdsFromRelations } from "../utils/roles";
 import { getJwtSecret } from "../config/jwt";
+import type { AuthRequest } from "./authMiddleware";
 
-interface JwtPayload {
-  id: number;
-  correo: string;
-}
+/**
+ * Igual que authenticateJWT, pero también acepta `?token=` (para /uploads en <img>/<a>).
+ */
+export const authenticateJWTOrQueryToken: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  let token: string | undefined;
 
-// Sólo para cuando necesites usarlo en controllers:
-export interface AuthRequest<B = any> extends Request<any, any, B> {
-  user: {
-    id: number;
-    codigo: string | null;
-    nombre: string;
-    apellido: string | null;
-    correoElectronico: string | null;
-    departamentoId: number;
-    rolIds: number[];
-  };
-}
-
-// Ahora `authenticateJWT` es un RequestHandler puro
-export const authenticateJWT: RequestHandler = async (req, res, next) => {
   const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith("Bearer ")) {
+  if (authHeader?.startsWith("Bearer ")) {
+    token = authHeader.split(" ")[1];
+  } else if (typeof req.query.token === "string" && req.query.token.trim()) {
+    token = req.query.token.trim();
+  }
+
+  if (!token) {
     return res.status(401).json({
       success: false,
       message: "Token no proporcionado",
@@ -35,9 +31,8 @@ export const authenticateJWT: RequestHandler = async (req, res, next) => {
     } as ApiResponse<null>);
   }
 
-  const token = authHeader.split(" ")[1];
   try {
-    const payload = jwt.verify(token, getJwtSecret()) as JwtPayload;
+    const payload = jwt.verify(token, getJwtSecret()) as { id: number };
 
     const empleado = await prisma.empleado.findFirst({
       where: {
@@ -55,6 +50,7 @@ export const authenticateJWT: RequestHandler = async (req, res, next) => {
         roles: { select: { rolId: true } },
       },
     });
+
     if (!empleado) {
       return res.status(401).json({
         success: false,

@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { AuthService } from "../services/AuthService";
+import { TurnstileService } from "../services/TurnstileService";
 import { ApiResponse } from "../dtos/ApiResponse";
 import { Roles } from "../enums/roles";
 
@@ -49,6 +50,7 @@ export class AuthController {
         correoElectronico,
         dni,
         contrasena,
+        turnstileToken,
       } = req.body;
       const identifier = [
         identificador,
@@ -73,6 +75,15 @@ export class AuthController {
           data: null,
         });
       }
+
+      const remoteIp =
+        (typeof req.headers["cf-connecting-ip"] === "string"
+          ? req.headers["cf-connecting-ip"]
+          : undefined) ||
+        req.ip ||
+        req.socket.remoteAddress;
+
+      await TurnstileService.verify(turnstileToken, remoteIp);
 
       const result = await AuthService.login(identifier, contrasena);
       res.json({

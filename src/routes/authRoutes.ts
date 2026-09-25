@@ -1,12 +1,35 @@
-import { Router } from "express";
+import { Router, Request, Response } from "express";
 import { AuthController } from "../controllers/AuthController";
 import { validate } from "../middlewares/validate";
-import { registerSchema, loginSchema, changePasswordSchema } from "../validators/auth.validator";
+import { loginSchema } from "../validators/auth.validator";
+import { ApiResponse } from "../dtos/ApiResponse";
+import { loginRateLimiter } from "../middlewares/loginRateLimiter";
 
 export const authRouter = Router();
 
-authRouter.post("/register", validate(registerSchema), AuthController.register);
+/** Endpoints deshabilitados: el alta de usuarios es solo vía RRHH. */
+authRouter.post("/register", (_req: Request, res: Response) => {
+  return res.status(403).json({
+    success: false,
+    message:
+      "El registro público está deshabilitado. Contacte a recursos humanos.",
+    data: null,
+  } as ApiResponse<null>);
+});
 
-authRouter.post("/login", validate(loginSchema), AuthController.login);
+authRouter.post(
+  "/login",
+  loginRateLimiter,
+  validate(loginSchema),
+  AuthController.login
+);
 
-authRouter.post("/change-password", validate(changePasswordSchema), AuthController.changePassword);
+/** Cambio de contraseña deshabilitado temporalmente (no expuesto en UI). */
+authRouter.post("/change-password", (_req: Request, res: Response) => {
+  return res.status(403).json({
+    success: false,
+    message:
+      "El cambio de contraseña está deshabilitado temporalmente. Contacte a recursos humanos.",
+    data: null,
+  } as ApiResponse<null>);
+});
