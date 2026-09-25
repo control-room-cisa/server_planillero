@@ -18,34 +18,28 @@ import {
 
 const router = Router();
 
-// GET /api/departamentos?empresaId=... - Público (sin autenticación)
+router.use(authenticateJWT);
+
 router.get("/", listDepartamentos);
 
-// GET /api/departamentos/:id - Público (sin autenticación)
 router.get("/:id", getDepartamento);
 
-// POST /api/departamentos - Solo RRHH
 router.post(
   "/",
-  authenticateJWT,
   authorizeRoles(Roles.RRHH),
   validate(createDepartamentoSchema),
   createDepartamento
 );
 
-// PUT /api/departamentos/:id - Solo RRHH
 router.put(
   "/:id",
-  authenticateJWT,
   authorizeRoles(Roles.RRHH),
   validate(updateDepartamentoSchema),
   updateDepartamento
 );
 
-// DELETE /api/departamentos/:id - Solo RRHH
 router.delete(
   "/:id",
-  authenticateJWT,
   authorizeRoles(Roles.RRHH),
   deleteDepartamento
 );

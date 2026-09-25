@@ -10,16 +10,27 @@ export class NominaRepository {
   static async findMany(params: {
     empleadoId?: number;
     empresaId?: number;
+    /** Si se indica (p. ej. scope de asistente), filtra `empresaId IN (...)`. */
+    empresaIds?: number[];
     start?: string;
     end?: string;
     codigoNomina?: string;
   }): Promise<Nomina[]> {
-    const { empleadoId, empresaId, start, end, codigoNomina } = params;
+    const { empleadoId, empresaId, empresaIds, start, end, codigoNomina } =
+      params;
+
+    const empresaFilter =
+      empresaId !== undefined
+        ? empresaId
+        : empresaIds !== undefined
+          ? { in: empresaIds }
+          : undefined;
+
     return prisma.nomina.findMany({
       where: {
         deletedAt: null,
         empleadoId,
-        empresaId,
+        ...(empresaFilter !== undefined ? { empresaId: empresaFilter } : {}),
         ...(codigoNomina ? { codigoNomina } : {}),
         ...(start && end && !codigoNomina
           ? {

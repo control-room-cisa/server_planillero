@@ -67,6 +67,18 @@ export class AccesoContabilidadRepository {
     });
   }
 
+  /** Empresas con acceso activo para un asistente (u otro empleado). */
+  static async findActiveEmpresaIdsByEmpleado(
+    empleadoId: number
+  ): Promise<number[]> {
+    const rows = await prisma.accesoContabilidad.findMany({
+      where: { empleadoId, deletedAt: null },
+      select: { empresaId: true },
+      distinct: ["empresaId"],
+    });
+    return rows.map((r) => r.empresaId);
+  }
+
   static async create(
     data: Prisma.AccesoContabilidadCreateInput
   ): Promise<AccesoContabilidadWithRelations> {

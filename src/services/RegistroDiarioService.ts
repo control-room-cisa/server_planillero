@@ -11,6 +11,7 @@ import {
 import { prisma } from "../config/prisma";
 import { HorarioTrabajoDomain } from "../domain/calculo-horas/horario-trabajo-domain";
 import { FeriadoRepository } from "../repositories/FeriadoRepository";
+import { EmpleadoAccessService } from "./EmpleadoAccessService";
 import { AppError } from "../errors/AppError";
 
 export class RegistroDiarioService {
@@ -89,18 +90,41 @@ export class RegistroDiarioService {
       fecha
     );
   }
+  /**
+   * Un supervisor solo puede actuar sobre empleados de su mismo departamento
+   * o vinculados vía PlanillaAcceso (misma regla que listByDepartment).
+   */
+  static assertSupervisorCanAccessEmpleado(
+    supervisorId: number,
+    supervisorDepartamentoId: number,
+    empleadoId: number
+  ): Promise<void> {
+    return EmpleadoAccessService.assertSupervisorCanAccessEmpleado(
+      supervisorId,
+      supervisorDepartamentoId,
+      empleadoId
+    );
+  }
+
   static async aprobarSupervisor(
     registroDiarioId: number,
-    dto: SupervisorApprovalDto
+    dto: SupervisorApprovalDto,
+    actor: { id: number; departamentoId: number }
   ) {
     const reg = await prisma.registroDiario.findFirst({
       where: { id: registroDiarioId, deletedAt: null },
-      select: { aprobacionRrhh: true },
+      select: { aprobacionRrhh: true, empleadoId: true },
     });
 
     if (!reg) {
       throw new AppError("Registro no encontrado", 404);
     }
+
+    await this.assertSupervisorCanAccessEmpleado(
+      actor.id,
+      actor.departamentoId,
+      reg.empleadoId
+    );
 
     if (reg.aprobacionRrhh === true) {
       throw new AppError(
@@ -117,6 +141,7 @@ export class RegistroDiarioService {
 
   /**
    * Actualiza la aprobación de RRHH de un registro diario.
+   * El rol RRHH se valida en la ruta; RRHH puede aprobar cualquier empleado.
    */
   static aprobarRrhh(registroDiarioId: number, dto: RrhhApprovalDto) {
     return RegistroDiarioRepository.updateRrhhApproval(registroDiarioId, dto);

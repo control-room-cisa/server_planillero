@@ -12,27 +12,24 @@ import {
 
 const router = Router();
 
-// GET /empresas - Público (sin autenticación)
+router.use(authenticateJWT);
+
 router.get("/", listEmpresasConDepartamentos);
 
-// Rutas protegidas: requieren autenticación y roles SUPERVISOR_CONTABILIDAD o GERENCIA
 router.post(
   "/",
-  authenticateJWT,
   authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   createEmpresa
 );
 
 router.patch(
   "/:id",
-  authenticateJWT,
   authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   updateEmpresa
 );
 
 router.delete(
   "/:id",
-  authenticateJWT,
   authorizeRoles(Roles.SUPERVISOR_CONTABILIDAD, Roles.GERENCIA),
   deleteEmpresa
 );

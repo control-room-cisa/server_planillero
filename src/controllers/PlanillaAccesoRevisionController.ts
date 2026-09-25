@@ -8,12 +8,18 @@ import {
   updatePlanillaAccesoRevisionSchema,
 } from "../validators/planillaAccesoRevision.validator";
 import { z } from "zod";
+import type { AuthRequest } from "../middlewares/authMiddleware";
+
+function actorFrom(req: Parameters<RequestHandler>[0]) {
+  const user = (req as AuthRequest).user;
+  return { id: user.id, rolIds: user.rolIds };
+}
 
 /** GET /api/planilla-acceso-revision */
 export const listPlanillaAccesoRevision: RequestHandler<
-  {}, // params
-  ApiResponse<PlanillaAcceso[]>, // res body
-  {}, // req body
+  {},
+  ApiResponse<PlanillaAcceso[]>,
+  {},
   {
     supervisorId?: string;
     empleadoId?: string;
@@ -27,12 +33,11 @@ export const listPlanillaAccesoRevision: RequestHandler<
       ? Number(req.query.empleadoId)
       : undefined;
 
-    const accesos = await PlanillaAccesoRevisionService.listPlanillaAccesoRevision(
-      {
-        supervisorId,
-        empleadoId,
-      }
-    );
+    const accesos =
+      await PlanillaAccesoRevisionService.listPlanillaAccesoRevision(
+        { supervisorId, empleadoId },
+        actorFrom(req)
+      );
 
     return res.json({
       success: true,
@@ -46,16 +51,18 @@ export const listPlanillaAccesoRevision: RequestHandler<
 
 /** GET /api/planilla-acceso-revision/:id */
 export const getPlanillaAccesoRevision: RequestHandler<
-  { id: string }, // params
-  ApiResponse<PlanillaAcceso>, // res body
-  {}, // req body
-  {} // query
+  { id: string },
+  ApiResponse<PlanillaAcceso>,
+  {},
+  {}
 > = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const acceso = await PlanillaAccesoRevisionService.getPlanillaAccesoRevisionById(
-      id
-    );
+    const acceso =
+      await PlanillaAccesoRevisionService.getPlanillaAccesoRevisionById(
+        id,
+        actorFrom(req)
+      );
     return res.json({
       success: true,
       message: `Detalles del acceso de planilla ${id}`,
@@ -74,7 +81,10 @@ export const createPlanillaAccesoRevision: RequestHandler<
   try {
     const payload = createPlanillaAccesoRevisionSchema.parse(req.body);
     const newAcceso =
-      await PlanillaAccesoRevisionService.createPlanillaAccesoRevision(payload);
+      await PlanillaAccesoRevisionService.createPlanillaAccesoRevision(
+        payload,
+        actorFrom(req)
+      );
     return res.status(201).json({
       success: true,
       message: "Acceso de planilla creado correctamente",
@@ -101,7 +111,8 @@ export const updatePlanillaAccesoRevision: RequestHandler<
     const updated =
       await PlanillaAccesoRevisionService.updatePlanillaAccesoRevision(
         id,
-        payload
+        payload,
+        actorFrom(req)
       );
     return res.json({
       success: true,
@@ -120,14 +131,17 @@ export const updatePlanillaAccesoRevision: RequestHandler<
 
 /** DELETE /api/planilla-acceso-revision/:id */
 export const deletePlanillaAccesoRevision: RequestHandler<
-  { id: string }, // params
-  ApiResponse<null>, // res body
-  {}, // req body
-  {} // query
+  { id: string },
+  ApiResponse<null>,
+  {},
+  {}
 > = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    await PlanillaAccesoRevisionService.deletePlanillaAccesoRevision(id);
+    await PlanillaAccesoRevisionService.deletePlanillaAccesoRevision(
+      id,
+      actorFrom(req)
+    );
     return res.json({
       success: true,
       message: `Acceso de planilla ${id} eliminado`,
@@ -137,11 +151,3 @@ export const deletePlanillaAccesoRevision: RequestHandler<
     next(err);
   }
 };
-
-
-
-
-
-
-
-

@@ -3,6 +3,7 @@ import type { RequestHandler } from "express";
 import type { AuthRequest } from "../middlewares/authMiddleware";
 import { EmpleadoService } from "../services/EmpleadoService";
 import { AccesoContabilidadService } from "../services/AccesoContabilidadService";
+import { EmpleadoAccessService } from "../services/EmpleadoAccessService";
 import { EmpleadoRepository } from "../repositories/EmpleadoRepository";
 import {
   CreateEmpleadoDto,
@@ -214,6 +215,9 @@ export const getById: RequestHandler<
 > = async (req, res, next) => {
   try {
     const id = Number(req.params.id);
+    const authReq = req as AuthRequest;
+    await EmpleadoAccessService.assertCanViewEmpleado(authReq.user, id);
+
     const empleado = await EmpleadoService.getById(id);
 
     if (!empleado) {
@@ -255,6 +259,12 @@ export const getByCodigo: RequestHandler<
         data: null,
       } as ApiResponse<EmployeeDetailDto>);
     }
+
+    const authReq = req as AuthRequest;
+    await EmpleadoAccessService.assertCanViewEmpleadoByCodigo(
+      authReq.user,
+      codigo
+    );
 
     const empleado = await EmpleadoRepository.findByCodigo(codigo);
     if (!empleado) {

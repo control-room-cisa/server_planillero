@@ -167,8 +167,6 @@ export const aprobacionSupervisor: RequestHandler<
   ApiResponse<RegistroDiario>,
   SupervisorApprovalDto
 > = async (req, res, next) => {
-  console.log("APROBACION SUPERVISOR");
-
   try {
     const registroId = parseInt(req.params.id, 10);
     if (isNaN(registroId)) {
@@ -177,9 +175,11 @@ export const aprobacionSupervisor: RequestHandler<
         .json({ success: false, message: "ID inválido", data: null });
     }
 
+    const user = (req as AuthRequest).user;
     const updated = await RegistroDiarioService.aprobarSupervisor(
       registroId,
-      req.body
+      req.body,
+      { id: user.id, departamentoId: user.departamentoId }
     );
     return res.json({
       success: true,

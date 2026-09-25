@@ -135,14 +135,18 @@ export const leerNominas: RequestHandler<
       ? Number(req.query.empresaId)
       : undefined;
     const { start, end, codigoNomina } = req.query;
+    const user = (req as AuthRequest).user;
 
-    const data = await NominaService.list({
-      empleadoId,
-      empresaId,
-      start,
-      end,
-      codigoNomina: codigoNomina as string | undefined,
-    });
+    const data = await NominaService.list(
+      {
+        empleadoId,
+        empresaId,
+        start,
+        end,
+        codigoNomina: codigoNomina as string | undefined,
+      },
+      { id: user.id, rolIds: user.rolIds }
+    );
     return res.json({ success: true, message: "Listado de nóminas", data });
   } catch (err) {
     next(err);
@@ -217,7 +221,10 @@ export const leerNominaPorId: RequestHandler<
         .status(400)
         .json({ success: false, message: "id inválido", data: null });
     }
-    const data = await NominaService.getById(id);
+    const data = await NominaService.getById(id, {
+      id: (req as AuthRequest).user.id,
+      rolIds: (req as AuthRequest).user.rolIds,
+    });
     return res.json({ success: true, message: "Nómina", data });
   } catch (err) {
     next(err);
@@ -299,7 +306,11 @@ export const leerNominasResumenPorEmpleado: RequestHandler<
     }
 
     // Reusar servicio existente (suponiendo que tiene list con filtros)
-    const nominas = await NominaService.list({ empleadoId });
+    const user = (req as unknown as AuthRequest).user;
+    const nominas = await NominaService.list(
+      { empleadoId },
+      { id: user.id, rolIds: user.rolIds }
+    );
     const resumen = (nominas || []).map((n: any) => ({
       id: n.id,
       nombrePeriodoNomina: n.nombrePeriodoNomina,
@@ -336,7 +347,10 @@ export const descargarDetalleNomina: RequestHandler<
     }
 
     const { buffer, filename } =
-      await NominaService.generarDetalleNominaXlsx(id);
+      await NominaService.generarDetalleNominaXlsx(id, {
+        id: (req as AuthRequest).user.id,
+        rolIds: (req as AuthRequest).user.rolIds,
+      });
     res.setHeader(
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -374,7 +388,11 @@ export const descargarTablaDetallesNominas: RequestHandler<
     const { buffer, filename } =
       await NominaService.generarTablaDetallesNominasXlsx(
         empresaId,
-        codigoNomina
+        codigoNomina,
+        {
+          id: (req as AuthRequest).user.id,
+          rolIds: (req as AuthRequest).user.rolIds,
+        }
       );
     res.setHeader(
       "Content-Type",

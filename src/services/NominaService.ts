@@ -12,8 +12,11 @@ import { EmpresaRepository } from "../repositories/EmpresaRepository";
 import { RegistroDiarioService } from "./RegistroDiarioService";
 import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
 import { prisma } from "../config/prisma";
+import { AccesoContabilidadService } from "./AccesoContabilidadService";
 
 type BancoCompensatoriaAplicada = { jobId: number | null; horas: number };
+
+type NominaViewer = { id: number; rolIds: number[] };
 
 function parseBancoCompensatoriasAplicadas(
   value: unknown
@@ -202,20 +205,60 @@ export class NominaService {
     return archived;
   }
 
-  static async getById(id: number): Promise<Nomina> {
+  static async getById(
+    id: number,
+    viewer?: NominaViewer
+  ): Promise<Nomina> {
     const found = await NominaRepository.findById(id);
     if (!found) throw new AppError("Nómina no encontrada", 404);
+    if (viewer) {
+      await AccesoContabilidadService.assertCanAccessNominaEmpresa(
+        viewer.id,
+        viewer.rolIds,
+        found.empresaId
+      );
+    }
     return found;
   }
 
-  static async list(params: {
-    empleadoId?: number;
-    empresaId?: number;
-    start?: string;
-    end?: string;
-    codigoNomina?: string;
-  }): Promise<Nomina[]> {
-    return NominaRepository.findMany(params);
+  static async list(
+    params: {
+      empleadoId?: number;
+      empresaId?: number;
+      start?: string;
+      end?: string;
+      codigoNomina?: string;
+    },
+    viewer?: NominaViewer
+  ): Promise<Nomina[]> {
+    let empresaId = params.empresaId;
+    let empresaIds: number[] | undefined;
+
+    if (viewer) {
+      const scope = await AccesoContabilidadService.getNominaEmpresaScope(
+        viewer.id,
+        viewer.rolIds
+      );
+      if (scope !== null) {
+        if (scope.length === 0) return [];
+        if (empresaId != null) {
+          if (!scope.includes(empresaId)) {
+            throw new AppError(
+              "No tiene permiso para ver nóminas de esta empresa.",
+              403
+            );
+          }
+        } else {
+          empresaIds = scope;
+        }
+      }
+    }
+
+    return NominaRepository.findMany({
+      ...params,
+      empresaId,
+      empresaIds,
+    });
   }
 
   static async create(
@@ -710,11 +753,19 @@ export class NominaService {
   }
 
   static async generarDetalleNominaXlsx(
-    id: number
+    id: number,
+    viewer?: NominaViewer
   ): Promise<{ buffer: Buffer; filename: string }> {
     const nomina = await NominaRepository.findById(id);
     if (!nomina) {
       throw new AppError("Nómina no encontrada", 404);
+    }
+    if (viewer) {
+      await AccesoContabilidadService.assertCanAccessNominaEmpresa(
+        viewer.id,
+        viewer.rolIds,
+        nomina.empresaId
+      );
     }
 
     const empleado = await EmpleadoRepository.findById(nomina.empleadoId);
@@ -844,8 +895,17 @@ export class NominaService {
 
   static async generarTablaDetallesNominasXlsx(
     empresaId: number,
-    codigoNomina: string
+    codigoNomina: string,
+    viewer?: NominaViewer
   ): Promise<{ buffer: Buffer; filename: string }> {
+    if (viewer) {
+      await AccesoContabilidadService.assertCanAccessNominaEmpresa(
+        viewer.id,
+        viewer.rolIds,
+        empresaId
+      );
+    }
+
     const nominas = await NominaRepository.findManyWithEmpleadoForPeriodo(
       empresaId,
       codigoNomina

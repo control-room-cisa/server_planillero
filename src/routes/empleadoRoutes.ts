@@ -46,10 +46,10 @@ router.get(
   getByCodigoForProrrateo
 );
 
-// GET /empleados/codigo/:codigo — acceso directo por código (nóminas / URL)
+// GET /empleados/codigo/:codigo — detalle por código (ACL en controller)
 router.get("/codigo/:codigo", getByCodigo);
 
-// GET /empleados/:id - Todos los autenticados pueden ver
+// GET /empleados/:id — detalle (self + roles autorizados + scope)
 router.get("/:id", getById);
 
 // POST /empleados - Solo RRHH puede crear empleados

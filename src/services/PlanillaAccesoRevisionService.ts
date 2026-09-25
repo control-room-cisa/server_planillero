@@ -6,29 +6,79 @@ import type {
   UpdatePlanillaAccesoRevisionDto,
 } from "../validators/planillaAccesoRevision.validator";
 import { prisma } from "../config/prisma";
+import { AppError } from "../errors/AppError";
+import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
+
+export type PlanillaAccesoActor = {
+  id: number;
+  rolIds: number[];
+};
 
 export class PlanillaAccesoRevisionService {
-  /**
-   * @param filters.supervisorId
-   * @param filters.empleadoId
-   */
-  static async listPlanillaAccesoRevision(filters: {
-    supervisorId?: number;
-    empleadoId?: number;
-  }): Promise<PlanillaAcceso[]> {
-    return PlanillaAccesoRevisionRepository.findAll(filters);
+  /** RRHH gestiona todos; supervisor solo los suyos. */
+  private static isRrhh(actor: PlanillaAccesoActor): boolean {
+    return hasAnyRole(actor.rolIds, Roles.RRHH);
+  }
+
+  private static assertSupervisorOwns(
+    actor: PlanillaAccesoActor,
+    supervisorId: number
+  ): void {
+    if (this.isRrhh(actor)) return;
+    if (supervisorId !== actor.id) {
+      throw new AppError(
+        "No tienes permiso para gestionar accesos de planilla de otro supervisor",
+        403
+      );
+    }
   }
 
   /**
-   * Obtener un acceso de planilla por su ID; lanza error si no existe o está soft‐deleted
-   * @throws Error si no se encuentra el acceso
+   * @param filters.supervisorId
+   * @param filters.empleadoId
+   * @param actor — si es supervisor (sin RRHH), fuerza filtro a sus propios accesos
+   */
+  static async listPlanillaAccesoRevision(
+    filters: {
+      supervisorId?: number;
+      empleadoId?: number;
+    },
+    actor: PlanillaAccesoActor
+  ): Promise<PlanillaAcceso[]> {
+    let supervisorId = filters.supervisorId;
+
+    if (!this.isRrhh(actor)) {
+      // Supervisor: solo sus vínculos; ignora/override query ajena
+      if (supervisorId != null && supervisorId !== actor.id) {
+        throw new AppError(
+          "No tienes permiso para listar accesos de otro supervisor",
+          403
+        );
+      }
+      supervisorId = actor.id;
+    }
+
+    return PlanillaAccesoRevisionRepository.findAll({
+      supervisorId,
+      empleadoId: filters.empleadoId,
+    });
+  }
+
+  /**
+   * Obtener un acceso de planilla por su ID
    */
   static async getPlanillaAccesoRevisionById(
-    id: number
+    id: number,
+    actor?: PlanillaAccesoActor
   ): Promise<PlanillaAcceso> {
     const acceso = await PlanillaAccesoRevisionRepository.findById(id);
-    if (!acceso)
-      throw new Error(`PlanillaAccesoRevision con id ${id} no encontrado`);
+    if (!acceso) {
+      throw new AppError(`PlanillaAccesoRevision con id ${id} no encontrado`, 404);
+    }
+    if (actor) {
+      this.assertSupervisorOwns(actor, acceso.supervisorId);
+    }
     return acceso;
   }
 
@@ -47,7 +97,7 @@ export class PlanillaAccesoRevisionService {
     });
 
     if (!supervisor) {
-      throw new Error(`Supervisor con id ${supervisorId} no encontrado`);
+      throw new AppError(`Supervisor con id ${supervisorId} no encontrado`, 404);
     }
 
     const empleado = await prisma.empleado.findFirst({
@@ -58,13 +108,13 @@ export class PlanillaAccesoRevisionService {
     });
 
     if (!empleado) {
-      throw new Error(`Empleado con id ${empleadoId} no encontrado`);
+      throw new AppError(`Empleado con id ${empleadoId} no encontrado`, 404);
     }
 
-    // Validar que no sean el mismo empleado
     if (supervisorId === empleadoId) {
-      throw new Error(
-        "El supervisor y el empleado no pueden ser la misma persona"
+      throw new AppError(
+        "El supervisor y el empleado no pueden ser la misma persona",
+        400
       );
     }
   }
@@ -84,8 +134,9 @@ export class PlanillaAccesoRevisionService {
       );
 
     if (accesoExistente && (!excludeId || accesoExistente.id !== excludeId)) {
-      throw new Error(
-        "Ya existe un acceso de planilla para este supervisor y empleado"
+      throw new AppError(
+        "Ya existe un acceso de planilla para este supervisor y empleado",
+        409
       );
     }
   }
@@ -118,28 +169,45 @@ export class PlanillaAccesoRevisionService {
   }
 
   static async createPlanillaAccesoRevision(
-    data: CreatePlanillaAccesoRevisionDto
+    data: CreatePlanillaAccesoRevisionDto,
+    actor: PlanillaAccesoActor
   ): Promise<PlanillaAcceso> {
-    // Validar que supervisor y empleado existan
+    const payloadData = { ...data };
+
+    if (!this.isRrhh(actor)) {
+      // Supervisor solo puede crear vínculos donde él es el supervisor
+      if (
+        payloadData.supervisorId != null &&
+        payloadData.supervisorId !== actor.id
+      ) {
+        throw new AppError(
+          "No tienes permiso para crear accesos de planilla para otro supervisor",
+          403
+        );
+      }
+      payloadData.supervisorId = actor.id;
+    }
+
     await this.validateSupervisorAndEmpleado(
-      data.supervisorId,
-      data.empleadoId
+      payloadData.supervisorId,
+      payloadData.empleadoId
+    );
+    await this.validateUniqueAccess(
+      payloadData.supervisorId,
+      payloadData.empleadoId
     );
 
-    // Validar que no exista ya un acceso con el mismo supervisor y empleado
-    await this.validateUniqueAccess(data.supervisorId, data.empleadoId);
-
-    const payload = this.toPrismaCreate(data);
+    const payload = this.toPrismaCreate(payloadData);
     return PlanillaAccesoRevisionRepository.create(payload);
   }
 
   static async updatePlanillaAccesoRevision(
     id: number,
-    data: UpdatePlanillaAccesoRevisionDto
+    data: UpdatePlanillaAccesoRevisionDto,
+    actor: PlanillaAccesoActor
   ): Promise<PlanillaAcceso> {
-    const accesoExistente = await this.getPlanillaAccesoRevisionById(id);
+    const accesoExistente = await this.getPlanillaAccesoRevisionById(id, actor);
 
-    // Si se está actualizando supervisorId o empleadoId, validar
     const supervisorId =
       data.supervisorId !== undefined
         ? data.supervisorId
@@ -149,10 +217,17 @@ export class PlanillaAccesoRevisionService {
         ? data.empleadoId
         : accesoExistente.empleadoId;
 
-    // Validar que supervisor y empleado existan
-    await this.validateSupervisorAndEmpleado(supervisorId, empleadoId);
+    if (!this.isRrhh(actor)) {
+      // No puede reasignar el vínculo a otro supervisor
+      if (supervisorId !== actor.id) {
+        throw new AppError(
+          "No tienes permiso para asignar el acceso a otro supervisor",
+          403
+        );
+      }
+    }
 
-    // Validar que no exista ya un acceso con el mismo supervisor y empleado (excepto el actual)
+    await this.validateSupervisorAndEmpleado(supervisorId, empleadoId);
     await this.validateUniqueAccess(supervisorId, empleadoId, id);
 
     const payload = this.toPrismaUpdate(data);
@@ -160,19 +235,13 @@ export class PlanillaAccesoRevisionService {
   }
 
   /**
-   * Soft‐delete: marca deletedAt; lanza error si no existe
+   * Soft‐delete: marca deletedAt
    */
-  static async deletePlanillaAccesoRevision(id: number): Promise<void> {
-    // Validar existencia
-    await this.getPlanillaAccesoRevisionById(id);
+  static async deletePlanillaAccesoRevision(
+    id: number,
+    actor: PlanillaAccesoActor
+  ): Promise<void> {
+    await this.getPlanillaAccesoRevisionById(id, actor);
     await PlanillaAccesoRevisionRepository.remove(id);
   }
 }
-
-
-
-
-
-
-
-

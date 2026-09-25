@@ -2,6 +2,9 @@
 import type { RequestHandler } from "express";
 import { GastosAlimentacionService } from "../services/GastosAlimentacionService";
 import type { ApiResponse } from "../dtos/ApiResponse";
+import type { AuthRequest } from "../middlewares/authMiddleware";
+import { EmpleadoAccessService } from "../services/EmpleadoAccessService";
+import { AppError } from "../errors/AppError";
 import { ymdGt } from "../utils/dateTime";
 
 const FECHA_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -111,7 +114,7 @@ export const getDeduccionAlimentacion: RequestHandler<
   }>, // response
   {}, // body
   { codigoEmpleado?: string; fechaInicio?: string; fechaFin?: string } // query
-> = async (req, res) => {
+> = async (req, res, next) => {
   const { codigoEmpleado, fechaInicio, fechaFin } = req.query;
 
   // Validaciones 400
@@ -143,6 +146,12 @@ export const getDeduccionAlimentacion: RequestHandler<
   }
 
   try {
+    const authReq = req as AuthRequest;
+    await EmpleadoAccessService.assertCanViewEmpleadoByCodigo(
+      authReq.user,
+      String(codigoEmpleado).trim()
+    );
+
     // Llamar al servicio que hace la petici?n a la API externa
     const resultado = await GastosAlimentacionService.obtenerConsumo({
       codigoEmpleado: String(codigoEmpleado).trim(),
@@ -193,6 +202,9 @@ export const getDeduccionAlimentacion: RequestHandler<
       )
     );
   } catch (err: any) {
+    if (err instanceof AppError) {
+      return next(err);
+    }
     const lower = (err?.message ?? "").toLowerCase();
     const status =
       lower.includes("no encontrado") || lower.includes("not found")

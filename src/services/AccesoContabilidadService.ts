@@ -233,4 +233,51 @@ export class AccesoContabilidadService {
       );
     }
   }
+
+  /**
+   * Scope de empresas para lectura de nóminas.
+   * - RRHH / SUPERVISOR_CONTABILIDAD: `null` = sin restricción
+   * - ASISTENTE_CONTABILIDAD: IDs de empresas en accesos_contabilidad
+   * - Otros: lista vacía
+   */
+  static async getNominaEmpresaScope(
+    viewerEmpleadoId: number,
+    viewerRolIds: number[]
+  ): Promise<number[] | null> {
+    if (
+      hasAnyRole(
+        viewerRolIds,
+        Roles.RRHH,
+        Roles.SUPERVISOR_CONTABILIDAD
+      )
+    ) {
+      return null;
+    }
+
+    if (hasAnyRole(viewerRolIds, Roles.ASISTENTE_CONTABILIDAD)) {
+      return AccesoContabilidadRepository.findActiveEmpresaIdsByEmpleado(
+        viewerEmpleadoId
+      );
+    }
+
+    return [];
+  }
+
+  static async assertCanAccessNominaEmpresa(
+    viewerEmpleadoId: number,
+    viewerRolIds: number[],
+    empresaId: number
+  ): Promise<void> {
+    const scope = await this.getNominaEmpresaScope(
+      viewerEmpleadoId,
+      viewerRolIds
+    );
+    if (scope === null) return;
+    if (!scope.includes(empresaId)) {
+      throw new AppError(
+        "No tiene permiso para ver nóminas de esta empresa.",
+        403
+      );
+    }
+  }
 }
