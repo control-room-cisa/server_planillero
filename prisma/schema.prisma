@@ -94,6 +94,7 @@ enum TipoHorario {
   H1_7 // (H1.7) Turnos rotativos 14x14
   H1_8 // (H1.8) Lunes a viernes (Legal)
   H1_9 // (H1.9) Especial Lunes a Sábado
+  H1_10 // (H1.10) Horario libre UI
   H2_1 // (H2.1) Turnos 7x7 Copenergy
   H2_2 // (H2.2) Lunes a Viernes Copenergy
 }
@@ -466,12 +467,22 @@ model BancoCompensatoriasAcumuladas {
   @@map("banco_compensatorias_acumuladas")
 }
 
+/// Alcance temporal del feriado
+enum TipoFeriado {
+  TODO_EL_DIA
+  DESDE
+  HASTA
+}
+
 //Feriados
 model Feriado {
-  id          Int     @id @default(autoincrement())
-  nombre      String  @db.VarChar(45)
-  fecha       String  @unique @db.VarChar(10)
-  descripcion String? @db.VarChar(255)
+  id          Int         @id @default(autoincrement())
+  nombre      String      @db.VarChar(45)
+  fecha       String      @unique @db.VarChar(10)
+  descripcion String?     @db.VarChar(255)
+  tipo        TipoFeriado @default(TODO_EL_DIA)
+  horaDesde   String?     @map("hora_desde") @db.VarChar(5)
+  horaHasta   String?     @map("hora_hasta") @db.VarChar(5)
 
   createdAt DateTime? @default(now()) @map("created_at")
   updatedAt DateTime? @map("updated_at")

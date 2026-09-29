@@ -1,0 +1,5 @@
+-- AlterTable
+ALTER TABLE `feriados`
+  ADD COLUMN `tipo` ENUM('TODO_EL_DIA', 'DESDE', 'HASTA') NOT NULL DEFAULT 'TODO_EL_DIA',
+  ADD COLUMN `hora_desde` VARCHAR(5) NULL,
+  ADD COLUMN `hora_hasta` VARCHAR(5) NULL;

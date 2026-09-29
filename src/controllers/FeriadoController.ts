@@ -2,7 +2,7 @@
 import { RequestHandler } from "express";
 import { FeriadoService } from "../services/FeriadoService";
 import { ApiResponse } from "../dtos/ApiResponse";
-import type { Feriado, Prisma } from "@prisma/client";
+import type { Feriado } from "@prisma/client";
 import { createFeriadoSchema } from "../validators/feriado.validator";
 
 /** GET /api/feriados */
@@ -43,8 +43,6 @@ export const getFeriadoByDate: RequestHandler<
     next(err);
   }
 };
-
-import { CreateFeriadoDto } from "../validators/feriado.validator";
 
 /** POST /api/feriados (Crear nuevo feriado - upsert) */
 export const createFeriado: RequestHandler<
