@@ -931,11 +931,36 @@ export class NominaService {
     const workbook = new ExcelJS.Workbook();
     const sheet = workbook.addWorksheet("Detalles");
     const currencyFmt = '"L" #,##0.00';
+    const fillGreen = {
+      type: "pattern" as const,
+      pattern: "solid" as const,
+      fgColor: { argb: "FFE8F5E9" },
+    };
+    const fillGreenStrong = {
+      type: "pattern" as const,
+      pattern: "solid" as const,
+      fgColor: { argb: "FFC8E6C9" },
+    };
+    const fillRed = {
+      type: "pattern" as const,
+      pattern: "solid" as const,
+      fgColor: { argb: "FFFFEBEE" },
+    };
+    const fillRedStrong = {
+      type: "pattern" as const,
+      pattern: "solid" as const,
+      fgColor: { argb: "FFFFCDD2" },
+    };
+
+    // Columnas que suman (percepción) → verde; que restan (deducción) → rojo.
+    // Sin "Subtotal": se desglosa en sus componentes.
     const headers = [
       "Colaborador",
       "Fecha de Corte",
       "Sueldo Quincenal",
-      "Subtotal",
+      "Monto Días Laborados",
+      "Monto Vacaciones",
+      "Monto Incapacidad Empresa",
       "Extra 25%",
       "Extra 50%",
       "Extra 75%",
@@ -955,6 +980,12 @@ export class NominaService {
       "Estado",
     ];
     const lastCol = headers.length;
+    // 1-based column indexes
+    const greenCols = [4, 5, 6, 7, 8, 9, 10, 11]; // solo componentes que suman
+    const greenTotalCol = 12; // Total Bruto
+    const redCols = [13, 14, 15, 16, 17, 18, 19, 20]; // solo componentes que restan
+    const redTotalCol = 21; // Total Deducciones
+    const totalAPagarCol = 22;
 
     sheet.columns = headers.map((_, index) => ({
       width: index === 0 ? 32 : index === 1 ? 24 : 18,
@@ -963,7 +994,12 @@ export class NominaService {
     sheet.mergeCells(1, 1, 1, lastCol);
     const titleRow = sheet.getRow(1);
     titleRow.getCell(1).value = nombreEmpresa;
-    titleRow.getCell(1).font = { bold: true, size: 18 };
+    titleRow.getCell(1).font = { bold: true, size: 18, color: { argb: "FFFFFFFF" } };
+    titleRow.getCell(1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FF3A5A7C" }, // azul oscuro suave, poco saturado
+    };
     titleRow.getCell(1).alignment = { horizontal: "center", vertical: "middle" };
     titleRow.height = 28;
 
@@ -977,6 +1013,22 @@ export class NominaService {
     };
     subtitleRow.height = 20;
 
+    const applyColumnFills = (row: ExcelJS.Row, boldTotalPagar = false) => {
+      for (const col of greenCols) {
+        row.getCell(col).fill = fillGreen;
+      }
+      row.getCell(greenTotalCol).fill = fillGreenStrong;
+      for (const col of redCols) {
+        row.getCell(col).fill = fillRed;
+      }
+      row.getCell(redTotalCol).fill = fillRedStrong;
+      const totalPagarCell = row.getCell(totalAPagarCol);
+      totalPagarCell.fill = fillGreenStrong;
+      if (boldTotalPagar) {
+        totalPagarCell.font = { ...(totalPagarCell.font || {}), bold: true };
+      }
+    };
+
     const headerRow = sheet.getRow(3);
     headers.forEach((header, index) => {
       const cell = headerRow.getCell(index + 1);
@@ -984,11 +1036,14 @@ export class NominaService {
       cell.font = { bold: true };
       cell.alignment = { vertical: "middle", wrapText: true };
     });
+    applyColumnFills(headerRow, true);
     headerRow.height = 30;
 
     const totals = {
       sueldoQuincenal: 0,
-      subtotal: 0,
+      montoDiasLaborados: 0,
+      montoVacaciones: 0,
+      montoIncapacidadEmpresa: 0,
       extra25: 0,
       extra50: 0,
       extra75: 0,
@@ -1008,18 +1063,30 @@ export class NominaService {
     };
 
     const firstAmountCol = 3;
-    const lastAmountCol = 20;
+    const lastAmountCol = 22;
 
     ordenadas.forEach((n) => {
       const nombre = `${n.empleado.nombre} ${n.empleado.apellido ?? ""}`.trim();
       const sueldoQuincenal = this.round2((n.sueldoMensual ?? 0) / 2);
-      const subtotal = n.subtotalQuincena ?? 0;
+      const montoDiasLaborados = n.montoDiasLaborados ?? 0;
+      const montoVacaciones = n.montoVacaciones ?? 0;
+      const montoIncapacidadEmpresa = n.montoIncapacidadCubreEmpresa ?? 0;
       const extra25 = n.montoHoras25 ?? 0;
       const extra50 = n.montoHoras50 ?? 0;
       const extra75 = n.montoHoras75 ?? 0;
       const extra100 = n.montoHoras100 ?? 0;
       const ajustes = n.ajuste ?? 0;
-      const totalBruto = this.calcularTotalBruto(n);
+      // Total bruto = suma de todos los positivos (componentes del ex-subtotal + extras + ajuste)
+      const totalBruto = this.round2(
+        montoDiasLaborados +
+          montoVacaciones +
+          montoIncapacidadEmpresa +
+          extra25 +
+          extra50 +
+          extra75 +
+          extra100 +
+          ajustes
+      );
       const deduccionIHSS = n.deduccionIHSS ?? 0;
       const deduccionISR = n.deduccionISR ?? 0;
       const deduccionRAP = n.deduccionRAP ?? 0;
@@ -1028,11 +1095,23 @@ export class NominaService {
       const cobroPrestamo = n.cobroPrestamo ?? 0;
       const impuestoVecinal = n.impuestoVecinal ?? 0;
       const otros = n.otros ?? 0;
-      const totalDeducciones = this.calcularTotalDeducciones(n);
-      const totalAPagar = this.calcularTotalAPagar(n);
+      // Total deducciones = suma de todos los que restan
+      const totalDeducciones = this.round2(
+        deduccionIHSS +
+          deduccionISR +
+          deduccionRAP +
+          deduccionAlimentacion +
+          deduccionAlojamiento +
+          cobroPrestamo +
+          impuestoVecinal +
+          otros
+      );
+      const totalAPagar = this.round2(totalBruto - totalDeducciones);
 
       totals.sueldoQuincenal += sueldoQuincenal;
-      totals.subtotal += subtotal;
+      totals.montoDiasLaborados += montoDiasLaborados;
+      totals.montoVacaciones += montoVacaciones;
+      totals.montoIncapacidadEmpresa += montoIncapacidadEmpresa;
       totals.extra25 += extra25;
       totals.extra50 += extra50;
       totals.extra75 += extra75;
@@ -1054,7 +1133,9 @@ export class NominaService {
         nombre,
         `${this.formatFechaUtc(n.fechaInicio)} - ${this.formatFechaUtc(n.fechaFin)}`,
         sueldoQuincenal,
-        subtotal,
+        montoDiasLaborados,
+        montoVacaciones,
+        montoIncapacidadEmpresa,
         extra25,
         extra50,
         extra75,
@@ -1077,13 +1158,17 @@ export class NominaService {
       for (let col = firstAmountCol; col <= lastAmountCol; col++) {
         row.getCell(col).numFmt = currencyFmt;
       }
+      applyColumnFills(row, true);
+      row.getCell(totalAPagarCol).font = { bold: true };
     });
 
     const totalRow = sheet.addRow([
       "Totales",
       "",
       this.round2(totals.sueldoQuincenal),
-      this.round2(totals.subtotal),
+      this.round2(totals.montoDiasLaborados),
+      this.round2(totals.montoVacaciones),
+      this.round2(totals.montoIncapacidadEmpresa),
       this.round2(totals.extra25),
       this.round2(totals.extra50),
       this.round2(totals.extra75),
@@ -1106,6 +1191,7 @@ export class NominaService {
     for (let col = firstAmountCol; col <= lastAmountCol; col++) {
       totalRow.getCell(col).numFmt = currencyFmt;
     }
+    applyColumnFills(totalRow, true);
 
     sheet.views = [{ state: "frozen", ySplit: 3 }];
 
