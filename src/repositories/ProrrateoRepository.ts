@@ -38,6 +38,33 @@ export class ProrrateoRepository {
     });
   }
 
+  /** Nóminas de un período/empresa que ya tienen snapshot de prorrateo. */
+  static async findNominasConProrrateoPorPeriodo(
+    empresaId: number,
+    codigoNomina: string
+  ) {
+    return prisma.nomina.findMany({
+      where: {
+        empresaId,
+        codigoNomina,
+        deletedAt: null,
+        prorrateos: { some: {} },
+      },
+      include: {
+        empleado: {
+          select: {
+            codigo: true,
+            nombre: true,
+            apellido: true,
+          },
+        },
+        prorrateos: {
+          orderBy: [{ tipo: "asc" }, { id: "asc" }],
+        },
+      },
+    });
+  }
+
   /** Nóminas del colaborador que ya tienen snapshot de prorrateo guardado. */
   static async listNominasGuardadasPorEmpleado(empleadoId: number) {
     const groups = await prisma.prorrateo.groupBy({

@@ -136,3 +136,48 @@ export const obtenerProrrateoPorNomina: RequestHandler = async (
     return next(err);
   }
 };
+
+/** GET /api/prorrateos/excel?empresaId=&codigoNomina= */
+export const descargarProrrateoExcel: RequestHandler<
+  {},
+  Buffer | ApiResponse<null>,
+  {},
+  { empresaId?: string; codigoNomina?: string }
+> = async (req, res, next) => {
+  try {
+    const empresaId = req.query.empresaId
+      ? Number(req.query.empresaId)
+      : undefined;
+    const codigoNomina = req.query.codigoNomina;
+
+    if (!empresaId || !Number.isFinite(empresaId) || !codigoNomina) {
+      return res.status(400).json({
+        success: false,
+        message: "empresaId y codigoNomina son requeridos",
+        data: null,
+      } satisfies ApiResponse<null>);
+    }
+
+    const authReq = req as AuthRequest;
+    const { buffer, filename } =
+      await ProrrateoService.generarExcelPorEmpresaYCodigo(
+        empresaId,
+        String(codigoNomina),
+        authReq.user.id,
+        authReq.user.rolIds
+      );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${filename.replace(/"/g, "")}"`
+    );
+    return res.send(buffer);
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    return next(err);
+  }
+};

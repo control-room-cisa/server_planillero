@@ -6,6 +6,7 @@ import {
   estadoProrrateoPorNomina,
   listarProrrateosPorEmpleado,
   obtenerProrrateoPorNomina,
+  descargarProrrateoExcel,
 } from "../controllers/ProrrateoController";
 import { Roles } from "../enums/roles";
 import { hasAnyRole } from "../utils/roles";
@@ -45,6 +46,13 @@ router.use(puedeGestionarProrrateo);
  * @body { nominaId: number }
  */
 router.post("/", guardarProrrateo);
+
+/**
+ * @route GET /api/prorrateos/excel?empresaId=&codigoNomina=
+ * @desc Descarga Excel multi-hoja (una pestaña por colaborador con prorrateo guardado)
+ * IMPORTANTE: debe ir antes de /nomina/:nominaId para no capturar "excel" como id.
+ */
+router.get("/excel", descargarProrrateoExcel);
 
 /**
  * @route GET /api/prorrateos/nomina/:nominaId/estado
