@@ -2,7 +2,7 @@ import { registroFechaToYmdSafe } from "../utils/dateTime";
 
 const DEFAULT_GASTOS_ALIMENTACION_ENDPOINT =
   process.env.GASTOS_ALIMENTACION_ENDPOINT ??
-  "http://192.168.1.13:5200/api/employee/reportes/consumo";
+  "http://172.17.10.17:5200/api/employee/reportes/consumo";
 
 export interface GastosAlimentacionParams {
   codigoEmpleado: string;

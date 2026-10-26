@@ -13,7 +13,7 @@ function loginIdentifierFromBody(req: Request): string {
 /** Límite de intentos de login por usuario+IP (fuerza bruta / credential stuffing). */
 export const loginRateLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
-  max: 10,
+  max: 15,
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => {
