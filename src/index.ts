@@ -23,6 +23,7 @@ import techoIhssRoutes from "./routes/techoIhssRoutes";
 import vehiculoRoutes from "./routes/VehiculoRoutes";
 import accesoContabilidadRoutes from "./routes/accesoContabilidadRoutes";
 import prorrateoRoutes from "./routes/ProrrateoRoutes";
+import solicitudPermisoRoutes from "./routes/solicitudPermisoRoutes";
 import { startFlotaUsuarioSyncCron } from "./jobs/flotaUsuarioSyncCron";
 import { assertJwtSecretConfigured } from "./config/jwt";
 import { assertCorsConfigured, getCorsOrigins } from "./config/cors";
@@ -93,6 +94,7 @@ app.use("/api/techo-ihss", techoIhssRoutes);
 app.use("/api/vehiculos", vehiculoRoutes);
 app.use("/api/accesos-contabilidad", accesoContabilidadRoutes);
 app.use("/api/prorrateos", prorrateoRoutes);
+app.use("/api/solicitudes-permisos", solicitudPermisoRoutes);
 
 app.use(errorHandler);
 

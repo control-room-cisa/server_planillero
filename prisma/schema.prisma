@@ -182,6 +182,10 @@ model Empleado {
   accesosContabilidadCreados       AccesoContabilidad[] @relation("AccesoContabilidadCreatedBy")
   accesosContabilidadActualizados  AccesoContabilidad[] @relation("AccesoContabilidadUpdatedBy")
   bancoCompensatoriasAcumuladas BancoCompensatoriasAcumuladas[]
+  solicitudesPermisoComoSolicitante SolicitudPermiso[] @relation("SolicitudPermisoSolicitante")
+  solicitudesPermisoComoSupervisor  SolicitudPermiso[] @relation("SolicitudPermisoAprobadorSupervisor")
+  solicitudesPermisoComoRrhh        SolicitudPermiso[] @relation("SolicitudPermisoAprobadorRrhh")
+  solicitudesPermisoActualizadas    SolicitudPermiso[] @relation("SolicitudPermisoUpdatedBy")
 
   @@map("empleados")
 }
@@ -530,4 +534,57 @@ model TechoIhss {
   updatedAt   DateTime? @map("updated_at")
 
   @@map("techo_ihss")
+}
+
+enum TipoSolicitudPermiso {
+  VACACIONES
+  PERMISO
+}
+
+/// Solicitud de vacaciones o permiso justificado.
+/// La edición queda cerrada en cuanto supervisor o RRHH registran una decisión.
+model SolicitudPermiso {
+  id                        Int                   @id @default(autoincrement())
+  empleadoSolicitanteId     Int                   @map("empleado_solicitante_id")
+  tipo                      TipoSolicitudPermiso
+  comentario                String?               @db.VarChar(500)
+  aprobacionSupervisor      Boolean?              @map("aprobacion_supervisor")
+  aprobacionRrhh            Boolean?              @map("aprobacion_rrhh")
+  comentarioSupervisor      String?               @map("comentario_supervisor") @db.VarChar(500)
+  comentarioRrhh            String?               @map("comentario_rrhh") @db.VarChar(500)
+  aprobadorSupervisorId     Int?                  @map("aprobador_supervisor_id")
+  aprobadorRrhhId           Int?                  @map("aprobador_rrhh_id")
+  fechaAprobacionSupervisor DateTime?             @map("fecha_aprobacion_supervisor")
+  fechaAprobacionRrhh       DateTime?             @map("fecha_aprobacion_rrhh")
+  createdAt                 DateTime?             @default(now()) @map("created_at")
+  updatedAt                 DateTime?             @map("updated_at")
+  deletedAt                 DateTime?             @map("deleted_at")
+  updatedBy                 Int?                  @map("updated_by")
+
+  empleadoSolicitante Empleado  @relation("SolicitudPermisoSolicitante", fields: [empleadoSolicitanteId], references: [id])
+  aprobadorSupervisor Empleado? @relation("SolicitudPermisoAprobadorSupervisor", fields: [aprobadorSupervisorId], references: [id])
+  aprobadorRrhh       Empleado? @relation("SolicitudPermisoAprobadorRrhh", fields: [aprobadorRrhhId], references: [id])
+  actualizadoPor      Empleado? @relation("SolicitudPermisoUpdatedBy", fields: [updatedBy], references: [id])
+  dias                SolicitudPermisoDia[]
+
+  @@index([empleadoSolicitanteId], name: "idx_solicitud_permiso_solicitante")
+  @@index([aprobacionSupervisor], name: "idx_solicitud_permiso_aprob_sup")
+  @@index([aprobadorSupervisorId], name: "fk_solicitud_permiso_aprobador_sup")
+  @@index([aprobadorRrhhId], name: "fk_solicitud_permiso_aprobador_rrhh")
+  @@index([updatedBy], name: "fk_solicitud_permiso_updated_by")
+  @@map("solicitudes_permisos")
+}
+
+/// Un día solicitado. comentarioHorario describe un horario distinto a la jornada completa.
+model SolicitudPermisoDia {
+  id                Int      @id @default(autoincrement())
+  solicitudId       Int      @map("solicitud_id")
+  fecha             String   @db.VarChar(10)
+  comentarioHorario String?  @map("comentario_horario") @db.VarChar(200)
+
+  solicitud SolicitudPermiso @relation(fields: [solicitudId], references: [id])
+
+  @@unique([solicitudId, fecha], name: "uq_solicitud_permiso_dia")
+  @@index([fecha], name: "idx_solicitud_permiso_dia_fecha")
+  @@map("solicitud_permiso_dias")
 }
