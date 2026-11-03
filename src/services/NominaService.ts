@@ -1162,7 +1162,7 @@ export class NominaService {
       row.getCell(totalAPagarCol).font = { bold: true };
     });
 
-    const totalRow = sheet.addRow([
+    const totalRow = sheet.insertRow(4, [
       "Totales",
       "",
       this.round2(totals.sueldoQuincenal),
@@ -1193,7 +1193,9 @@ export class NominaService {
     }
     applyColumnFills(totalRow, true);
 
-    sheet.views = [{ state: "frozen", ySplit: 3 }];
+    sheet.views = [
+      { state: "frozen", ySplit: 4, topLeftCell: "A5", activeCell: "A5" },
+    ];
 
     const buffer = await workbook.xlsx.writeBuffer();
     const filename = `detalles-nominas-${codigoNomina}.xlsx`;

@@ -186,6 +186,8 @@ model Empleado {
   solicitudesPermisoComoSupervisor  SolicitudPermiso[] @relation("SolicitudPermisoAprobadorSupervisor")
   solicitudesPermisoComoRrhh        SolicitudPermiso[] @relation("SolicitudPermisoAprobadorRrhh")
   solicitudesPermisoActualizadas    SolicitudPermiso[] @relation("SolicitudPermisoUpdatedBy")
+  notificacionesComoDestinatario   NotificacionLog[]  @relation("NotificacionDestinatario")
+  notificacionesComoActor          NotificacionLog[]  @relation("NotificacionActor")
 
   @@map("empleados")
 }
@@ -587,4 +589,26 @@ model SolicitudPermisoDia {
   @@unique([solicitudId, fecha], name: "uq_solicitud_permiso_dia")
   @@index([fecha], name: "idx_solicitud_permiso_dia_fecha")
   @@map("solicitud_permiso_dias")
+}
+
+/// Log reutilizable de eventos notificados al usuario (cambio de job, datos personales, etc.).
+/// categoria es un código string para que la UI trate cada tipo distinto sin migración.
+model NotificacionLog {
+  id             Int       @id @default(autoincrement())
+  destinatarioId Int       @map("destinatario_id")
+  actorId        Int?      @map("actor_id")
+  categoria      String    @db.VarChar(50)
+  descripcion    String    @db.VarChar(500)
+  leida          Boolean   @default(false)
+  leidaAt        DateTime? @map("leida_at")
+  metadata       Json?
+  createdAt      DateTime? @default(now()) @map("created_at")
+
+  destinatario Empleado  @relation("NotificacionDestinatario", fields: [destinatarioId], references: [id])
+  actor        Empleado? @relation("NotificacionActor", fields: [actorId], references: [id])
+
+  @@index([destinatarioId, leida, createdAt], name: "idx_notif_destinatario_leida_fecha")
+  @@index([categoria], name: "idx_notif_categoria")
+  @@index([actorId], name: "idx_notif_actor")
+  @@map("notificaciones_log")
 }

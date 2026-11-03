@@ -18,6 +18,8 @@ import {
   SolicitudPermisoRepository,
   type SolicitudPermisoRow,
 } from "../repositories/SolicitudPermisoRepository";
+import { NotificacionLogService } from "./NotificacionLogService";
+import { NotificacionCategorias } from "../enums/notificacionCategorias";
 
 function pagination(
   page: number,
@@ -354,6 +356,13 @@ export class SolicitudPermisoService {
       body.aprobado,
       cleanText(body.comentario)
     );
+    await this.notificarDecision(
+      updated,
+      supervisorId,
+      "supervisor",
+      body.aprobado,
+      cleanText(body.comentario)
+    );
     const [dto] = await hydrate([updated]);
     return dto;
   }
@@ -421,8 +430,46 @@ export class SolicitudPermisoService {
       body.aprobado,
       cleanText(body.comentario)
     );
+    await this.notificarDecision(
+      updated,
+      rrhhId,
+      "rrhh",
+      body.aprobado,
+      cleanText(body.comentario)
+    );
     const [dto] = await hydrate([updated]);
     return dto;
+  }
+
+  private static async notificarDecision(
+    solicitud: SolicitudPermisoRow,
+    actorId: number,
+    instancia: "supervisor" | "rrhh",
+    aprobado: boolean,
+    comentario: string | null
+  ): Promise<void> {
+    const tipoLabel =
+      solicitud.tipo === "VACACIONES" ? "vacaciones" : "permiso";
+    const instanciaLabel =
+      instancia === "supervisor" ? "tu supervisor" : "RRHH";
+    const decision = aprobado ? "aprobó" : "rechazó";
+    const comentarioTxt = comentario ? ` Comentario: ${comentario}` : "";
+    await NotificacionLogService.create({
+      destinatarioId: solicitud.empleadoSolicitanteId,
+      actorId,
+      categoria: NotificacionCategorias.SOLICITUD_PERMISO,
+      descripcion: `${instanciaLabel.charAt(0).toUpperCase()}${instanciaLabel.slice(1)} ${decision} tu solicitud de ${tipoLabel}.${comentarioTxt}`.slice(
+        0,
+        500
+      ),
+      metadata: {
+        solicitudId: solicitud.id,
+        tipo: solicitud.tipo,
+        instancia,
+        aprobado,
+        comentario,
+      },
+    });
   }
 
   private static async requireOwnedEditable(

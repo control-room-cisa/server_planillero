@@ -3,6 +3,8 @@ import { prisma } from "../config/prisma";
 import type { RegistroDiario, Actividad, Job, Prisma } from "@prisma/client";
 import { Roles } from "../enums/roles";
 import { hasAnyRole, rolIdsFromRelations } from "../utils/roles";
+import { NotificacionLogRepository } from "./NotificacionLogRepository";
+import { NotificacionCategorias } from "../enums/notificacionCategorias";
 
 /** DTO reutilizable para cada actividad */
 export type ActividadInput = {
@@ -428,34 +430,11 @@ export class RegistroDiarioRepository {
         },
       },
       include: {
+        job: { select: { id: true, codigo: true, nombre: true } },
         registroDiario: {
-          include: {
-            empleado: {
-              select: {
-                id: true,
-                nombre: true,
-                apellido: true,
-                codigo: true,
-              },
-            },
-            actividades: {
-              include: {
-                job: {
-                  select: {
-                    id: true,
-                    codigo: true,
-                    nombre: true,
-                    descripcion: true,
-                    empresa: {
-                      select: {
-                        id: true,
-                        nombre: true,
-                      },
-                    },
-                  },
-                },
-              },
-            },
+          select: {
+            fecha: true,
+            empleadoId: true,
           },
         },
       },
@@ -473,7 +452,7 @@ export class RegistroDiarioRepository {
         id: dto.nuevoJobId,
         deletedAt: null,
       },
-      select: { id: true, activo: true },
+      select: { id: true, activo: true, codigo: true, nombre: true },
     });
 
     if (!nuevoJob || !nuevoJob.activo) {
@@ -483,6 +462,19 @@ export class RegistroDiarioRepository {
     if (dto.descripcion !== undefined && dto.descripcion.length > 250) {
       throw new Error("La descripción no puede exceder 250 caracteres");
     }
+
+    const jobAnterior = actividad.job;
+    const jobCambio = jobAnterior?.id !== nuevoJob.id;
+    const classAnterior = actividad.className ?? null;
+    const classNueva =
+      dto.className !== undefined
+        ? (this.normalizeClassName(dto.className) ?? null)
+        : undefined;
+    const classCambio =
+      classNueva !== undefined && classAnterior !== classNueva;
+    const actividadDescripcion =
+      (dto.descripcion !== undefined ? dto.descripcion : actividad.descripcion)?.trim() ||
+      "";
 
     // Actualizar job, descripción y className de la actividad
     await prisma.actividad.update({
@@ -496,6 +488,74 @@ export class RegistroDiarioRepository {
         updatedAt: new Date(),
       },
     });
+
+    if (jobCambio) {
+      const labelAnterior =
+        jobAnterior?.codigo?.trim() ||
+        jobAnterior?.nombre?.trim() ||
+        (jobAnterior ? `Job ${jobAnterior.id}` : "Sin job");
+      const labelNuevo =
+        nuevoJob.codigo?.trim() ||
+        nuevoJob.nombre?.trim() ||
+        `Job ${nuevoJob.id}`;
+      await NotificacionLogRepository.create({
+        destinatarioId: empleadoId,
+        actorId: supervisorId,
+        categoria: NotificacionCategorias.CAMBIO_JOB,
+        descripcion: `Se cambió el job de la actividad del ${actividad.registroDiario.fecha}: ${labelAnterior} → ${labelNuevo}`,
+        metadata: {
+          actividadId: dto.actividadId,
+          fecha: actividad.registroDiario.fecha,
+          actividadDescripcion,
+          jobAnteriorId: jobAnterior?.id ?? null,
+          jobAnteriorCodigo: jobAnterior?.codigo ?? null,
+          jobAnteriorNombre: jobAnterior?.nombre ?? null,
+          jobNuevoId: nuevoJob.id,
+          jobNuevoCodigo: nuevoJob.codigo,
+          jobNuevoNombre: nuevoJob.nombre,
+        },
+      });
+    }
+
+    if (classCambio) {
+      const classIds = [classAnterior, classNueva].filter(
+        (value): value is number => value != null
+      );
+      const vehiculos =
+        classIds.length > 0
+          ? await prisma.vehiculo.findMany({
+              where: { class: { in: classIds }, deletedAt: null },
+              select: { class: true, nombre: true },
+            })
+          : [];
+      const vehiculoByClass = new Map(
+        vehiculos.map((vehiculo) => [vehiculo.class, vehiculo.nombre])
+      );
+      const labelClass = (value: number | null) => {
+        if (value == null) return "Sin class";
+        const nombre = vehiculoByClass.get(value)?.trim();
+        return nombre ? `${value} - ${nombre}` : `Class ${value}`;
+      };
+      await NotificacionLogRepository.create({
+        destinatarioId: empleadoId,
+        actorId: supervisorId,
+        categoria: NotificacionCategorias.CAMBIO_CLASS,
+        descripcion: `Se cambió el class de la actividad del ${actividad.registroDiario.fecha}: ${labelClass(classAnterior)} → ${labelClass(classNueva ?? null)}`,
+        metadata: {
+          actividadId: dto.actividadId,
+          fecha: actividad.registroDiario.fecha,
+          actividadDescripcion,
+          classAnterior,
+          classAnteriorNombre:
+            classAnterior != null
+              ? vehiculoByClass.get(classAnterior) ?? null
+              : null,
+          classNuevo: classNueva ?? null,
+          classNuevoNombre:
+            classNueva != null ? vehiculoByClass.get(classNueva) ?? null : null,
+        },
+      });
+    }
 
     // Retornar el registro diario actualizado usando el método existente
     const registroActualizado = await this.findByEmpleadoAndDateWithActivities(
