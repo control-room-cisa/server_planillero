@@ -22,6 +22,7 @@ import {
   calcMontoFilaProrrateo,
   repartirMontoDiasLaboradosConPermisoJustificado,
 } from "../domain/calculo-horas/nominaMontos";
+import { CODIGO_JOB_FERIADOS } from "../domain/calculo-horas/politicas-horario/prorrateo-class";
 
 const TIPO_PRORRATEO_LABEL: Record<TipoProrrateo, string> = {
   normal: "Normal",
@@ -842,8 +843,55 @@ export class ProrrateoService {
         nomina.diasIncapacidadEmpresa ?? "—"
       );
       writeLeftKV("Días incap. IHSS", nomina.diasIncapacidadIHSS ?? "—");
-      writeLeftMoney("Monto días laborados", nomina.montoDiasLaborados, fillGreen);
+
+      // Desglose izquierdo: normales / feriados / permiso / vacaciones / comp. tomadas
+      // (job 00 sigue en la tabla Normal a la derecha)
+      const montoDiasLaboradosNomina = Number(nomina.montoDiasLaborados ?? 0);
+      let montoNormalGuardado = 0;
+      let montoFeriados = 0;
+      let horasNormalesIncluyendoFeriados = 0;
+      let montoCompensatoriasTomadas = 0;
+      for (const f of nomina.prorrateos) {
+        const horas = Number(f.cantidadHoras ?? 0);
+        const monto = Number(f.monto ?? 0);
+        if (f.tipo === "normal") {
+          montoNormalGuardado = round2(montoNormalGuardado + monto);
+          horasNormalesIncluyendoFeriados = round2(
+            horasNormalesIncluyendoFeriados + horas
+          );
+          const job = (f.codigoJob || "").trim();
+          if (job === CODIGO_JOB_FERIADOS) {
+            montoFeriados = round2(montoFeriados + monto);
+          }
+        } else if (f.tipo === "compensatoriaTomada") {
+          montoCompensatoriasTomadas = round2(
+            montoCompensatoriasTomadas + monto
+          );
+        }
+      }
+      const montoPermisoJustificado = round2(
+        Math.max(0, montoDiasLaboradosNomina - montoNormalGuardado)
+      );
+      const montoHorasNormales = round2(montoNormalGuardado - montoFeriados);
+
+      writeLeftMoney(
+        "Monto días laborados (total)",
+        montoDiasLaboradosNomina,
+        fillGreen
+      );
+      writeLeftMoney("Monto horas normales", montoHorasNormales, fillGreen);
+      writeLeftMoney("Monto feriados", montoFeriados, fillGreen);
+      writeLeftMoney(
+        "Monto permiso justificado",
+        montoPermisoJustificado,
+        fillGreen
+      );
       writeLeftMoney("Monto vacaciones", nomina.montoVacaciones, fillGreen);
+      writeLeftMoney(
+        "Monto compensatorias tomadas",
+        montoCompensatoriasTomadas,
+        fillGreen
+      );
       writeLeftMoney(
         "Monto incapacidad empresa",
         nomina.montoIncapacidadCubreEmpresa,
@@ -980,14 +1028,14 @@ export class ProrrateoService {
       };
 
       const sueldoMensual = Number(nomina.sueldoMensual ?? 0);
-      const diasLab = Number(nomina.diasLaborados ?? 0);
-      const montoDias = Number(nomina.montoDiasLaborados ?? 0);
       const precioHoraBase = sueldoMensual / (30 * 8);
       const precioHoraNormal =
-        diasLab > 0 ? montoDias / (diasLab * 8) : 0;
+        horasNormalesIncluyendoFeriados > 0
+          ? round2(montoNormalGuardado / horasNormalesIncluyendoFeriados)
+          : 0;
 
       const precioHoraDeTipo = (tipo: TipoProrrateo): number => {
-        if (tipo === "normal") return round2(precioHoraNormal);
+        if (tipo === "normal") return precioHoraNormal;
         const factor = EXTRA_FACTOR[tipo];
         if (factor != null) return round2(precioHoraBase * factor);
         return round2(precioHoraBase);
