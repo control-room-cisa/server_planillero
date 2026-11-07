@@ -500,20 +500,20 @@ export class NominaService {
       // Así la validación de unicidad no la considera (solo activas deletedAt IS NULL).
       await this.archivarNomina(existing, updatedBy, tx);
 
-      const duplicadaPorCodigo = await tx.nomina.findFirst({
+      // Duplicados huérfanos del mismo código (p. ej. por NULL en unique de MySQL):
+      // archivarlos para que solo quede la última modificación.
+      const duplicadosMismoCodigo = await tx.nomina.findMany({
         where: {
           empleadoId,
           codigoNomina,
           deletedAt: null,
         },
       });
-      if (duplicadaPorCodigo) {
-        throw new AppError(
-          `Ya existe una nómina activa para este colaborador en el período ${codigoNomina}`,
-          400
-        );
+      for (const dup of duplicadosMismoCodigo) {
+        await this.archivarNomina(dup, updatedBy, tx);
       }
 
+      // Traslapes con otro período distinto: bloquear (no archivar en silencio)
       const overlapping = await tx.nomina.findMany({
         where: {
           empleadoId,
@@ -849,6 +849,7 @@ export class NominaService {
       ["Subtotal Quincena", formatCurrency(nomina.subtotalQuincena)],
       ["Monto Vacaciones", formatCurrency(nomina.montoVacaciones)],
       ["Monto Días Laborados", formatCurrency(nomina.montoDiasLaborados)],
+      ["(+) Ajuste", formatCurrency(nomina.ajuste)],
       ["Total Bruto", formatCurrency(totalBruto)],
     ]);
 
@@ -868,7 +869,6 @@ export class NominaService {
       ["Cobro Préstamo", formatCurrency(nomina.cobroPrestamo)],
       ["Impuesto Vecinal", formatCurrency(nomina.impuestoVecinal)],
       ["Otros", formatCurrency(nomina.otros)],
-      ["Ajuste", formatCurrency(nomina.ajuste)],
       ["Total Deducciones", formatCurrency(totalDeducciones)],
     ]);
 

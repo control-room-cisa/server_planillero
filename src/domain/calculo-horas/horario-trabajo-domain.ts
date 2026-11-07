@@ -184,10 +184,24 @@ export class HorarioTrabajoDomain {
     empleadoId: string
   ): Promise<{
     deduccionesAlimentacion: number;
+    deduccionesAlojamiento: number;
     detalle: Array<{
       producto: string;
       precio: number;
       fecha: string;
+      categoria?: "ALIMENTACION" | "ALOJAMIENTO";
+    }>;
+    detalleAlimentacion: Array<{
+      producto: string;
+      precio: number;
+      fecha: string;
+      categoria?: "ALIMENTACION" | "ALOJAMIENTO";
+    }>;
+    detalleAlojamiento: Array<{
+      producto: string;
+      precio: number;
+      fecha: string;
+      categoria?: "ALIMENTACION" | "ALOJAMIENTO";
     }>;
     errorAlimentacion?: { tieneError: boolean; mensajeError: string };
   }> {

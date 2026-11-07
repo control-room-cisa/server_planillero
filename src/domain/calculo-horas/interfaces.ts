@@ -45,7 +45,10 @@ export interface IPoliticaHorario {
     empleadoPrecargado?: any
   ): Promise<{
     deduccionesAlimentacion: number;
+    deduccionesAlojamiento: number;
     detalle: any[];
+    detalleAlimentacion: any[];
+    detalleAlojamiento: any[];
     errorAlimentacion?: { tieneError: boolean; mensajeError: string };
   }>;
 }

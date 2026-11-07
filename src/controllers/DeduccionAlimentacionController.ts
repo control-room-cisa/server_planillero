@@ -101,17 +101,25 @@ function toApiErrors(items: any[]): ApiError[] {
  * @query fechaFin - Fecha de fin (YYYY-MM-DD)
  * @access Private
  */
+type DetalleConsumo = {
+  producto: string;
+  precio: number;
+  fecha: string;
+  categoria: "ALIMENTACION" | "ALOJAMIENTO";
+};
+
+type DeduccionAlimentacionData = {
+  deduccionesAlimentacion: number;
+  deduccionesAlojamiento: number;
+  detalle: DetalleConsumo[];
+  detalleAlimentacion: DetalleConsumo[];
+  detalleAlojamiento: DetalleConsumo[];
+  errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+};
+
 export const getDeduccionAlimentacion: RequestHandler<
   {}, // params
-  ApiResponse<{
-    deduccionesAlimentacion: number;
-    detalle: Array<{
-      producto: string;
-      precio: number;
-      fecha: string;
-    }>;
-    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-  }>, // response
+  ApiResponse<DeduccionAlimentacionData>, // response
   {}, // body
   { codigoEmpleado?: string; fechaInicio?: string; fechaFin?: string } // query
 > = async (req, res, next) => {
@@ -133,15 +141,11 @@ export const getDeduccionAlimentacion: RequestHandler<
   }
 
   if (errors400.length) {
-    const { status, body } = buildErr<{
-      deduccionesAlimentacion: number;
-      detalle: Array<{
-        producto: string;
-        precio: number;
-        fecha: string;
-      }>;
-      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>("Par?metros inv?lidos", toApiErrors(errors400), 400);
+    const { status, body } = buildErr<DeduccionAlimentacionData>(
+      "Par?metros inv?lidos",
+      toApiErrors(errors400),
+      400
+    );
     return res.status(status).json(body);
   }
 
@@ -161,15 +165,7 @@ export const getDeduccionAlimentacion: RequestHandler<
 
     // Si el servicio devuelve success=false, devolver error
     if (!resultado.success) {
-      const { status, body } = buildErr<{
-        deduccionesAlimentacion: number;
-        detalle: Array<{
-          producto: string;
-          precio: number;
-          fecha: string;
-        }>;
-        errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-      }>(
+      const { status, body } = buildErr<DeduccionAlimentacionData>(
         resultado.message || "Error al obtener deducciones de alimentaci?n",
         [],
         500
@@ -177,16 +173,34 @@ export const getDeduccionAlimentacion: RequestHandler<
       return res.status(status).json(body);
     }
 
-    // Calcular el total de deducciones
-    const deduccionesAlimentacion = (resultado.items || []).reduce(
+    const detalle: DetalleConsumo[] = (resultado.items || []).map((item) => ({
+      producto: item.producto,
+      precio: item.precio || 0,
+      fecha: item.fecha,
+      categoria: item.categoria,
+    }));
+    const detalleAlimentacion = detalle.filter(
+      (item) => item.categoria === "ALIMENTACION"
+    );
+    const detalleAlojamiento = detalle.filter(
+      (item) => item.categoria === "ALOJAMIENTO"
+    );
+    const deduccionesAlimentacion = detalleAlimentacion.reduce(
+      (total, item) => total + (item.precio || 0),
+      0
+    );
+    const deduccionesAlojamiento = detalleAlojamiento.reduce(
       (total, item) => total + (item.precio || 0),
       0
     );
 
     // Construir respuesta exitosa
-    const data = {
+    const data: DeduccionAlimentacionData = {
       deduccionesAlimentacion,
-      detalle: resultado.items || [],
+      deduccionesAlojamiento,
+      detalle,
+      detalleAlimentacion,
+      detalleAlojamiento,
       errorAlimentacion: resultado.success
         ? undefined
         : {
@@ -196,7 +210,7 @@ export const getDeduccionAlimentacion: RequestHandler<
     };
 
     return res.json(
-      buildOk<typeof data>(
+      buildOk(
         "Deducciones de alimentaci?n obtenidas exitosamente",
         data
       )
@@ -216,15 +230,7 @@ export const getDeduccionAlimentacion: RequestHandler<
         : 500;
 
     const errors = normalizeThrownToErrors(err);
-    const { status: st, body } = buildErr<{
-      deduccionesAlimentacion: number;
-      detalle: Array<{
-        producto: string;
-        precio: number;
-        fecha: string;
-      }>;
-      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>(
+    const { status: st, body } = buildErr<DeduccionAlimentacionData>(
       err?.message || "Error obteniendo deducciones de alimentaci?n",
       toApiErrors(errors),
       status

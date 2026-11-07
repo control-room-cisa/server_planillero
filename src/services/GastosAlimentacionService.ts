@@ -10,10 +10,13 @@ export interface GastosAlimentacionParams {
   fechaFin: string; // formato YYYY-MM-DD
 }
 
+export type CategoriaGastoConsumo = "ALIMENTACION" | "ALOJAMIENTO";
+
 interface GastosAlimentacionApiItem {
   Producto: string;
   Precio: string;
   Fecha: string;
+  Categoria?: string;
 }
 
 interface GastosAlimentacionApiResponse {
@@ -22,6 +25,7 @@ interface GastosAlimentacionApiResponse {
   codigoEmpleado?: string;
   fechaInicio?: string;
   fechaFin?: string;
+  medioPago?: string;
   items?: GastosAlimentacionApiItem[];
   message?: string; // Mensaje de error cuando success=false
 }
@@ -30,6 +34,7 @@ export interface GastosAlimentacionItem {
   producto: string;
   precio: number;
   fecha: string;
+  categoria: CategoriaGastoConsumo;
 }
 
 export interface GastosAlimentacionResponse {
@@ -108,6 +113,11 @@ export class GastosAlimentacionService {
           producto: item.Producto,
           precio: Number(item.Precio ?? 0),
           fecha: registroFechaToYmdSafe(item.Fecha) ?? String(item.Fecha ?? ""),
+          // Sin categoría (API antigua): se trata como alimentación
+          categoria:
+            String(item.Categoria ?? "").toUpperCase() === "ALOJAMIENTO"
+              ? "ALOJAMIENTO"
+              : "ALIMENTACION",
         })),
         message: data.message,
       };

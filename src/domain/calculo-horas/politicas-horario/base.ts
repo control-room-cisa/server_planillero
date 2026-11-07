@@ -310,11 +310,17 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
     empleadoPrecargado?: any
   ): Promise<{
     deduccionesAlimentacion: number;
+    deduccionesAlojamiento: number;
     detalle: DeduccionAlimentacionDetalle[];
+    detalleAlimentacion: DeduccionAlimentacionDetalle[];
+    detalleAlojamiento: DeduccionAlimentacionDetalle[];
     errorAlimentacion?: { tieneError: boolean; mensajeError: string };
   }> {
     let deduccionesAlimentacion = 0;
+    let deduccionesAlojamiento = 0;
     let detalle: DeduccionAlimentacionDetalle[] = [];
+    let detalleAlimentacion: DeduccionAlimentacionDetalle[] = [];
+    let detalleAlojamiento: DeduccionAlimentacionDetalle[] = [];
     let errorAlimentacion:
       | { tieneError: boolean; mensajeError: string }
       | undefined;
@@ -341,9 +347,19 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
             producto: item.producto,
             precio: item.precio,
             fecha: item.fecha,
+            categoria: item.categoria,
           }));
-
-          deduccionesAlimentacion = detalle.reduce(
+          detalleAlimentacion = detalle.filter(
+            (item) => item.categoria === "ALIMENTACION"
+          );
+          detalleAlojamiento = detalle.filter(
+            (item) => item.categoria === "ALOJAMIENTO"
+          );
+          deduccionesAlimentacion = detalleAlimentacion.reduce(
+            (total, item) => total + item.precio,
+            0
+          );
+          deduccionesAlojamiento = detalleAlojamiento.reduce(
             (total, item) => total + item.precio,
             0
           );
@@ -369,7 +385,10 @@ export abstract class PoliticaHorarioBase implements IPoliticaHorario {
 
     return {
       deduccionesAlimentacion,
+      deduccionesAlojamiento,
       detalle,
+      detalleAlimentacion,
+      detalleAlojamiento,
       errorAlimentacion,
     };
   }

@@ -362,17 +362,25 @@ export const getProrrateo: RequestHandler<
 // -----------------------------------------------------------------------------
 // GET /api/calculo-horas/:empleadoId/deducciones-alimentacion?fechaInicio=YYYY-MM-DD&fechaFin=YYYY-MM-DD
 // -----------------------------------------------------------------------------
+type DetalleConsumoResponse = {
+  producto: string;
+  precio: number;
+  fecha: string;
+  categoria?: "ALIMENTACION" | "ALOJAMIENTO";
+};
+
+type DeduccionesAlimentacionResponse = {
+  deduccionesAlimentacion: number;
+  deduccionesAlojamiento: number;
+  detalle: DetalleConsumoResponse[];
+  detalleAlimentacion: DetalleConsumoResponse[];
+  detalleAlojamiento: DetalleConsumoResponse[];
+  errorAlimentacion?: { tieneError: boolean; mensajeError: string };
+};
+
 export const getDeduccionesAlimentacion: RequestHandler<
   { empleadoId: string }, // params
-  ApiResponse<{
-    deduccionesAlimentacion: number;
-    detalle: Array<{
-      producto: string;
-      precio: number;
-      fecha: string;
-    }>;
-    errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-  }>, // response
+  ApiResponse<DeduccionesAlimentacionResponse>, // response
   {}, // body
   { fechaInicio?: string; fechaFin?: string } // query
 > = async (req, res, next) => {
@@ -393,29 +401,17 @@ export const getDeduccionesAlimentacion: RequestHandler<
   }
 
   if (errors400.length) {
-    const { status, body } = buildErr<{
-      deduccionesAlimentacion: number;
-      detalle: Array<{
-        producto: string;
-        precio: number;
-        fecha: string;
-      }>;
-      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>("Parámetros inválidos", toApiErrors(errors400), 400);
+    const { status, body } = buildErr<DeduccionesAlimentacionResponse>(
+      "Parámetros inválidos",
+      toApiErrors(errors400),
+      400
+    );
     return res.status(status).json(body);
   }
 
   const targetId = Number(empleadoId);
   if (!Number.isFinite(targetId) || targetId <= 0) {
-    const { status, body } = buildErr<{
-      deduccionesAlimentacion: number;
-      detalle: Array<{
-        producto: string;
-        precio: number;
-        fecha: string;
-      }>;
-      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>(
+    const { status, body } = buildErr<DeduccionesAlimentacionResponse>(
       "Parámetros inválidos",
       toApiErrors(["empleadoId debe ser un identificador numérico válido."]),
       400
@@ -433,7 +429,7 @@ export const getDeduccionesAlimentacion: RequestHandler<
       empleadoId
     );
     return res.json(
-      buildOk<typeof data>(
+      buildOk(
         "Deducciones de alimentación obtenidas exitosamente",
         data
       )
@@ -453,15 +449,7 @@ export const getDeduccionesAlimentacion: RequestHandler<
         : 500;
 
     const errors = normalizeThrownToErrors(err);
-    const { status: st, body } = buildErr<{
-      deduccionesAlimentacion: number;
-      detalle: Array<{
-        producto: string;
-        precio: number;
-        fecha: string;
-      }>;
-      errorAlimentacion?: { tieneError: boolean; mensajeError: string };
-    }>(
+    const { status: st, body } = buildErr<DeduccionesAlimentacionResponse>(
       err?.message || "Error obteniendo deducciones de alimentación",
       toApiErrors(errors),
       status
