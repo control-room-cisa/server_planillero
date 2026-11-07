@@ -236,6 +236,12 @@ model Nomina {
   montoHoras75  Float? @map("monto_ot_75")
   montoHoras100 Float? @map("monto_ot_100")
 
+  // Cantidades horas extra (totales por porcentaje)
+  cantidadHoras25  Float? @map("cantidad_ot_25")
+  cantidadHoras50  Float? @map("cantidad_ot_50")
+  cantidadHoras75  Float? @map("cantidad_ot_75")
+  cantidadHoras100 Float? @map("cantidad_ot_100")
+
   // Ajustes y totales
   ajuste                Float? @map("ajuste")
   totalPercepciones     Float? @map("total_percepciones")

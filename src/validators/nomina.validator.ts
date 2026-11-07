@@ -107,6 +107,23 @@ export const crearNominaSchema = z.object({
     .number({ invalid_type_error: "El monto de horas al 100% debe ser un número válido" })
     .default(0),
 
+  cantidadHoras25: z
+    .number({ invalid_type_error: "La cantidad de horas al 25% debe ser un número válido" })
+    .nonnegative("La cantidad de horas al 25% no puede ser negativa")
+    .default(0),
+  cantidadHoras50: z
+    .number({ invalid_type_error: "La cantidad de horas al 50% debe ser un número válido" })
+    .nonnegative("La cantidad de horas al 50% no puede ser negativa")
+    .default(0),
+  cantidadHoras75: z
+    .number({ invalid_type_error: "La cantidad de horas al 75% debe ser un número válido" })
+    .nonnegative("La cantidad de horas al 75% no puede ser negativa")
+    .default(0),
+  cantidadHoras100: z
+    .number({ invalid_type_error: "La cantidad de horas al 100% debe ser un número válido" })
+    .nonnegative("La cantidad de horas al 100% no puede ser negativa")
+    .default(0),
+
   ajuste: z
     .number({ invalid_type_error: "El ajuste debe ser un número válido" })
     .default(0),

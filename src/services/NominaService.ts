@@ -381,6 +381,10 @@ export class NominaService {
       montoHoras50: payload.montoHoras50 ?? null,
       montoHoras75: payload.montoHoras75 ?? null,
       montoHoras100: payload.montoHoras100 ?? null,
+      cantidadHoras25: payload.cantidadHoras25 ?? null,
+      cantidadHoras50: payload.cantidadHoras50 ?? null,
+      cantidadHoras75: payload.cantidadHoras75 ?? null,
+      cantidadHoras100: payload.cantidadHoras100 ?? null,
       ajuste: payload.ajuste ?? null,
       totalPercepciones: payload.totalPercepciones ?? null,
       deduccionIHSS: payload.deduccionIHSS ?? null,
@@ -586,6 +590,22 @@ export class NominaService {
           montoHoras50: coalesce(payload.montoHoras50, existing.montoHoras50),
           montoHoras75: coalesce(payload.montoHoras75, existing.montoHoras75),
           montoHoras100: coalesce(payload.montoHoras100, existing.montoHoras100),
+          cantidadHoras25: coalesce(
+            payload.cantidadHoras25,
+            existing.cantidadHoras25
+          ),
+          cantidadHoras50: coalesce(
+            payload.cantidadHoras50,
+            existing.cantidadHoras50
+          ),
+          cantidadHoras75: coalesce(
+            payload.cantidadHoras75,
+            existing.cantidadHoras75
+          ),
+          cantidadHoras100: coalesce(
+            payload.cantidadHoras100,
+            existing.cantidadHoras100
+          ),
           ajuste: coalesce(payload.ajuste, existing.ajuste),
           totalPercepciones: coalesce(
             payload.totalPercepciones,

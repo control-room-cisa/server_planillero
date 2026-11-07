@@ -29,6 +29,11 @@ export interface NominaDto {
   montoHoras75?: number | null;
   montoHoras100?: number | null;
 
+  cantidadHoras25?: number | null;
+  cantidadHoras50?: number | null;
+  cantidadHoras75?: number | null;
+  cantidadHoras100?: number | null;
+
   ajuste?: number | null;
   totalPercepciones?: number | null;
   deduccionIHSS?: number | null;
