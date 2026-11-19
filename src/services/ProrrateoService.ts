@@ -890,7 +890,8 @@ export class ProrrateoService {
           );
         }
       }
-      // Permiso justificado: solo si el cálculo de horas reporta E03 (>0). Nunca inferir.
+      // Solo al exportar: horas reales de filas + permiso justificado del cálculo
+      // (E03). No se reescriben montos en DB.
       let horasPermisoJustificado = 0;
       try {
         const conteoExcel =
