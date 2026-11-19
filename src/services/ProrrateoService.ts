@@ -387,13 +387,14 @@ export class ProrrateoService {
         }
 
         const rawJobId = normalizeJobId(a.jobId);
+        // Monto se asigna después con el precioHora del reparto 3 vías
         filasCompTomadas.push({
           nominaId,
           jobId: rawJobId,
           codigoJob: bankRow.job?.codigo ?? null,
           codigoClass: null,
           cantidadHoras: horas,
-          monto: round2(horas * salarioPorHora),
+          monto: 0,
           tipo: "compensatoriaTomada",
         });
         deltasBanco.push({ jobId: a.jobId ?? null, horas: -horas });
@@ -441,13 +442,31 @@ export class ProrrateoService {
       (acc, j) => acc + Number(j.cantidadHoras ?? 0),
       0
     );
+    // Solo permiso JUSTIFICADO + normales + compensatorias TOMADAS (no acumuladas / no justificado)
     const horasPermisoJustificado = Number(ch.permisoConSueldoHoras ?? 0);
-    const { montoJobsNormales } =
-      repartirMontoDiasLaboradosConPermisoJustificado(
-        Number(nomina.montoDiasLaborados ?? 0),
-        horasJobsNormales,
-        horasPermisoJustificado
-      );
+    const {
+      precioHora: precioHoraBase,
+      montoJobsNormales,
+      montoCompensatoriasTomadas: montoCompTomadasReparto,
+    } = repartirMontoDiasLaboradosConPermisoJustificado(
+      Number(nomina.montoDiasLaborados ?? 0),
+      horasJobsNormales,
+      horasPermisoJustificado,
+      horasTomadas
+    );
+
+    // Montos de tomadas con la misma precioHoraBase; residuo en última fila
+    if (filasCompTomadas.length > 0) {
+      let acumulado = 0;
+      filasCompTomadas = filasCompTomadas.map((f, idx, arr) => {
+        const isLast = idx === arr.length - 1;
+        const monto = isLast
+          ? round2(montoCompTomadasReparto - acumulado)
+          : round2(Number(f.cantidadHoras) * precioHoraBase);
+        if (!isLast) acumulado = round2(acumulado + monto);
+        return { ...f, monto };
+      });
+    }
 
     const rows: ProrrateoCreateRow[] = [
       ...expandJobsToRows(
@@ -543,6 +562,11 @@ export class ProrrateoService {
     return Math.round(n * 100) / 100;
   }
 
+  /**
+   * Percepciones = subtotal + extras + ajuste.
+   * Compensatorias tomadas NO se suman: ya van en montoDiasLaborados
+   * (en prorrateo solo se separan por concepto).
+   */
   private static totalBrutoNomina(nomina: Nomina): number {
     const horasExtra =
       (nomina.montoHoras25 ?? 0) +
@@ -844,35 +868,62 @@ export class ProrrateoService {
       );
       writeLeftKV("Días incap. IHSS", nomina.diasIncapacidadIHSS ?? "—");
 
-      // Desglose izquierdo: normales / feriados / permiso / vacaciones / comp. tomadas
-      // (job 00 sigue en la tabla Normal a la derecha)
+      // Desglose: solo horas REALES de las 3 categorías (sin inventar residuales).
+      // precioHora = montoDiasLaborados / (normales + permisoJustificado + tomadas)
       const montoDiasLaboradosNomina = Number(nomina.montoDiasLaborados ?? 0);
-      let montoNormalGuardado = 0;
-      let montoFeriados = 0;
       let horasNormalesIncluyendoFeriados = 0;
-      let montoCompensatoriasTomadas = 0;
+      let horasFeriados = 0;
+      let horasCompensatoriasTomadas = 0;
       for (const f of nomina.prorrateos) {
         const horas = Number(f.cantidadHoras ?? 0);
-        const monto = Number(f.monto ?? 0);
         if (f.tipo === "normal") {
-          montoNormalGuardado = round2(montoNormalGuardado + monto);
           horasNormalesIncluyendoFeriados = round2(
             horasNormalesIncluyendoFeriados + horas
           );
           const job = (f.codigoJob || "").trim();
           if (job === CODIGO_JOB_FERIADOS) {
-            montoFeriados = round2(montoFeriados + monto);
+            horasFeriados = round2(horasFeriados + horas);
           }
         } else if (f.tipo === "compensatoriaTomada") {
-          montoCompensatoriasTomadas = round2(
-            montoCompensatoriasTomadas + monto
+          horasCompensatoriasTomadas = round2(
+            horasCompensatoriasTomadas + horas
           );
         }
       }
-      const montoPermisoJustificado = round2(
-        Math.max(0, montoDiasLaboradosNomina - montoNormalGuardado)
+      // Permiso justificado: solo si el cálculo de horas reporta E03 (>0). Nunca inferir.
+      let horasPermisoJustificado = 0;
+      try {
+        const conteoExcel =
+          await HorarioTrabajoDomain.getProrrateoHorasPorJobByDateAndEmpleado(
+            toFechaStr(nomina.fechaInicio),
+            toFechaStr(nomina.fechaFin),
+            String(nomina.empleadoId)
+          );
+        horasPermisoJustificado = round2(
+          Number(conteoExcel.cantidadHoras?.permisoConSueldoHoras ?? 0)
+        );
+      } catch {
+        horasPermisoJustificado = 0;
+      }
+      const {
+        precioHora: precioHoraBase,
+        montoJobsNormales: montoNormalReparto,
+        montoPermisoJustificado,
+        montoCompensatoriasTomadas,
+      } = repartirMontoDiasLaboradosConPermisoJustificado(
+        montoDiasLaboradosNomina,
+        horasNormalesIncluyendoFeriados,
+        horasPermisoJustificado,
+        horasCompensatoriasTomadas
       );
-      const montoHorasNormales = round2(montoNormalGuardado - montoFeriados);
+      const montoFeriados =
+        horasNormalesIncluyendoFeriados > 0
+          ? round2(
+              (horasFeriados / horasNormalesIncluyendoFeriados) *
+                montoNormalReparto
+            )
+          : 0;
+      const montoHorasNormales = round2(montoNormalReparto - montoFeriados);
 
       writeLeftMoney(
         "Monto días laborados (total)",
@@ -1027,15 +1078,12 @@ export class ProrrateoService {
         }
       };
 
-      const sueldoMensual = Number(nomina.sueldoMensual ?? 0);
-      const precioHoraBase = sueldoMensual / (30 * 8);
-      const precioHoraNormal =
-        horasNormalesIncluyendoFeriados > 0
-          ? round2(montoNormalGuardado / horasNormalesIncluyendoFeriados)
-          : 0;
-
+      // Misma precioHoraBase del reparto 3 vías para Normal / Comp.tomada;
+      // extras = base × factor.
       const precioHoraDeTipo = (tipo: TipoProrrateo): number => {
-        if (tipo === "normal") return precioHoraNormal;
+        if (tipo === "normal" || tipo === "compensatoriaTomada") {
+          return round2(precioHoraBase);
+        }
         const factor = EXTRA_FACTOR[tipo];
         if (factor != null) return round2(precioHoraBase * factor);
         return round2(precioHoraBase);
@@ -1047,6 +1095,34 @@ export class ProrrateoService {
         list.push(f);
         byTipo.set(f.tipo, list);
       }
+
+      /** Reparte totalMontoBanda por horas (ignora montos viejos de DB). */
+      const redistribuirMontosPorHoras = (
+        agg: Map<string, { horas: number; monto: number }>,
+        totalMontoBanda: number
+      ) => {
+        const keys = [...agg.keys()];
+        const totalHoras = round2(
+          keys.reduce((s, k) => s + (agg.get(k)?.horas ?? 0), 0)
+        );
+        if (keys.length === 0 || totalHoras <= 0 || totalMontoBanda <= 0) {
+          for (const k of keys) {
+            const prev = agg.get(k)!;
+            agg.set(k, { ...prev, monto: 0 });
+          }
+          return;
+        }
+        let acumulado = 0;
+        keys.forEach((k, idx) => {
+          const prev = agg.get(k)!;
+          const isLast = idx === keys.length - 1;
+          const monto = isLast
+            ? round2(totalMontoBanda - acumulado)
+            : round2((prev.horas / totalHoras) * totalMontoBanda);
+          if (!isLast) acumulado = round2(acumulado + monto);
+          agg.set(k, { ...prev, monto });
+        });
+      };
 
       const tiposAMostrar: TipoProrrateo[] = [
         "normal",
@@ -1102,6 +1178,12 @@ export class ProrrateoService {
             horas: round2(prev.horas + Number(f.cantidadHoras ?? 0)),
             monto: round2(prev.monto + Number(f.monto ?? 0)),
           });
+        }
+        // Normal y tomadas: montos vivos del reparto 3 vías (no montos DB viejos)
+        if (tipo === "normal") {
+          redistribuirMontosPorHoras(aggPorJob, montoNormalReparto);
+        } else if (tipo === "compensatoriaTomada") {
+          redistribuirMontosPorHoras(aggPorJob, montoCompensatoriasTomadas);
         }
         const totalHoras = round2(
           [...aggPorJob.values()].reduce((s, n) => s + n.horas, 0)
