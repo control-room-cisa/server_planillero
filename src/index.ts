@@ -25,6 +25,7 @@ import accesoContabilidadRoutes from "./routes/accesoContabilidadRoutes";
 import prorrateoRoutes from "./routes/ProrrateoRoutes";
 import solicitudPermisoRoutes from "./routes/solicitudPermisoRoutes";
 import notificacionLogRoutes from "./routes/notificacionLogRoutes";
+import periodosNominaRoutes from "./routes/periodosNominaRoutes";
 import { startFlotaUsuarioSyncCron } from "./jobs/flotaUsuarioSyncCron";
 import { assertJwtSecretConfigured } from "./config/jwt";
 import { assertCorsConfigured, getCorsOrigins } from "./config/cors";
@@ -97,6 +98,7 @@ app.use("/api/accesos-contabilidad", accesoContabilidadRoutes);
 app.use("/api/prorrateos", prorrateoRoutes);
 app.use("/api/solicitudes-permisos", solicitudPermisoRoutes);
 app.use("/api/notificaciones", notificacionLogRoutes);
+app.use("/api/periodos-nomina", periodosNominaRoutes);
 
 app.use(errorHandler);
 

@@ -13,6 +13,8 @@ import { RegistroDiarioService } from "./RegistroDiarioService";
 import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
 import { prisma } from "../config/prisma";
 import { AccesoContabilidadService } from "./AccesoContabilidadService";
+import { getPeriodosNominaConfig } from "../config/periodosNomina";
+import { generarCodigoNomina as generarCodigoNominaFromConfig } from "../domain/nomina/periodosNomina";
 
 type BancoCompensatoriaAplicada = { jobId: number | null; horas: number };
 
@@ -50,41 +52,16 @@ function coalesce<T>(incoming: T | undefined, current: T): T {
   return incoming !== undefined ? incoming : current;
 }
 
-// Función para generar código de nómina: YYYYMMP
-// YYYY = año, MM = mes (01-12), P = período (A primera quincena, B segunda quincena)
+/** Código de nómina YYYYMMP según cortes configurados en .env */
 function generarCodigoNomina(fechaInicio: Date, fechaFin: Date): string {
   const inicio =
     fechaInicio instanceof Date ? fechaInicio : new Date(fechaInicio);
   const fin = fechaFin instanceof Date ? fechaFin : new Date(fechaFin);
-
-  const diaFin = fin.getDate();
-  const diaInicio = inicio.getDate();
-
-  // Determinar período: A (primera quincena) o B (segunda quincena)
-  // Primera quincena: días 27-11 (del mes siguiente) → usar mes del fin
-  // Segunda quincena: días 12-26 → usar mes del fin
-  let periodo: string;
-  let año: number;
-  let mes: string;
-
-  if (diaFin === 11 || diaInicio === 27) {
-    // Primera quincena: 27 del mes anterior al 11 del mes actual
-    periodo = "A";
-    año = fin.getFullYear();
-    mes = String(fin.getMonth() + 1).padStart(2, "0");
-  } else if (diaFin === 26 || diaInicio === 12) {
-    // Segunda quincena: 12-26 del mismo mes
-    periodo = "B";
-    año = fin.getFullYear();
-    mes = String(fin.getMonth() + 1).padStart(2, "0");
-  } else {
-    // Fallback: usar mes del fin
-    año = fin.getFullYear();
-    mes = String(fin.getMonth() + 1).padStart(2, "0");
-    periodo = diaFin <= 15 ? "A" : "B";
-  }
-
-  return `${año}${mes}${periodo}`;
+  return generarCodigoNominaFromConfig(
+    inicio,
+    fin,
+    getPeriodosNominaConfig(),
+  );
 }
 
 export class NominaService {

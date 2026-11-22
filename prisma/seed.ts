@@ -167,7 +167,7 @@ async function main() {
     },
     {
       codigo: "E05",
-      nombre: "Falta",
+      nombre: "Inasistencia",
       descripcion: "Inasistencia",
     },
     // {
@@ -227,41 +227,40 @@ async function main() {
       });
   }
 
-  // Crear jobs especiales
+  // Crear jobs especiales (idempotente por codigo)
   for (const jobDef of jobsEspecialesToSeed) {
-    await prisma.job
-      .upsert({
-        where: {
-          id: -1,
-        },
-        update: {},
-        create: {
+    const exists = await prisma.job.findFirst({
+      where: {
+        codigo: jobDef.codigo,
+        especial: true,
+      },
+    });
+
+    if (!exists) {
+      await prisma.job.create({
+        data: {
           nombre: jobDef.nombre,
           codigo: jobDef.codigo,
           descripcion: jobDef.descripcion,
           especial: true,
           activo: true,
         },
-      })
-      .catch(async () => {
-        const exists = await prisma.job.findFirst({
-          where: {
-            codigo: jobDef.codigo,
-            especial: true,
-          },
-        });
-        if (!exists) {
-          await prisma.job.create({
-            data: {
-              nombre: jobDef.nombre,
-              codigo: jobDef.codigo,
-              descripcion: jobDef.descripcion,
-              especial: true,
-              activo: true,
-            },
-          });
-        }
       });
+      continue;
+    }
+
+    // Mantener nombre/descripcion alineados y reactivar si estaba soft-deleted/inactivo
+    await prisma.job.update({
+      where: { id: exists.id },
+      data: {
+        nombre: jobDef.nombre,
+        descripcion: jobDef.descripcion,
+        especial: true,
+        activo: true,
+        deletedAt: null,
+        updatedAt: new Date(),
+      },
+    });
   }
 
   console.log("✔️ Seed completado");
