@@ -15,6 +15,8 @@ import { prisma } from "../config/prisma";
 import { AccesoContabilidadService } from "./AccesoContabilidadService";
 import { getPeriodosNominaConfig } from "../config/periodosNomina";
 import { generarCodigoNomina as generarCodigoNominaFromConfig } from "../domain/nomina/periodosNomina";
+import { resolverSueldoVigente } from "../domain/empleado/sueldoVigente";
+import { prismaDateToYmd, registroFechaToYmdSafe } from "../utils/dateTime";
 
 type BancoCompensatoriaAplicada = { jobId: number | null; horas: number };
 
@@ -336,6 +338,16 @@ export class NominaService {
       );
     }
 
+    const fechaInicioYmd =
+      fechaInicioDate instanceof Date
+        ? prismaDateToYmd(fechaInicioDate)
+        : registroFechaToYmdSafe(String(payload.fechaInicio)) ||
+          toFechaStr(payload.fechaInicio);
+    const sueldoMensualVigente = await resolverSueldoVigente(
+      payload.empleadoId,
+      fechaInicioYmd,
+    );
+
     // Prisma types: map DTO to create input usando spread para reducir código
     const bancoAplicadas = parseBancoCompensatoriasAplicadas(
       payload.bancoCompensatoriasAplicadas
@@ -386,7 +398,7 @@ export class NominaService {
           codigoNomina: codigoNomina,
           fechaInicio: payload.fechaInicio,
           fechaFin: payload.fechaFin,
-          sueldoMensual: payload.sueldoMensual,
+          sueldoMensual: sueldoMensualVigente,
           ...(createdBy
             ? { createdByEmpleado: { connect: { id: createdBy } } }
             : {}),

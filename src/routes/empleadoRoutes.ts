@@ -5,6 +5,8 @@ import {
   getById,
   getByCodigo,
   getByCodigoForProrrateo,
+  getHistorialSalarios,
+  getSueldoVigente,
   createEmpleado,
   updateEmpleado,
   deleteEmpleado,
@@ -48,6 +50,30 @@ router.get(
 
 // GET /empleados/codigo/:codigo — detalle por código (ACL en controller)
 router.get("/codigo/:codigo", getByCodigo);
+
+// GET /empleados/:id/historial-salarios
+router.get(
+  "/:id/historial-salarios",
+  authorizeRoles(
+    Roles.RRHH,
+    Roles.SUPERVISOR_CONTABILIDAD,
+    Roles.ASISTENTE_CONTABILIDAD,
+    Roles.GERENCIA,
+  ),
+  getHistorialSalarios,
+);
+
+// GET /empleados/:id/sueldo-vigente?fecha=YYYY-MM-DD
+router.get(
+  "/:id/sueldo-vigente",
+  authorizeRoles(
+    Roles.RRHH,
+    Roles.SUPERVISOR_CONTABILIDAD,
+    Roles.ASISTENTE_CONTABILIDAD,
+    Roles.GERENCIA,
+  ),
+  getSueldoVigente,
+);
 
 // GET /empleados/:id — detalle (self + roles autorizados + scope)
 router.get("/:id", getById);

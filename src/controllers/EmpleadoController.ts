@@ -88,10 +88,12 @@ export const createEmpleado: RequestHandler<
     const { foto, cv } = getFiles(req);
 
     // 3) Delegar a Service (genera código, crea, mueve archivos y guarda filenames)
-    const dto = await EmpleadoService.createWithFiles(parsed.data, {
-      foto,
-      cv,
-    });
+    const authReq = req as AuthRequest;
+    const dto = await EmpleadoService.createWithFiles(
+      parsed.data,
+      { foto, cv },
+      { createdById: authReq.user?.id ?? null },
+    );
 
     // 4) Responder OK
     const resp201: ApiResponse<EmployeeDto> = {
@@ -150,10 +152,12 @@ export const updateEmpleado: RequestHandler<
     const { foto, cv } = getFiles(req);
 
     // 3) Delegar a Service (actualiza campos normales y reemplaza archivos si vienen)
-    const dto = await EmpleadoService.updateWithFiles(parsed.data, {
-      foto,
-      cv,
-    });
+    const authReq = req as AuthRequest;
+    const dto = await EmpleadoService.updateWithFiles(
+      parsed.data,
+      { foto, cv },
+      { createdById: authReq.user?.id ?? null },
+    );
 
     // 4) Responder
     return res.status(200).json({
@@ -199,6 +203,85 @@ export const listByDepartment: RequestHandler<
       message: "Empleados de tu departamento y colaboradores asignados",
       data: empleados,
     } as ApiResponse<EmployeeDto[]>);
+  } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET historial de salarios
+// -----------------------------------------------------------------------------
+export const getHistorialSalarios: RequestHandler<
+  { id: string },
+  ApiResponse<
+    Array<{
+      id: number;
+      empleadoId: number;
+      sueldoMensual: number;
+      fechaVigencia: Date;
+      createdAt: Date | null;
+      createdById: number | null;
+    }>
+  >,
+  {},
+  {}
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de empleado inválido",
+        data: null as any,
+      });
+    }
+    const authReq = req as AuthRequest;
+    await EmpleadoAccessService.assertCanViewEmpleado(authReq.user, id);
+    const rows = await EmpleadoService.getHistorialSalarios(id);
+    return res.json({
+      success: true,
+      message: "Historial de salarios",
+      data: rows,
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// -----------------------------------------------------------------------------
+// GET sueldo vigente a una fecha
+// -----------------------------------------------------------------------------
+export const getSueldoVigente: RequestHandler<
+  { id: string },
+  ApiResponse<{ empleadoId: number; fecha: string; sueldoMensual: number }>,
+  {},
+  { fecha?: string }
+> = async (req, res, next) => {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "ID de empleado inválido",
+        data: null as any,
+      });
+    }
+    const fecha = String(req.query.fecha || "").trim();
+    if (!fecha) {
+      return res.status(400).json({
+        success: false,
+        message: "Query fecha (YYYY-MM-DD) es requerida",
+        data: null as any,
+      });
+    }
+    const authReq = req as AuthRequest;
+    await EmpleadoAccessService.assertCanViewEmpleado(authReq.user, id);
+    const data = await EmpleadoService.getSueldoVigente(id, fecha);
+    return res.json({
+      success: true,
+      message: "Sueldo vigente",
+      data,
+    });
   } catch (err) {
     next(err);
   }

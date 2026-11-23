@@ -62,6 +62,11 @@ const empleadoFields = {
   sueldoMensual: z
     .number({ invalid_type_error: "El sueldo mensual debe ser un número" })
     .optional(),
+  /** YYYY-MM-DD; vigencia del sueldo al crear/ajustar */
+  fechaVigenciaSueldo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "fechaVigenciaSueldo debe ser YYYY-MM-DD")
+    .optional(),
   aporteVoluntarioRap: z
     .number({
       invalid_type_error: "El aporte voluntario RAP debe ser un número",
@@ -251,6 +256,10 @@ export const updateEmpleadoSchema = z.object({
     .optional(),
   sueldoMensual: z
     .number({ invalid_type_error: "El sueldo mensual debe ser un número" })
+    .optional(),
+  fechaVigenciaSueldo: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "fechaVigenciaSueldo debe ser YYYY-MM-DD")
     .optional(),
   aporteVoluntarioRap: z
     .number({

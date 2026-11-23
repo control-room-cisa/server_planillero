@@ -188,8 +188,26 @@ model Empleado {
   solicitudesPermisoActualizadas    SolicitudPermiso[] @relation("SolicitudPermisoUpdatedBy")
   notificacionesComoDestinatario   NotificacionLog[]  @relation("NotificacionDestinatario")
   notificacionesComoActor          NotificacionLog[]  @relation("NotificacionActor")
+  historialSalarios                HistorialSalario[] @relation("HistorialSalarioEmpleado")
+  historialSalariosCreados         HistorialSalario[] @relation("HistorialSalarioCreatedBy")
 
   @@map("empleados")
+}
+
+/// Historial de ajustes salariales con fecha de vigencia.
+model HistorialSalario {
+  id            Int       @id @default(autoincrement())
+  empleadoId    Int       @map("empleado_id")
+  sueldoMensual Float     @map("sueldo_mensual")
+  fechaVigencia DateTime  @map("fecha_vigencia") @db.Date
+  createdAt     DateTime? @default(now()) @map("created_at")
+  createdById   Int?      @map("created_by_id")
+
+  empleado  Empleado  @relation("HistorialSalarioEmpleado", fields: [empleadoId], references: [id])
+  createdBy Empleado? @relation("HistorialSalarioCreatedBy", fields: [createdById], references: [id])
+
+  @@index([empleadoId, fechaVigencia], name: "idx_historial_salarios_empleado_vigencia")
+  @@map("historial_salarios")
 }
 
 // (Planilla eliminada; se sustituye por Nomina)

@@ -13,6 +13,31 @@ import { PlanillaAccesoRevisionRepository } from "../repositories/PlanillaAcceso
 import { FileService } from "./FileService";
 import { mapTipoContrato, mapTipoCuenta } from "../utils/prismaEnumMapper";
 import { rolIdsFromRelations } from "../utils/roles";
+import {
+  listHistorialSalarios,
+  registrarAjusteSalario,
+  resolverSueldoVigente,
+} from "../domain/empleado/sueldoVigente";
+import { prismaDateToYmd, registroFechaToYmdSafe } from "../utils/dateTime";
+import { AppError } from "../errors/AppError";
+
+function toYmdFlexible(value: unknown): string | null {
+  if (value == null) return null;
+  if (value instanceof Date) return prismaDateToYmd(value);
+  if (typeof value === "string") {
+    const fromStr = registroFechaToYmdSafe(value);
+    if (fromStr) return fromStr;
+  }
+  return null;
+}
+
+function todayYmdLocal(): string {
+  const n = new Date();
+  const y = n.getFullYear();
+  const m = String(n.getMonth() + 1).padStart(2, "0");
+  const day = String(n.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 const SALT_ROUNDS = 10;
 
@@ -233,7 +258,8 @@ export class EmpleadoService {
 
   static async createWithFiles(
     body: CreateEmpleadoDto,
-    files: { foto?: Express.Multer.File; cv?: Express.Multer.File }
+    files: { foto?: Express.Multer.File; cv?: Express.Multer.File },
+    options?: { createdById?: number | null },
   ): Promise<EmployeeDto> {
     // Validar que el nombre de usuario no exista
     if (body.nombreUsuario) {
@@ -300,10 +326,22 @@ export class EmpleadoService {
         });
       }
 
+      const vigencia =
+        body.fechaVigenciaSueldo ||
+        toYmdFlexible(body.fechaInicioIngreso) ||
+        todayYmdLocal();
+      await registrarAjusteSalario({
+        empleadoId: empleado.id,
+        sueldoMensual: Number(body.sueldoMensual ?? 0),
+        fechaVigencia: vigencia,
+        createdById: options?.createdById ?? null,
+      });
+      const refreshed = await EmpleadoRepository.findById(empleado.id);
+
       return this.toDtoBase({
-        ...empleado,
-        urlFotoPerfil: fotoFilename ?? null,
-        urlCv: cvFilename ?? null,
+        ...(refreshed ?? empleado),
+        urlFotoPerfil: fotoFilename ?? refreshed?.urlFotoPerfil ?? null,
+        urlCv: cvFilename ?? refreshed?.urlCv ?? null,
       });
     } catch (err) {
       await FileService.deleteFoto(empleado.id, fotoFilename);
@@ -317,9 +355,10 @@ export class EmpleadoService {
 
   static async updateWithFiles(
     body: UpdateEmpleadoDto,
-    files: { foto?: Express.Multer.File; cv?: Express.Multer.File }
+    files: { foto?: Express.Multer.File; cv?: Express.Multer.File },
+    options?: { createdById?: number | null },
   ): Promise<EmployeeDto> {
-    const { id, ...rest } = body as any;
+    const { id, fechaVigenciaSueldo, ...rest } = body as any;
     const empPrev = await EmpleadoRepository.findById(id);
     if (!empPrev) {
       await FileService.deleteTemp(files.foto?.path);
@@ -364,6 +403,26 @@ export class EmpleadoService {
     }
 
     const { rolIds, ...updateFields } = rest;
+    const sueldoIncoming =
+      updateFields.sueldoMensual !== undefined
+        ? Number(updateFields.sueldoMensual)
+        : undefined;
+    const sueldoCambio =
+      sueldoIncoming !== undefined &&
+      Number(sueldoIncoming) !== Number(empPrev.sueldoMensual ?? 0);
+    const vigenciaYmd = toYmdFlexible(fechaVigenciaSueldo);
+
+    if (sueldoCambio && !vigenciaYmd) {
+      throw new AppError(
+        "fechaVigenciaSueldo es requerida al cambiar el sueldo mensual",
+        400,
+      );
+    }
+
+    // El sueldo en empleados se sincroniza desde historial (vigente hoy).
+    if (sueldoCambio || (vigenciaYmd && sueldoIncoming !== undefined)) {
+      delete updateFields.sueldoMensual;
+    }
 
     let emp = await EmpleadoRepository.updateEmpleado(
       id,
@@ -374,6 +433,17 @@ export class EmpleadoService {
       await EmpleadoRepository.setRoles(id, rolIds);
       const refreshed = await EmpleadoRepository.findById(id);
       if (refreshed) emp = refreshed;
+    }
+
+    if (sueldoIncoming !== undefined && vigenciaYmd) {
+      await registrarAjusteSalario({
+        empleadoId: id,
+        sueldoMensual: sueldoIncoming,
+        fechaVigencia: vigenciaYmd,
+        createdById: options?.createdById ?? null,
+      });
+      const synced = await EmpleadoRepository.findById(id);
+      if (synced) emp = synced;
     }
 
     let newFotoFilename: string | undefined;
@@ -420,6 +490,19 @@ export class EmpleadoService {
       await FileService.deleteTemp(files.foto?.path);
       await FileService.deleteTemp(files.cv?.path);
     }
+  }
+
+  static async getHistorialSalarios(empleadoId: number) {
+    return listHistorialSalarios(empleadoId);
+  }
+
+  static async getSueldoVigente(empleadoId: number, fecha: string) {
+    const ymd = registroFechaToYmdSafe(fecha);
+    if (!ymd) {
+      throw new AppError("fecha debe ser YYYY-MM-DD", 400);
+    }
+    const sueldoMensual = await resolverSueldoVigente(empleadoId, ymd);
+    return { empleadoId, fecha: ymd, sueldoMensual };
   }
 
   static async updateMyProfileWithFiles(

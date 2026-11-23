@@ -91,6 +91,8 @@ export interface CreateEmpleadoDto {
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
+  /** YYYY-MM-DD vigencia del sueldo al crear */
+  fechaVigenciaSueldo?: string;
   aporteVoluntarioRap?: number;
   isr?: number;
   tipoContrato?: TipoContrato;
@@ -130,6 +132,8 @@ export interface UpdateEmpleadoDto {
   nombreConyugue?: string;
   cargo?: string;
   sueldoMensual?: number;
+  /** YYYY-MM-DD requerida si cambia el sueldo */
+  fechaVigenciaSueldo?: string;
   aporteVoluntarioRap?: number;
   isr?: number;
   tipoContrato?: TipoContrato;
