@@ -4,7 +4,10 @@ import { ApiResponse } from "../dtos/ApiResponse";
 import { AuthRequest } from "../middlewares/authMiddleware";
 import { AppError } from "../errors/AppError";
 import { ProrrateoService } from "../services/ProrrateoService";
-import { guardarProrrateoSchema } from "../validators/prorrateo.validator";
+import {
+  guardarProrrateoSchema,
+  resumirComentariosProrrateoSchema,
+} from "../validators/prorrateo.validator";
 
 export const guardarProrrateo: RequestHandler = async (req, res, next) => {
   try {
@@ -129,6 +132,39 @@ export const obtenerProrrateoPorNomina: RequestHandler = async (
     return res.json({
       success: true,
       message: "Prorrateo obtenido",
+      data,
+    } satisfies ApiResponse<typeof data>);
+  } catch (err) {
+    if (err instanceof AppError) return next(err);
+    return next(err);
+  }
+};
+
+/** POST /api/prorrateos/resumen-comentarios */
+export const resumirComentariosProrrateo: RequestHandler = async (
+  req,
+  res,
+  next
+) => {
+  try {
+    const parsed = resumirComentariosProrrateoSchema.safeParse(req.body);
+    if (!parsed.success) {
+      const errors = parsed.error.issues.map((i) => ({
+        field: i.path.join(".") || "body",
+        message: i.message,
+      }));
+      return res.status(400).json({
+        success: false,
+        message: "Parámetros inválidos",
+        data: null,
+        errors,
+      } satisfies ApiResponse<null>);
+    }
+
+    const data = await ProrrateoService.resumirComentariosJob(parsed.data);
+    return res.json({
+      success: true,
+      message: "Resumen de comentarios generado",
       data,
     } satisfies ApiResponse<typeof data>);
   } catch (err) {

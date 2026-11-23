@@ -296,6 +296,7 @@ model Nomina {
   deletedAt DateTime? @map("deleted_at")
 
   prorrateos Prorrateo[]
+  prorrateoComentarioResumenes ProrrateoComentarioResumen[]
 
   // Índice único que incluye deletedAt: permite múltiples registros eliminados pero solo uno activo
   // por combinación de empleadoId, fechaInicio, fechaFin
@@ -344,6 +345,32 @@ model Prorrateo {
   @@index([nominaId], name: "idx_prorrateos_nomina")
   @@index([jobId], name: "idx_prorrateos_job")
   @@map("prorrateos")
+}
+
+/// Resumen IA de comentarios de actividades por job, snapshot al guardar el prorrateo.
+model ProrrateoComentarioResumen {
+  id Int @id @default(autoincrement())
+
+  nominaId Int    @map("nomina_id")
+  nomina   Nomina @relation(fields: [nominaId], references: [id], onDelete: Cascade)
+
+  /// FK opcional: puede ser null si el job ya no existe o no estaba identificado.
+  jobId Int? @map("job_id")
+  job   Job? @relation(fields: [jobId], references: [id])
+
+  codigoJob  String? @map("codigo_job") @db.VarChar(10)
+  nombreJob  String? @map("nombre_job") @db.VarChar(100)
+  /// Clave estable para unicidad (jobId o "codigo:XXX")
+  jobKey     String  @map("job_key") @db.VarChar(40)
+  resumen    String  @db.Text
+
+  createdAt DateTime? @default(now()) @map("created_at")
+  updatedAt DateTime? @map("updated_at")
+
+  @@unique([nominaId, jobKey], name: "uq_prorrateo_comentario_resumen_nomina_job")
+  @@index([nominaId], name: "idx_prorrateo_comentario_resumen_nomina")
+  @@index([jobId], name: "idx_prorrateo_comentario_resumen_job")
+  @@map("prorrateo_comentario_resumenes")
 }
 
 // ---- planilla accesos ----
@@ -476,6 +503,7 @@ model Job {
   actividades Actividad[]
   bancoCompensatoriasAcumuladas BancoCompensatoriasAcumuladas[]
   prorrateos Prorrateo[]
+  prorrateoComentarioResumenes ProrrateoComentarioResumen[]
 
   @@index([empresaId], name: "fk_jobs_empresa_idx")
   @@index([mostrarEmpresaId], name: "fk_jobs_mostrar_empresa_idx")

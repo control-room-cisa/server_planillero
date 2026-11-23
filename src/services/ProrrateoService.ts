@@ -14,9 +14,17 @@ import {
   ProrrateoRepository,
   type ProrrateoCreateRow,
 } from "../repositories/ProrrateoRepository";
+import {
+  ProrrateoComentarioResumenRepository,
+  type ProrrateoComentarioResumenCreateRow,
+} from "../repositories/ProrrateoComentarioResumenRepository";
 import { BancoCompensatoriasRepository } from "../repositories/BancoCompensatoriasRepository";
 import { AccesoContabilidadService } from "./AccesoContabilidadService";
-import type { AsignacionCompensatoriaTomadaDto } from "../validators/prorrateo.validator";
+import { OpenAIService } from "./OpenAIService";
+import type {
+  AsignacionCompensatoriaTomadaDto,
+  ResumirComentariosProrrateoDto,
+} from "../validators/prorrateo.validator";
 import {
   roundNomina2,
   calcMontoFilaProrrateo,
@@ -65,6 +73,59 @@ function hasPendingValidations(
 function normalizeJobId(jobId: number | null | undefined): number | null {
   if (jobId == null || !Number.isFinite(jobId) || jobId <= 0) return null;
   return Number(jobId);
+}
+
+function jobKeyFrom(jobId: number | null, codigoJob: string | null): string {
+  if (jobId != null) return `id:${jobId}`;
+  const codigo = (codigoJob ?? "").trim();
+  return codigo ? `codigo:${codigo}` : "sin-job";
+}
+
+type JobComentariosAgg = {
+  jobId: number | null;
+  codigoJob: string | null;
+  nombreJob: string | null;
+  textos: string[];
+  seen: Set<string>;
+};
+
+/** Agrupa comentarios únicos por job a partir de listas HorasPorJob. */
+function aggregateComentariosPorJob(
+  lists: Array<HorasPorJob[] | undefined>
+): JobComentariosAgg[] {
+  const map = new Map<string, JobComentariosAgg>();
+
+  for (const list of lists) {
+    for (const j of list ?? []) {
+      const jobId = normalizeJobId(j.jobId);
+      const codigoJob = (j.codigoJob ?? "").trim() || null;
+      const key = jobKeyFrom(jobId, codigoJob);
+      let entry = map.get(key);
+      if (!entry) {
+        entry = {
+          jobId,
+          codigoJob,
+          nombreJob: (j.nombreJob ?? "").trim() || null,
+          textos: [],
+          seen: new Set(),
+        };
+        map.set(key, entry);
+      } else if (!entry.nombreJob && j.nombreJob) {
+        entry.nombreJob = String(j.nombreJob).trim() || null;
+      }
+
+      for (const c of j.comentarios ?? []) {
+        const texto = String(c?.texto ?? "").trim();
+        if (!texto) continue;
+        const tKey = texto.toLowerCase();
+        if (entry.seen.has(tKey)) continue;
+        entry.seen.add(tKey);
+        entry.textos.push(texto);
+      }
+    }
+  }
+
+  return [...map.values()].filter((e) => e.textos.length > 0);
 }
 
 /**
@@ -157,6 +218,16 @@ function expandJobsToRows(
 }
 
 export class ProrrateoService {
+  static async resumirComentariosJob(
+    dto: ResumirComentariosProrrateoDto
+  ): Promise<{ resumen: string }> {
+    const resumen = await OpenAIService.resumirComentariosJob(dto.comentarios, {
+      codigoJob: dto.codigoJob,
+      nombreJob: dto.nombreJob,
+    });
+    return { resumen };
+  }
+
   static async existePorNomina(
     nominaId: number,
     viewerEmpleadoId: number,
@@ -229,6 +300,9 @@ export class ProrrateoService {
       throw new AppError("No hay prorrateo guardado para esta nómina", 404);
     }
 
+    const resumenes =
+      await ProrrateoComentarioResumenRepository.findByNominaId(nominaId);
+
     return {
       nominaId: nomina.id,
       empleadoId: nomina.empleadoId,
@@ -244,6 +318,12 @@ export class ProrrateoService {
         cantidadHoras: f.cantidadHoras,
         monto: f.monto,
         tipo: f.tipo,
+      })),
+      resumenesComentarios: resumenes.map((r) => ({
+        jobId: r.jobId,
+        codigoJob: r.codigoJob,
+        nombreJob: r.nombreJob,
+        resumen: r.resumen,
       })),
     };
   }
@@ -533,6 +613,36 @@ export class ProrrateoService {
       );
     }
 
+    // Resúmenes IA por job (antes de la tx; no bloquea el snapshot si OpenAI falla)
+    const jobsConComentarios = aggregateComentariosPorJob([
+      ch.normal,
+      ch.p25,
+      ch.p50,
+      ch.p75,
+      ch.p100,
+      ch.horasCompensatoriasTomadasPorJob,
+      ch.horasCompensatoriasAcumuladasPorJob,
+    ]);
+
+    const resumenRows: ProrrateoComentarioResumenCreateRow[] = [];
+    for (const job of jobsConComentarios) {
+      const jobId =
+        job.jobId != null && validJobIds.has(job.jobId) ? job.jobId : null;
+      const resumen = await OpenAIService.resumirComentariosJobSafe(
+        job.textos,
+        { codigoJob: job.codigoJob, nombreJob: job.nombreJob }
+      );
+      if (!resumen.trim()) continue;
+      resumenRows.push({
+        nominaId,
+        jobId,
+        codigoJob: job.codigoJob,
+        nombreJob: job.nombreJob,
+        jobKey: jobKeyFrom(jobId, job.codigoJob),
+        resumen: resumen.trim(),
+      });
+    }
+
     const cantidadFilas = await prisma.$transaction(async (tx) => {
       const count = await ProrrateoRepository.countByNominaId(nominaId, tx);
       if (count > 0) {
@@ -543,6 +653,10 @@ export class ProrrateoService {
       }
 
       const created = await ProrrateoRepository.createMany(rows, tx);
+
+      if (resumenRows.length > 0) {
+        await ProrrateoComentarioResumenRepository.createMany(resumenRows, tx);
+      }
 
       if (deltasBanco.length > 0) {
         await BancoCompensatoriasRepository.aplicarDeltas(

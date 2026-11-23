@@ -7,6 +7,7 @@ import {
   listarProrrateosPorEmpleado,
   obtenerProrrateoPorNomina,
   descargarProrrateoExcel,
+  resumirComentariosProrrateo,
 } from "../controllers/ProrrateoController";
 import { Roles } from "../enums/roles";
 import { hasAnyRole } from "../utils/roles";
@@ -46,6 +47,12 @@ router.use(puedeGestionarProrrateo);
  * @body { nominaId: number }
  */
 router.post("/", guardarProrrateo);
+
+/**
+ * @route POST /api/prorrateos/resumen-comentarios
+ * @desc Resume con OpenAI los comentarios de un job (on-demand, dashboard)
+ */
+router.post("/resumen-comentarios", resumirComentariosProrrateo);
 
 /**
  * @route GET /api/prorrateos/excel?empresaId=&codigoNomina=
