@@ -35,6 +35,7 @@ export interface NominaDto {
   cantidadHoras100?: number | null;
 
   ajuste?: number | null;
+  anticipoPago?: number | null;
   totalPercepciones?: number | null;
   deduccionIHSS?: number | null;
   deduccionISR?: number | null;

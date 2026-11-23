@@ -375,6 +375,7 @@ export class NominaService {
       cantidadHoras75: payload.cantidadHoras75 ?? null,
       cantidadHoras100: payload.cantidadHoras100 ?? null,
       ajuste: payload.ajuste ?? null,
+      anticipoPago: payload.anticipoPago ?? null,
       totalPercepciones: payload.totalPercepciones ?? null,
       deduccionIHSS: payload.deduccionIHSS ?? null,
       deduccionISR: payload.deduccionISR ?? null,
@@ -596,6 +597,7 @@ export class NominaService {
             existing.cantidadHoras100
           ),
           ajuste: coalesce(payload.ajuste, existing.ajuste),
+          anticipoPago: coalesce(payload.anticipoPago, existing.anticipoPago),
           totalPercepciones: coalesce(
             payload.totalPercepciones,
             existing.totalPercepciones
@@ -669,7 +671,10 @@ export class NominaService {
       (nomina.montoHoras100 ?? 0);
     return (
       Math.round(
-        ((nomina.subtotalQuincena ?? 0) + horasExtra + (nomina.ajuste ?? 0)) *
+        ((nomina.subtotalQuincena ?? 0) +
+          horasExtra +
+          (nomina.ajuste ?? 0) +
+          (nomina.anticipoPago ?? 0)) *
           100
       ) / 100
     );
@@ -859,6 +864,7 @@ export class NominaService {
       ["Monto Vacaciones", formatCurrency(nomina.montoVacaciones)],
       ["Monto Días Laborados", formatCurrency(nomina.montoDiasLaborados)],
       ["(+) Ajuste", formatCurrency(nomina.ajuste)],
+      ["(+) Anticipo de pago", formatCurrency(nomina.anticipoPago)],
       ["Total Bruto", formatCurrency(totalBruto)],
     ]);
 
@@ -975,6 +981,7 @@ export class NominaService {
       "Extra 75%",
       "Extra 100%",
       "Ajustes",
+      "Anticipo de pago",
       "Total Bruto",
       "Deducción IHSS",
       "Deducción ISR",
@@ -990,11 +997,11 @@ export class NominaService {
     ];
     const lastCol = headers.length;
     // 1-based column indexes
-    const greenCols = [4, 5, 6, 7, 8, 9, 10, 11]; // solo componentes que suman
-    const greenTotalCol = 12; // Total Bruto
-    const redCols = [13, 14, 15, 16, 17, 18, 19, 20]; // solo componentes que restan
-    const redTotalCol = 21; // Total Deducciones
-    const totalAPagarCol = 22;
+    const greenCols = [4, 5, 6, 7, 8, 9, 10, 11, 12]; // solo componentes que suman
+    const greenTotalCol = 13; // Total Bruto
+    const redCols = [14, 15, 16, 17, 18, 19, 20, 21]; // solo componentes que restan
+    const redTotalCol = 22; // Total Deducciones
+    const totalAPagarCol = 23;
 
     sheet.columns = headers.map((_, index) => ({
       width: index === 0 ? 32 : index === 1 ? 24 : 18,
@@ -1058,6 +1065,7 @@ export class NominaService {
       extra75: 0,
       extra100: 0,
       ajustes: 0,
+      anticipoPago: 0,
       totalBruto: 0,
       deduccionIHSS: 0,
       deduccionISR: 0,
@@ -1072,7 +1080,7 @@ export class NominaService {
     };
 
     const firstAmountCol = 3;
-    const lastAmountCol = 22;
+    const lastAmountCol = 23;
 
     ordenadas.forEach((n) => {
       const nombre = `${n.empleado.nombre} ${n.empleado.apellido ?? ""}`.trim();
@@ -1085,7 +1093,8 @@ export class NominaService {
       const extra75 = n.montoHoras75 ?? 0;
       const extra100 = n.montoHoras100 ?? 0;
       const ajustes = n.ajuste ?? 0;
-      // Total bruto = suma de todos los positivos (componentes del ex-subtotal + extras + ajuste)
+      const anticipoPago = n.anticipoPago ?? 0;
+      // Total bruto = suma de todos los positivos (componentes + extras + ajuste + anticipo)
       const totalBruto = this.round2(
         montoDiasLaborados +
           montoVacaciones +
@@ -1094,7 +1103,8 @@ export class NominaService {
           extra50 +
           extra75 +
           extra100 +
-          ajustes
+          ajustes +
+          anticipoPago
       );
       const deduccionIHSS = n.deduccionIHSS ?? 0;
       const deduccionISR = n.deduccionISR ?? 0;
@@ -1126,6 +1136,7 @@ export class NominaService {
       totals.extra75 += extra75;
       totals.extra100 += extra100;
       totals.ajustes += ajustes;
+      totals.anticipoPago += anticipoPago;
       totals.totalBruto += totalBruto;
       totals.deduccionIHSS += deduccionIHSS;
       totals.deduccionISR += deduccionISR;
@@ -1150,6 +1161,7 @@ export class NominaService {
         extra75,
         extra100,
         ajustes,
+        anticipoPago,
         totalBruto,
         deduccionIHSS,
         deduccionISR,
@@ -1183,6 +1195,7 @@ export class NominaService {
       this.round2(totals.extra75),
       this.round2(totals.extra100),
       this.round2(totals.ajustes),
+      this.round2(totals.anticipoPago),
       this.round2(totals.totalBruto),
       this.round2(totals.deduccionIHSS),
       this.round2(totals.deduccionISR),

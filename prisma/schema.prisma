@@ -262,6 +262,8 @@ model Nomina {
 
   // Ajustes y totales
   ajuste                Float? @map("ajuste")
+  /// Anticipo de pago (+): suma al total a depositar (ambas quincenas).
+  anticipoPago          Float? @map("anticipo_pago")
   totalPercepciones     Float? @map("total_percepciones")
   deduccionIHSS         Float? @map("deduccion_ihss")
   deduccionISR          Float? @map("deduccion_isr")

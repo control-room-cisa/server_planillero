@@ -563,7 +563,7 @@ export class ProrrateoService {
   }
 
   /**
-   * Percepciones = subtotal + extras + ajuste.
+   * Percepciones = subtotal + extras + ajuste + anticipo de pago.
    * Compensatorias tomadas NO se suman: ya van en montoDiasLaborados
    * (en prorrateo solo se separan por concepto).
    */
@@ -574,7 +574,10 @@ export class ProrrateoService {
       (nomina.montoHoras75 ?? 0) +
       (nomina.montoHoras100 ?? 0);
     return this.roundMoney(
-      (nomina.subtotalQuincena ?? 0) + horasExtra + (nomina.ajuste ?? 0)
+      (nomina.subtotalQuincena ?? 0) +
+        horasExtra +
+        (nomina.ajuste ?? 0) +
+        (nomina.anticipoPago ?? 0)
     );
   }
 
@@ -954,6 +957,7 @@ export class ProrrateoService {
       writeLeftMoney("Extra 75%", nomina.montoHoras75, fillGreen);
       writeLeftMoney("Extra 100%", nomina.montoHoras100, fillGreen);
       writeLeftMoney("Ajuste", nomina.ajuste, fillGreen);
+      writeLeftMoney("Anticipo de pago", nomina.anticipoPago, fillGreen);
       const totalBruto = this.totalBrutoNomina(nomina);
       writeLeftMoney("Total Percepciones", totalBruto, fillGreenStrong);
       writeLeftMoney("Deducción IHSS", nomina.deduccionIHSS, fillRed);

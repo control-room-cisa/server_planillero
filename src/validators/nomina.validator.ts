@@ -127,6 +127,9 @@ export const crearNominaSchema = z.object({
   ajuste: z
     .number({ invalid_type_error: "El ajuste debe ser un número válido" })
     .default(0),
+  anticipoPago: z
+    .number({ invalid_type_error: "El anticipo de pago debe ser un número válido" })
+    .default(0),
   totalPercepciones: z
     .number({ invalid_type_error: "El total de percepciones debe ser un número válido" })
     .default(0),
