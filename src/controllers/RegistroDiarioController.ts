@@ -313,7 +313,7 @@ export const updateJobBySupervisor: RequestHandler<
  * GET /api/registrodiario/tiempo-compensatorio?idEmpleado=
  * Opcional: seccion=porJob|acumuladas|tomadas|vacaciones&page=1&limit=10
  * Lista actividades compensatorias (acumuladas/tomadas) y banco por job.
- * Roles: SUPERVISOR, RRHH, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
+ * Roles: EMPLEADO (solo propio), SUPERVISOR, RRHH, SUPERVISOR_CONTABILIDAD, ASISTENTE_CONTABILIDAD.
  */
 export const getTiempoCompensatorio: RequestHandler<
   {},
@@ -332,22 +332,6 @@ export const getTiempoCompensatorio: RequestHandler<
     const { id: usuarioId, rolIds } = (req as AuthRequest).user;
     const { idEmpleado, seccion, page, limit } = req.query;
 
-    if (
-      !hasAnyRole(
-        rolIds,
-        Roles.SUPERVISOR,
-        Roles.RRHH,
-        Roles.SUPERVISOR_CONTABILIDAD,
-        Roles.ASISTENTE_CONTABILIDAD
-      )
-    ) {
-      return res.status(403).json({
-        success: false,
-        message: "No autorizado para consultar tiempo compensatorio",
-        data: null,
-      });
-    }
-
     if (typeof idEmpleado !== "string") {
       return res.status(400).json({
         success: false,
@@ -365,7 +349,24 @@ export const getTiempoCompensatorio: RequestHandler<
       });
     }
 
-    if (empleadoIdNum !== usuarioId && hasOnlyEmpleado(rolIds)) {
+    const puedeVerOtros = hasAnyRole(
+      rolIds,
+      Roles.SUPERVISOR,
+      Roles.RRHH,
+      Roles.SUPERVISOR_CONTABILIDAD,
+      Roles.ASISTENTE_CONTABILIDAD
+    );
+    const esPropio = empleadoIdNum === usuarioId;
+
+    if (!esPropio && !puedeVerOtros) {
+      return res.status(403).json({
+        success: false,
+        message: "No autorizado para consultar tiempo compensatorio",
+        data: null,
+      });
+    }
+
+    if (!esPropio && hasOnlyEmpleado(rolIds)) {
       return res.status(403).json({
         success: false,
         message: "No tienes permisos para ver datos de otros empleados",

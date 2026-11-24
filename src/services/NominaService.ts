@@ -782,10 +782,24 @@ export class NominaService {
       );
     }
 
-    const empleado = await EmpleadoRepository.findById(nomina.empleadoId);
+    const [empleado, empresa] = await Promise.all([
+      EmpleadoRepository.findById(nomina.empleadoId),
+      EmpresaRepository.findById(nomina.empresaId),
+    ]);
     const nombreEmpleado = empleado
       ? `${empleado.nombre} ${empleado.apellido ?? ""}`.trim()
       : `ID: ${nomina.empleadoId}`;
+    const nombreEmpresa = empresa?.nombre?.trim() || "Comprobante de nómina";
+    const codigoNominaStr =
+      nomina.codigoNomina && String(nomina.codigoNomina).trim() !== ""
+        ? String(nomina.codigoNomina)
+        : "—";
+    const periodoLabel = nomina.nombrePeriodoNomina ?? "Sin período";
+    const estadoLabel = nomina.pagado ? "Pagado" : "Pendiente de pago";
+    const generadoEl = new Date().toLocaleString("es-HN", {
+      dateStyle: "short",
+      timeStyle: "short",
+    });
 
     const formatDate = (value: Date) =>
       value.toLocaleDateString("es-HN", {
@@ -795,103 +809,612 @@ export class NominaService {
         day: "2-digit",
       });
 
-    const formatCurrency = (amount: number | null | undefined) => {
-      if (amount === null || amount === undefined) return "-";
-      return new Intl.NumberFormat("es-HN", {
-        style: "currency",
-        currency: "HNL",
-      }).format(amount);
-    };
+    const num = (v: number | null | undefined) =>
+      v === null || v === undefined || !Number.isFinite(Number(v))
+        ? 0
+        : Number(v);
 
-    const formatDays = (value: number | null | undefined) => {
-      if (value === null || value === undefined) return "-";
-      return value;
+    const moneyFmt = '"L"#,##0.00';
+    const thinBorder: Partial<ExcelJS.Borders> = {
+      top: { style: "thin", color: { argb: "FFD0D7DE" } },
+      left: { style: "thin", color: { argb: "FFD0D7DE" } },
+      bottom: { style: "thin", color: { argb: "FFD0D7DE" } },
+      right: { style: "thin", color: { argb: "FFD0D7DE" } },
     };
-
-    const totalBruto = this.calcularTotalBruto(nomina);
-    const totalDeducciones = this.calcularTotalDeducciones(nomina);
-    const totalAPagar = this.calcularTotalAPagar(nomina);
 
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet("Detalle");
-    sheet.columns = [{ width: 34 }, { width: 28 }];
+    workbook.creator = "Planillero";
+    const sheet = workbook.addWorksheet("Voucher", {
+      views: [{ showGridLines: false }],
+    });
+    sheet.columns = [
+      { width: 28 },
+      { width: 16 },
+      { width: 28 },
+      { width: 16 },
+    ];
 
-    let rowIndex = 1;
-    const titleRow = sheet.getRow(rowIndex);
-    sheet.mergeCells(rowIndex, 1, rowIndex, 2);
-    titleRow.getCell(1).value = `Detalles de Nómina - ${
-      nomina.nombrePeriodoNomina ?? "Sin nombre"
-    }`;
-    titleRow.getCell(1).font = { bold: true, size: 14 };
-    rowIndex += 2;
+    let r = 1;
 
-    const addSection = (
-      title: string,
-      fields: Array<[string, string | number]>
+    const fillRange = (
+      row: number,
+      colStart: number,
+      colEnd: number,
+      argb: string
     ) => {
-      const sectionRow = sheet.getRow(rowIndex);
-      sectionRow.getCell(1).value = title;
-      sectionRow.getCell(1).font = { bold: true, size: 12 };
-      rowIndex += 1;
-
-      for (const [label, value] of fields) {
-        const row = sheet.getRow(rowIndex);
-        row.getCell(1).value = label;
-        row.getCell(2).value = value;
-        rowIndex += 1;
+      for (let c = colStart; c <= colEnd; c++) {
+        sheet.getCell(row, c).fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb },
+        };
       }
-      rowIndex += 1;
     };
 
-    addSection("Información General", [
-      ["Colaborador", nombreEmpleado],
-      ["Período", nomina.nombrePeriodoNomina ?? "Sin nombre"],
-      ["Estado", nomina.pagado ? "Pagado" : "Pendiente"],
-      ["Fecha Inicio", formatDate(nomina.fechaInicio)],
-      ["Fecha Fin", formatDate(nomina.fechaFin)],
-    ]);
+    const applyBorderRange = (
+      row: number,
+      colStart: number,
+      colEnd: number
+    ) => {
+      for (let c = colStart; c <= colEnd; c++) {
+        sheet.getCell(row, c).border = thinBorder;
+      }
+    };
 
-    addSection("Datos Base", [
-      ["Sueldo Mensual", formatCurrency(nomina.sueldoMensual)],
-      ["Días Laborados", formatDays(nomina.diasLaborados)],
-      ["Días Vacaciones", formatDays(nomina.diasVacaciones)],
-      ["Días incap. empresa", formatDays(nomina.diasIncapacidadEmpresa)],
-      ["Días incap. IHSS", formatDays(nomina.diasIncapacidadIHSS)],
-    ]);
+    const styleSectionHead = (
+      row: number,
+      colStart: number,
+      colEnd: number,
+      title: string,
+      bg: string,
+      fg: string
+    ) => {
+      sheet.mergeCells(row, colStart, row, colEnd);
+      const cell = sheet.getCell(row, colStart);
+      cell.value = title;
+      cell.font = { bold: true, size: 10, color: { argb: fg } };
+      cell.alignment = { vertical: "middle", horizontal: "left" };
+      fillRange(row, colStart, colEnd, bg);
+      applyBorderRange(row, colStart, colEnd);
+      sheet.getRow(row).height = 20;
+    };
 
-    addSection("Percepciones", [
-      ["Subtotal Quincena", formatCurrency(nomina.subtotalQuincena)],
-      ["Monto Vacaciones", formatCurrency(nomina.montoVacaciones)],
-      ["Monto Días Laborados", formatCurrency(nomina.montoDiasLaborados)],
-      ["(+) Ajuste", formatCurrency(nomina.ajuste)],
-      ["(+) Anticipo de pago", formatCurrency(nomina.anticipoPago)],
-      ["Total Bruto", formatCurrency(totalBruto)],
-    ]);
+    const writeLabelValue = (
+      row: number,
+      labelCol: number,
+      valueCol: number,
+      label: string,
+      value: string | number,
+      opts?: {
+        money?: boolean;
+        bold?: boolean;
+        valueColor?: string;
+        alt?: boolean;
+        formula?: string;
+      }
+    ) => {
+      const labelCell = sheet.getCell(row, labelCol);
+      const valueCell = sheet.getCell(row, valueCol);
+      labelCell.value = label;
+      labelCell.font = {
+        size: 10,
+        color: { argb: "FF546E7A" },
+        bold: opts?.bold,
+      };
+      labelCell.alignment = { vertical: "middle", horizontal: "left" };
+      if (opts?.formula) {
+        valueCell.value = { formula: opts.formula };
+      } else {
+        valueCell.value = value;
+      }
+      valueCell.font = {
+        size: 10,
+        bold: true,
+        color: { argb: opts?.valueColor ?? "FF1A2332" },
+      };
+      valueCell.alignment = { vertical: "middle", horizontal: "right" };
+      if (opts?.money || opts?.formula) {
+        valueCell.numFmt = moneyFmt;
+      }
+      if (opts?.alt) {
+        labelCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFAFBFC" },
+        };
+        valueCell.fill = {
+          type: "pattern",
+          pattern: "solid",
+          fgColor: { argb: "FFFAFBFC" },
+        };
+      }
+      labelCell.border = thinBorder;
+      valueCell.border = thinBorder;
+      sheet.getRow(row).height = 18;
+    };
 
-    addSection("Horas Extra", [
-      ["OT 25%", formatCurrency(nomina.montoHoras25)],
-      ["OT 50%", formatCurrency(nomina.montoHoras50)],
-      ["OT 75%", formatCurrency(nomina.montoHoras75)],
-      ["OT 100%", formatCurrency(nomina.montoHoras100)],
-    ]);
+    // —— Header ——
+    sheet.mergeCells(r, 1, r, 3);
+    sheet.getCell(r, 1).value = nombreEmpresa;
+    sheet.getCell(r, 1).font = {
+      bold: true,
+      size: 14,
+      color: { argb: "FFFFFFFF" },
+    };
+    sheet.getCell(r, 1).alignment = { vertical: "middle", horizontal: "left" };
+    sheet.getCell(r, 4).value = "VOUCHER";
+    sheet.getCell(r, 4).font = {
+      bold: true,
+      size: 11,
+      color: { argb: "FFFFFFFF" },
+    };
+    sheet.getCell(r, 4).alignment = {
+      vertical: "middle",
+      horizontal: "right",
+    };
+    fillRange(r, 1, 4, "FF0D47A1");
+    sheet.getRow(r).height = 24;
+    r += 1;
 
-    addSection("Deducciones", [
-      ["Deducción IHSS", formatCurrency(nomina.deduccionIHSS)],
-      ["Deducción ISR", formatCurrency(nomina.deduccionISR)],
-      ["Deducción RAP", formatCurrency(nomina.deduccionRAP)],
-      ["Deducción Alimentación", formatCurrency(nomina.deduccionAlimentacion)],
-      ["Deducción Alojamiento", formatCurrency(nomina.deduccionAlojamiento)],
-      ["Cobro Préstamo", formatCurrency(nomina.cobroPrestamo)],
-      ["Impuesto Vecinal", formatCurrency(nomina.impuestoVecinal)],
-      ["Otros", formatCurrency(nomina.otros)],
-      ["Total Deducciones", formatCurrency(totalDeducciones)],
-    ]);
+    sheet.mergeCells(r, 1, r, 3);
+    sheet.getCell(r, 1).value = "Comprobante de pago de nómina";
+    sheet.getCell(r, 1).font = {
+      size: 9,
+      color: { argb: "FFD6E4FF" },
+    };
+    sheet.getCell(r, 4).value = `Nómina #${nomina.id}`;
+    sheet.getCell(r, 4).font = { size: 9, color: { argb: "FFD6E4FF" } };
+    sheet.getCell(r, 4).alignment = { horizontal: "right" };
+    fillRange(r, 1, 4, "FF1565C0");
+    sheet.getRow(r).height = 18;
+    r += 1;
 
-    addSection("Total a Pagar", [["Total a Pagar", formatCurrency(totalAPagar)]]);
+    // Accent bar
+    fillRange(r, 1, 4, "FFFFC107");
+    sheet.getRow(r).height = 4;
+    r += 1;
 
-    if (nomina.comentario) {
-      addSection("Comentario", [["Comentario", nomina.comentario]]);
+    // —— Identity ——
+    sheet.mergeCells(r, 1, r, 3);
+    sheet.getCell(r, 1).value = nombreEmpleado;
+    sheet.getCell(r, 1).font = {
+      bold: true,
+      size: 13,
+      color: { argb: "FF0D47A1" },
+    };
+    sheet.getCell(r, 4).value = estadoLabel.toUpperCase();
+    sheet.getCell(r, 4).font = {
+      bold: true,
+      size: 9,
+      color: { argb: nomina.pagado ? "FF1B5E20" : "FFB71C1C" },
+    };
+    sheet.getCell(r, 4).alignment = {
+      vertical: "middle",
+      horizontal: "center",
+    };
+    sheet.getCell(r, 4).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: nomina.pagado ? "FFE8F5E9" : "FFFFEBEE" },
+    };
+    fillRange(r, 1, 3, "FFF4F7FB");
+    applyBorderRange(r, 1, 4);
+    sheet.getRow(r).height = 22;
+    r += 1;
+
+    sheet.mergeCells(r, 1, r, 4);
+    sheet.getCell(r, 1).value = `Código ${codigoNominaStr}  ·  ${periodoLabel}`;
+    sheet.getCell(r, 1).font = { size: 9, color: { argb: "FF546E7A" } };
+    fillRange(r, 1, 4, "FFF4F7FB");
+    applyBorderRange(r, 1, 4);
+    r += 1;
+
+    // —— Period strip ——
+    const periodItems: Array<[string, string | number]> = [
+      ["PERÍODO", periodoLabel],
+      ["FECHA INICIO", formatDate(nomina.fechaInicio)],
+      ["FECHA FIN", formatDate(nomina.fechaFin)],
+      ["SUELDO MENSUAL", num(nomina.sueldoMensual)],
+    ];
+    const periodRowLbl = r;
+    const periodRowVal = r + 1;
+    periodItems.forEach(([lbl, val], i) => {
+      const col = i + 1;
+      const lblCell = sheet.getCell(periodRowLbl, col);
+      const valCell = sheet.getCell(periodRowVal, col);
+      lblCell.value = lbl;
+      lblCell.font = {
+        size: 8,
+        bold: true,
+        color: { argb: "FF78909C" },
+      };
+      lblCell.alignment = { horizontal: "left" };
+      valCell.value = val;
+      valCell.font = { size: 10, bold: true, color: { argb: "FF263238" } };
+      if (i === 3) valCell.numFmt = moneyFmt;
+      lblCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFFFFF" },
+      };
+      valCell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FFFFFFFF" },
+      };
+      lblCell.border = thinBorder;
+      valCell.border = thinBorder;
+    });
+    sheet.getRow(periodRowLbl).height = 14;
+    sheet.getRow(periodRowVal).height = 18;
+    r = periodRowVal + 2;
+
+    // —— Datos laborales | Horas extra ——
+    const laborStart = r;
+    styleSectionHead(
+      laborStart,
+      1,
+      2,
+      "DATOS LABORALES",
+      "FFF7F9FC",
+      "FF37474F"
+    );
+    styleSectionHead(laborStart, 3, 4, "HORAS EXTRA", "FFE3F2FD", "FF0D47A1");
+
+    const laborRows: Array<[string, string | number]> = [
+      ["Días laborados", nomina.diasLaborados ?? "—"],
+      ["Días vacaciones", nomina.diasVacaciones ?? "—"],
+      ["Días incap. empresa", nomina.diasIncapacidadEmpresa ?? "—"],
+      ["Días incap. IHSS", nomina.diasIncapacidadIHSS ?? "—"],
+      ["Horas compensatorias", nomina.horasCompensatorias ?? "—"],
+    ];
+
+    const formatHorasOt = (h: number | null | undefined) => {
+      if (h === null || h === undefined || !Number.isFinite(Number(h))) {
+        return "—";
+      }
+      return `${Number(h).toFixed(2)} h`;
+    };
+
+    const otRows: Array<[string, string, number]> = [
+      [
+        "OT 25%",
+        formatHorasOt(nomina.cantidadHoras25),
+        num(nomina.montoHoras25),
+      ],
+      [
+        "OT 50%",
+        formatHorasOt(nomina.cantidadHoras50),
+        num(nomina.montoHoras50),
+      ],
+      [
+        "OT 75%",
+        formatHorasOt(nomina.cantidadHoras75),
+        num(nomina.montoHoras75),
+      ],
+      [
+        "OT 100%",
+        formatHorasOt(nomina.cantidadHoras100),
+        num(nomina.montoHoras100),
+      ],
+    ];
+
+    const pairCount = Math.max(laborRows.length, otRows.length);
+    const otMontoRows: number[] = [];
+    for (let i = 0; i < pairCount; i++) {
+      const row = laborStart + 1 + i;
+      if (laborRows[i]) {
+        writeLabelValue(row, 1, 2, laborRows[i][0], laborRows[i][1], {
+          alt: i % 2 === 1,
+        });
+      } else {
+        applyBorderRange(row, 1, 2);
+      }
+      if (otRows[i]) {
+        const [label, hrs, monto] = otRows[i];
+        const labelCell = sheet.getCell(row, 3);
+        labelCell.value = `${label}  (${hrs})`;
+        labelCell.font = { size: 10, color: { argb: "FF546E7A" } };
+        labelCell.border = thinBorder;
+        const valueCell = sheet.getCell(row, 4);
+        valueCell.value = monto;
+        valueCell.numFmt = moneyFmt;
+        valueCell.font = { size: 10, bold: true };
+        valueCell.alignment = { horizontal: "right" };
+        valueCell.border = thinBorder;
+        if (i % 2 === 1) {
+          labelCell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFAFBFC" },
+          };
+          valueCell.fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: "FFFAFBFC" },
+          };
+        }
+        otMontoRows.push(row);
+      } else {
+        applyBorderRange(row, 3, 4);
+      }
     }
+    r = laborStart + 1 + pairCount + 1;
+
+    // —— Percepciones | Deducciones ——
+    const moneyStart = r;
+    styleSectionHead(
+      moneyStart,
+      1,
+      2,
+      "PERCEPCIONES",
+      "FFE8F5E9",
+      "FF1B5E20"
+    );
+    styleSectionHead(
+      moneyStart,
+      3,
+      4,
+      "DEDUCCIONES",
+      "FFFCE4EC",
+      "FF880E4F"
+    );
+
+    // Componentes del bruto (editables) + desglose informativo
+    // Total bruto = Subtotal + OT25..100 + Ajuste + Anticipo
+    type PercRow = {
+      label: string;
+      value: number;
+      inBruto?: boolean;
+      info?: boolean;
+    };
+    const percepcionRows: PercRow[] = [
+      {
+        label: "Subtotal quincena",
+        value: num(nomina.subtotalQuincena),
+        inBruto: true,
+      },
+      {
+        label: "Monto vacaciones",
+        value: num(nomina.montoVacaciones),
+        info: true,
+      },
+      {
+        label: "Monto días laborados",
+        value: num(nomina.montoDiasLaborados),
+        info: true,
+      },
+      {
+        label: "Monto excedente IHSS",
+        value: num(nomina.montoExcedenteIHSS),
+        info: true,
+      },
+      {
+        label: "Monto incap. cubre empresa",
+        value: num(nomina.montoIncapacidadCubreEmpresa),
+        info: true,
+      },
+      {
+        label: "Monto permisos justificados",
+        value: num(nomina.montoPermisosJustificados),
+        info: true,
+      },
+      { label: "(+) Ajuste", value: num(nomina.ajuste), inBruto: true },
+      {
+        label: "(+) Anticipo de pago",
+        value: num(nomina.anticipoPago),
+        inBruto: true,
+      },
+    ];
+
+    const deduccionRows: Array<[string, number]> = [
+      ["IHSS", num(nomina.deduccionIHSS)],
+      ["ISR", num(nomina.deduccionISR)],
+      ["RAP", num(nomina.deduccionRAP)],
+      ["Alimentación", num(nomina.deduccionAlimentacion)],
+      ["Alojamiento", num(nomina.deduccionAlojamiento)],
+      ["Cobro préstamo", num(nomina.cobroPrestamo)],
+      ["Impuesto vecinal", num(nomina.impuestoVecinal)],
+      ["Otros", num(nomina.otros)],
+    ];
+
+    const moneyCount = Math.max(percepcionRows.length, deduccionRows.length);
+    const brutoComponentCells: string[] = [];
+    // OT montos are already written in column D of otMontoRows
+    for (const otRow of otMontoRows) {
+      brutoComponentCells.push(`D${otRow}`);
+    }
+
+    let firstDedRow = 0;
+    let lastDedRow = 0;
+
+    for (let i = 0; i < moneyCount; i++) {
+      const row = moneyStart + 1 + i;
+      if (percepcionRows[i]) {
+        const p = percepcionRows[i];
+        writeLabelValue(row, 1, 2, p.label, p.value, {
+          money: true,
+          alt: i % 2 === 1,
+          valueColor: p.info ? "FF607D8B" : "FF1A2332",
+        });
+        if (p.inBruto) {
+          brutoComponentCells.push(`B${row}`);
+        }
+      } else {
+        applyBorderRange(row, 1, 2);
+      }
+      if (deduccionRows[i]) {
+        writeLabelValue(row, 3, 4, deduccionRows[i][0], deduccionRows[i][1], {
+          money: true,
+          alt: i % 2 === 1,
+        });
+        if (!firstDedRow) firstDedRow = row;
+        lastDedRow = row;
+      } else {
+        applyBorderRange(row, 3, 4);
+      }
+    }
+
+    const totalsRow = moneyStart + 1 + moneyCount;
+    // Total bruto (left) — formula
+    writeLabelValue(totalsRow, 1, 2, "Total bruto", 0, {
+      bold: true,
+      money: true,
+      valueColor: "FF2E7D32",
+      formula: brutoComponentCells.join("+") || "0",
+    });
+    sheet.getCell(totalsRow, 1).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE8F5E9" },
+    };
+    sheet.getCell(totalsRow, 2).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFE8F5E9" },
+    };
+    sheet.getCell(totalsRow, 1).font = {
+      bold: true,
+      size: 10,
+      color: { argb: "FF1B5E20" },
+    };
+
+    // Total deducciones (right) — SUM formula
+    const dedFormula =
+      firstDedRow && lastDedRow
+        ? `SUM(D${firstDedRow}:D${lastDedRow})`
+        : "0";
+    writeLabelValue(totalsRow, 3, 4, "Total deducciones", 0, {
+      bold: true,
+      money: true,
+      valueColor: "FFC62828",
+      formula: dedFormula,
+    });
+    sheet.getCell(totalsRow, 3).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFCE4EC" },
+    };
+    sheet.getCell(totalsRow, 4).fill = {
+      type: "pattern",
+      pattern: "solid",
+      fgColor: { argb: "FFFCE4EC" },
+    };
+    sheet.getCell(totalsRow, 3).font = {
+      bold: true,
+      size: 10,
+      color: { argb: "FF880E4F" },
+    };
+    sheet.getRow(totalsRow).height = 20;
+
+    const brutoCellRef = `B${totalsRow}`;
+    const dedCellRef = `D${totalsRow}`;
+    r = totalsRow + 2;
+
+    // —— Total a pagar banner ——
+    sheet.mergeCells(r, 1, r, 2);
+    sheet.getCell(r, 1).value = "TOTAL A PAGAR";
+    sheet.getCell(r, 1).font = {
+      bold: true,
+      size: 11,
+      color: { argb: "FFFFFFFF" },
+    };
+    sheet.getCell(r, 1).alignment = { vertical: "middle", horizontal: "left" };
+    sheet.mergeCells(r, 3, r, 4);
+    sheet.getCell(r, 3).value = {
+      formula: `${brutoCellRef}-${dedCellRef}`,
+    };
+    sheet.getCell(r, 3).numFmt = moneyFmt;
+    sheet.getCell(r, 3).font = {
+      bold: true,
+      size: 16,
+      color: { argb: "FFFFFFFF" },
+    };
+    sheet.getCell(r, 3).alignment = {
+      vertical: "middle",
+      horizontal: "right",
+    };
+    fillRange(r, 1, 4, "FF0D47A1");
+    sheet.getRow(r).height = 28;
+    r += 1;
+
+    sheet.mergeCells(r, 1, r, 4);
+    sheet.getCell(r, 1).value =
+      `Neto del período · ${estadoLabel}  |  Totales con fórmulas (edite montos para simular)`;
+    sheet.getCell(r, 1).font = { size: 8, color: { argb: "FFBBDEFB" } };
+    fillRange(r, 1, 4, "FF1565C0");
+    sheet.getRow(r).height = 16;
+    r += 2;
+
+    // —— Comentario ——
+    styleSectionHead(r, 1, 4, "COMENTARIO", "FFFFF8E1", "FFE65100");
+    r += 1;
+    sheet.mergeCells(r, 1, r, 4);
+    sheet.getCell(r, 1).value =
+      nomina.comentario && String(nomina.comentario).trim() !== ""
+        ? String(nomina.comentario)
+        : "Sin comentario";
+    sheet.getCell(r, 1).font = {
+      size: 10,
+      italic: !(nomina.comentario && String(nomina.comentario).trim()),
+      color: {
+        argb:
+          nomina.comentario && String(nomina.comentario).trim()
+            ? "FF455A64"
+            : "FF90A4AE",
+      },
+    };
+    sheet.getCell(r, 1).alignment = {
+      wrapText: true,
+      vertical: "top",
+    };
+    applyBorderRange(r, 1, 4);
+    sheet.getRow(r).height = 36;
+    r += 2;
+
+    // —— Firmas ——
+    sheet.mergeCells(r, 1, r, 2);
+    sheet.getCell(r, 1).value = "______________________________";
+    sheet.getCell(r, 1).alignment = { horizontal: "center" };
+    sheet.mergeCells(r, 3, r, 4);
+    sheet.getCell(r, 3).value = "______________________________";
+    sheet.getCell(r, 3).alignment = { horizontal: "center" };
+    r += 1;
+    sheet.mergeCells(r, 1, r, 2);
+    sheet.getCell(r, 1).value = "Recibí conforme";
+    sheet.getCell(r, 1).font = {
+      size: 9,
+      bold: true,
+      color: { argb: "FF607D8B" },
+    };
+    sheet.getCell(r, 1).alignment = { horizontal: "center" };
+    sheet.mergeCells(r, 3, r, 4);
+    sheet.getCell(r, 3).value = "Autorizado por";
+    sheet.getCell(r, 3).font = {
+      size: 9,
+      bold: true,
+      color: { argb: "FF607D8B" },
+    };
+    sheet.getCell(r, 3).alignment = { horizontal: "center" };
+    r += 1;
+    sheet.mergeCells(r, 1, r, 2);
+    sheet.getCell(r, 1).value = nombreEmpleado;
+    sheet.getCell(r, 1).font = { size: 8, color: { argb: "FF90A4AE" } };
+    sheet.getCell(r, 1).alignment = { horizontal: "center" };
+    sheet.mergeCells(r, 3, r, 4);
+    sheet.getCell(r, 3).value = "Recursos Humanos";
+    sheet.getCell(r, 3).font = { size: 8, color: { argb: "FF90A4AE" } };
+    sheet.getCell(r, 3).alignment = { horizontal: "center" };
+    r += 2;
+
+    // —— Footer ——
+    sheet.mergeCells(r, 1, r, 2);
+    sheet.getCell(r, 1).value = `Documento generado el ${generadoEl}`;
+    sheet.getCell(r, 1).font = { size: 8, color: { argb: "FF78909C" } };
+    sheet.mergeCells(r, 3, r, 4);
+    sheet.getCell(r, 3).value = `${nombreEmpresa} · ID ${nomina.id} · ${codigoNominaStr}`;
+    sheet.getCell(r, 3).font = { size: 8, color: { argb: "FF78909C" } };
+    sheet.getCell(r, 3).alignment = { horizontal: "right" };
 
     const buffer = await workbook.xlsx.writeBuffer();
     const codigo = nomina.codigoNomina ?? String(nomina.id);
@@ -901,7 +1424,7 @@ export class NominaService {
       .replace(/[^a-zA-Z0-9]+/g, "-")
       .replace(/^-+|-+$/g, "")
       .toLowerCase();
-    const filename = `detalle-nomina-${codigo}${
+    const filename = `voucher-nomina-${codigo}${
       slugEmpleado ? `-${slugEmpleado}` : ""
     }.xlsx`;
 
