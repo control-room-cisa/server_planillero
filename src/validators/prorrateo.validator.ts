@@ -17,6 +17,32 @@ export const asignacionCompensatoriaTomadaSchema = z.object({
     .positive("horas debe ser mayor a 0"),
 });
 
+export const resumenComentarioGuardarSchema = z.object({
+  // jobId puede ser 0 en jobs especiales/feriados del cálculo en vivo
+  jobId: z.preprocess(
+    (v) => (v === "" || v === undefined ? undefined : v),
+    z
+      .number({ invalid_type_error: "jobId debe ser un número" })
+      .int()
+      .nullable()
+      .optional()
+  ),
+  codigoJob: z.preprocess(
+    (v) => (v == null || v === "" ? null : String(v)),
+    z.string().max(40).nullable().optional()
+  ),
+  nombreJob: z.preprocess(
+    (v) => (v == null || v === "" ? null : String(v)),
+    z.string().max(200).nullable().optional()
+  ),
+  resumen: z
+    .string({
+      required_error: "resumen es requerido",
+      invalid_type_error: "resumen debe ser un texto",
+    })
+    .max(20000, "resumen no puede superar 20000 caracteres"),
+});
+
 export const guardarProrrateoSchema = z.object({
   nominaId: z
     .number({
@@ -29,11 +55,19 @@ export const guardarProrrateoSchema = z.object({
     .array(asignacionCompensatoriaTomadaSchema)
     .optional()
     .default([]),
+  resumenesComentarios: z
+    .array(resumenComentarioGuardarSchema)
+    .max(500, "máximo 500 resúmenes por solicitud")
+    .optional()
+    .default([]),
 });
 
 export type GuardarProrrateoDto = z.infer<typeof guardarProrrateoSchema>;
 export type AsignacionCompensatoriaTomadaDto = z.infer<
   typeof asignacionCompensatoriaTomadaSchema
+>;
+export type ResumenComentarioGuardarDto = z.infer<
+  typeof resumenComentarioGuardarSchema
 >;
 
 export const resumirComentariosProrrateoSchema = z.object({

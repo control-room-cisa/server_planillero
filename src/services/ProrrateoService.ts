@@ -23,6 +23,7 @@ import { AccesoContabilidadService } from "./AccesoContabilidadService";
 import { OpenAIService } from "./OpenAIService";
 import type {
   AsignacionCompensatoriaTomadaDto,
+  ResumenComentarioGuardarDto,
   ResumirComentariosProrrateoDto,
 } from "../validators/prorrateo.validator";
 import {
@@ -79,53 +80,6 @@ function jobKeyFrom(jobId: number | null, codigoJob: string | null): string {
   if (jobId != null) return `id:${jobId}`;
   const codigo = (codigoJob ?? "").trim();
   return codigo ? `codigo:${codigo}` : "sin-job";
-}
-
-type JobComentariosAgg = {
-  jobId: number | null;
-  codigoJob: string | null;
-  nombreJob: string | null;
-  textos: string[];
-  seen: Set<string>;
-};
-
-/** Agrupa comentarios únicos por job a partir de listas HorasPorJob. */
-function aggregateComentariosPorJob(
-  lists: Array<HorasPorJob[] | undefined>
-): JobComentariosAgg[] {
-  const map = new Map<string, JobComentariosAgg>();
-
-  for (const list of lists) {
-    for (const j of list ?? []) {
-      const jobId = normalizeJobId(j.jobId);
-      const codigoJob = (j.codigoJob ?? "").trim() || null;
-      const key = jobKeyFrom(jobId, codigoJob);
-      let entry = map.get(key);
-      if (!entry) {
-        entry = {
-          jobId,
-          codigoJob,
-          nombreJob: (j.nombreJob ?? "").trim() || null,
-          textos: [],
-          seen: new Set(),
-        };
-        map.set(key, entry);
-      } else if (!entry.nombreJob && j.nombreJob) {
-        entry.nombreJob = String(j.nombreJob).trim() || null;
-      }
-
-      for (const c of j.comentarios ?? []) {
-        const texto = String(c?.texto ?? "").trim();
-        if (!texto) continue;
-        const tKey = texto.toLowerCase();
-        if (entry.seen.has(tKey)) continue;
-        entry.seen.add(tKey);
-        entry.textos.push(texto);
-      }
-    }
-  }
-
-  return [...map.values()].filter((e) => e.textos.length > 0);
 }
 
 /**
@@ -338,7 +292,8 @@ export class ProrrateoService {
     nominaId: number,
     viewerEmpleadoId: number,
     viewerRolIds: number[],
-    asignacionesCompensatoriasTomadas: AsignacionCompensatoriaTomadaDto[] = []
+    asignacionesCompensatoriasTomadas: AsignacionCompensatoriaTomadaDto[] = [],
+    resumenesComentarios: ResumenComentarioGuardarDto[] = []
   ): Promise<{ cantidadFilas: number; nominaId: number }> {
     const nomina = await NominaRepository.findById(nominaId);
     if (!nomina || nomina.deletedAt) {
@@ -613,33 +568,27 @@ export class ProrrateoService {
       );
     }
 
-    // Resúmenes IA por job (antes de la tx; no bloquea el snapshot si OpenAI falla)
-    const jobsConComentarios = aggregateComentariosPorJob([
-      ch.normal,
-      ch.p25,
-      ch.p50,
-      ch.p75,
-      ch.p100,
-      ch.horasCompensatoriasTomadasPorJob,
-      ch.horasCompensatoriasAcumuladasPorJob,
-    ]);
-
+    // Resúmenes vienen del front (caché/edición); no se vuelve a llamar a OpenAI
+    const resumenSeen = new Set<string>();
     const resumenRows: ProrrateoComentarioResumenCreateRow[] = [];
-    for (const job of jobsConComentarios) {
+    for (const r of resumenesComentarios ?? []) {
+      const rawJobId = normalizeJobId(r.jobId);
       const jobId =
-        job.jobId != null && validJobIds.has(job.jobId) ? job.jobId : null;
-      const resumen = await OpenAIService.resumirComentariosJobSafe(
-        job.textos,
-        { codigoJob: job.codigoJob, nombreJob: job.nombreJob }
-      );
-      if (!resumen.trim()) continue;
+        rawJobId != null && validJobIds.has(rawJobId) ? rawJobId : null;
+      const codigoJob = (r.codigoJob ?? "").trim() || null;
+      const nombreJob = (r.nombreJob ?? "").trim() || null;
+      const resumen = String(r.resumen ?? "").trim();
+      if (!resumen) continue;
+      const key = jobKeyFrom(jobId, codigoJob);
+      if (resumenSeen.has(key)) continue;
+      resumenSeen.add(key);
       resumenRows.push({
         nominaId,
         jobId,
-        codigoJob: job.codigoJob,
-        nombreJob: job.nombreJob,
-        jobKey: jobKeyFrom(jobId, job.codigoJob),
-        resumen: resumen.trim(),
+        codigoJob,
+        nombreJob,
+        jobKey: key,
+        resumen,
       });
     }
 

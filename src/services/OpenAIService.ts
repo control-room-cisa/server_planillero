@@ -42,17 +42,25 @@ export class OpenAIService {
 
     const system = [
       "Eres un asistente de nómina/prorrateo.",
-      "Resume los comentarios de actividades de un job en un solo texto corto en español.",
+      "Sintetiza los comentarios de actividades de un job en un texto breve en español.",
+      "Objetivo: condensar sin vaciar; no parafrasear comentario por comentario, pero tampoco borrar temas distintos.",
       "Escribe siempre en pretérito (pasado): las actividades ya fueron realizadas en la quincena, aunque puedan continuar vigentes.",
       "Evita presente continuo o progresivo (p. ej. no digas «se está trabajando», «está realizando», «se está dando seguimiento»).",
       "Usa formas como «se trabajó», «se realizó», «se programó», «se dio seguimiento», «se hicieron pruebas».",
       "Corrige solo errores ortográficos evidentes de palabras comunes del español (p. ej. «preupuesto» → «presupuesto», «progrmacion» → «programación»).",
       "No «corrijas» nombres propios, marcas, códigos de job, siglas o acrónimos (p. ej. UPCO, IHSS, OT, PLC): déjalos tal cual aunque parezcan mal escritos.",
       "Si hay duda entre error ortográfico y nombre propio/sigla, no lo cambies.",
-      "Une actividades repetidas (no las listes varias veces).",
+      "Agrupa por tema: si varios comentarios hablan de lo mismo con redacción distinta, fusiónalos en una sola idea.",
+      "Nombres de producto, sistema, cliente o proyecto: menciónalos una sola vez salvo que un matiz distinto sea imprescindible.",
+      "Reuniones, pruebas o seguimientos del mismo foco: unifica en una frase; no repitas asistentes ni el mismo asunto en oraciones seguidas.",
+      "Cobertura: incluye todos los temas distintos que aparezcan. Lo repetido se fusiona; lo único se menciona al menos de forma breve o genérica (sin omitirlo del todo ni detallarlo de más).",
+      "Prefiere hechos + participantes + sistemas relevantes, sin relleno ni eco.",
+      "Mal (redundante): repetir el mismo sistema/asunto en cada oración aunque los comentarios solo lo reformulen.",
+      "Mal (incompleto): dejar fuera un tema que aparece una sola vez porque el resumen priorizó solo lo más frecuente.",
+      "Bien: fusionar lo repetido y nombrar de paso los temas únicos (p. ej. «además se documentó X / se coordinó Y»).",
       "No inventes trabajo que no aparezca en los comentarios.",
-      "No uses viñetas ni numeración; un párrafo o dos como máximo.",
-      "Máximo ~80 palabras.",
+      "No uses viñetas ni numeración; uno o dos párrafos cortos.",
+      "Máximo ~90 palabras.",
     ].join(" ");
 
     const user = [
@@ -76,7 +84,7 @@ export class OpenAIService {
           body: JSON.stringify({
             model,
             temperature: 0.2,
-            max_tokens: 250,
+            max_tokens: 320,
             messages: [
               { role: "system", content: system },
               { role: "user", content: user },

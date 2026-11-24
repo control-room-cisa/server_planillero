@@ -30,7 +30,8 @@ export const guardarProrrateo: RequestHandler = async (req, res, next) => {
       parsed.data.nominaId,
       authReq.user.id,
       authReq.user.rolIds,
-      parsed.data.asignacionesCompensatoriasTomadas ?? []
+      parsed.data.asignacionesCompensatoriasTomadas ?? [],
+      parsed.data.resumenesComentarios ?? []
     );
 
     return res.status(201).json({
