@@ -57,12 +57,28 @@ export class NotificacionLogRepository {
       take: number;
       soloNoLeidas?: boolean;
       categoria?: string;
+      /** Categorías a ocultar (p.ej. CAMBIO_JOB para colaborador). */
+      excluirCategorias?: string[];
     }
   ): Promise<{ total: number; items: NotificacionLogRow[] }> {
+    if (
+      options.categoria &&
+      options.excluirCategorias?.includes(options.categoria)
+    ) {
+      return { total: 0, items: [] };
+    }
+
+    let categoriaFilter: Prisma.NotificacionLogWhereInput["categoria"];
+    if (options.categoria) {
+      categoriaFilter = options.categoria;
+    } else if (options.excluirCategorias?.length) {
+      categoriaFilter = { notIn: options.excluirCategorias };
+    }
+
     const where: Prisma.NotificacionLogWhereInput = {
       destinatarioId,
       ...(options.soloNoLeidas ? { leida: false } : {}),
-      ...(options.categoria ? { categoria: options.categoria } : {}),
+      ...(categoriaFilter !== undefined ? { categoria: categoriaFilter } : {}),
     };
     const [total, items] = await Promise.all([
       prisma.notificacionLog.count({ where }),
@@ -91,9 +107,18 @@ export class NotificacionLogRepository {
     });
   }
 
-  static async countNoLeidas(destinatarioId: number): Promise<number> {
+  static async countNoLeidas(
+    destinatarioId: number,
+    options: { excluirCategorias?: string[] } = {}
+  ): Promise<number> {
     return prisma.notificacionLog.count({
-      where: { destinatarioId, leida: false },
+      where: {
+        destinatarioId,
+        leida: false,
+        ...(options.excluirCategorias?.length
+          ? { categoria: { notIn: options.excluirCategorias } }
+          : {}),
+      },
     });
   }
 }

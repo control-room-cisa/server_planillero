@@ -21,14 +21,16 @@ export const listMias: RequestHandler<
 > = async (req, res, next) => {
   try {
     const query = listNotificacionesSchema.parse({ query: req.query }).query;
+    const user = userOf(req);
     const data = await NotificacionLogService.listMias(
-      userOf(req).id,
+      user.id,
       query.page,
       query.limit,
       {
         soloNoLeidas: query.soloNoLeidas,
         categoria: query.categoria,
-      }
+      },
+      user.rolIds
     );
     return res.json({
       success: true,
@@ -67,7 +69,11 @@ export const countNoLeidas: RequestHandler<
   ApiResponse<{ count: number }>
 > = async (req, res, next) => {
   try {
-    const count = await NotificacionLogService.countNoLeidas(userOf(req).id);
+    const user = userOf(req);
+    const count = await NotificacionLogService.countNoLeidas(
+      user.id,
+      user.rolIds
+    );
     return res.json({
       success: true,
       message: "Notificaciones no leídas",

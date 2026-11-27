@@ -435,6 +435,8 @@ export class RegistroDiarioRepository {
           select: {
             fecha: true,
             empleadoId: true,
+            aprobacionSupervisor: true,
+            codigoSupervisor: true,
           },
         },
       },
@@ -489,72 +491,121 @@ export class RegistroDiarioRepository {
       },
     });
 
-    if (jobCambio) {
-      const labelAnterior =
-        jobAnterior?.codigo?.trim() ||
-        jobAnterior?.nombre?.trim() ||
-        (jobAnterior ? `Job ${jobAnterior.id}` : "Sin job");
-      const labelNuevo =
-        nuevoJob.codigo?.trim() ||
-        nuevoJob.nombre?.trim() ||
-        `Job ${nuevoJob.id}`;
-      await NotificacionLogRepository.create({
-        destinatarioId: empleadoId,
-        actorId: supervisorId,
-        categoria: NotificacionCategorias.CAMBIO_JOB,
-        descripcion: `Se cambió el job de la actividad del ${actividad.registroDiario.fecha}: ${labelAnterior} → ${labelNuevo}`,
-        metadata: {
-          actividadId: dto.actividadId,
-          fecha: actividad.registroDiario.fecha,
-          actividadDescripcion,
-          jobAnteriorId: jobAnterior?.id ?? null,
-          jobAnteriorCodigo: jobAnterior?.codigo ?? null,
-          jobAnteriorNombre: jobAnterior?.nombre ?? null,
-          jobNuevoId: nuevoJob.id,
-          jobNuevoCodigo: nuevoJob.codigo,
-          jobNuevoNombre: nuevoJob.nombre,
-        },
-      });
-    }
+    // CAMBIO_JOB / CAMBIO_CLASS: solo el supervisor que aprobó ese día (codigoSupervisor).
+    // No al colaborador ni al resto de supervisores del departamento.
+    if (jobCambio || classCambio) {
+      const codigoAprobador =
+        actividad.registroDiario.aprobacionSupervisor === true
+          ? actividad.registroDiario.codigoSupervisor?.trim() || null
+          : null;
 
-    if (classCambio) {
-      const classIds = [classAnterior, classNueva].filter(
-        (value): value is number => value != null
-      );
-      const vehiculos =
-        classIds.length > 0
-          ? await prisma.vehiculo.findMany({
-              where: { class: { in: classIds }, deletedAt: null },
-              select: { class: true, nombre: true },
+      const aprobador =
+        codigoAprobador != null
+          ? await prisma.empleado.findFirst({
+              where: {
+                codigo: codigoAprobador,
+                deletedAt: null,
+                activo: true,
+                roles: { some: { rolId: Roles.SUPERVISOR } },
+              },
+              select: { id: true },
             })
-          : [];
-      const vehiculoByClass = new Map(
-        vehiculos.map((vehiculo) => [vehiculo.class, vehiculo.nombre])
-      );
-      const labelClass = (value: number | null) => {
-        if (value == null) return "Sin class";
-        const nombre = vehiculoByClass.get(value)?.trim();
-        return nombre ? `${value} - ${nombre}` : `Class ${value}`;
-      };
-      await NotificacionLogRepository.create({
-        destinatarioId: empleadoId,
-        actorId: supervisorId,
-        categoria: NotificacionCategorias.CAMBIO_CLASS,
-        descripcion: `Se cambió el class de la actividad del ${actividad.registroDiario.fecha}: ${labelClass(classAnterior)} → ${labelClass(classNueva ?? null)}`,
-        metadata: {
-          actividadId: dto.actividadId,
-          fecha: actividad.registroDiario.fecha,
-          actividadDescripcion,
-          classAnterior,
-          classAnteriorNombre:
-            classAnterior != null
-              ? vehiculoByClass.get(classAnterior) ?? null
-              : null,
-          classNuevo: classNueva ?? null,
-          classNuevoNombre:
-            classNueva != null ? vehiculoByClass.get(classNueva) ?? null : null,
-        },
-      });
+          : null;
+
+      const destinatarioId =
+        aprobador && aprobador.id !== supervisorId ? aprobador.id : null;
+
+      if (destinatarioId != null) {
+        const colaborador = await prisma.empleado.findFirst({
+          where: { id: empleadoId, deletedAt: null },
+          select: {
+            id: true,
+            codigo: true,
+            nombre: true,
+            apellido: true,
+          },
+        });
+        const colaboradorLabel =
+          `${colaborador?.nombre ?? ""} ${colaborador?.apellido ?? ""}`.trim() ||
+          colaborador?.codigo ||
+          `Colaborador ${empleadoId}`;
+
+        if (jobCambio) {
+          const labelAnterior =
+            jobAnterior?.codigo?.trim() ||
+            jobAnterior?.nombre?.trim() ||
+            (jobAnterior ? `Job ${jobAnterior.id}` : "Sin job");
+          const labelNuevo =
+            nuevoJob.codigo?.trim() ||
+            nuevoJob.nombre?.trim() ||
+            `Job ${nuevoJob.id}`;
+          await NotificacionLogRepository.create({
+            destinatarioId,
+            actorId: supervisorId,
+            categoria: NotificacionCategorias.CAMBIO_JOB,
+            descripcion: `Se cambió el job de ${colaboradorLabel} (${actividad.registroDiario.fecha}): ${labelAnterior} → ${labelNuevo}`,
+            metadata: {
+              actividadId: dto.actividadId,
+              fecha: actividad.registroDiario.fecha,
+              actividadDescripcion,
+              empleadoId,
+              empleadoCodigo: colaborador?.codigo ?? null,
+              empleadoNombre: colaboradorLabel,
+              jobAnteriorId: jobAnterior?.id ?? null,
+              jobAnteriorCodigo: jobAnterior?.codigo ?? null,
+              jobAnteriorNombre: jobAnterior?.nombre ?? null,
+              jobNuevoId: nuevoJob.id,
+              jobNuevoCodigo: nuevoJob.codigo,
+              jobNuevoNombre: nuevoJob.nombre,
+            },
+          });
+        }
+
+        if (classCambio) {
+          const classIds = [classAnterior, classNueva].filter(
+            (value): value is number => value != null
+          );
+          const vehiculos =
+            classIds.length > 0
+              ? await prisma.vehiculo.findMany({
+                  where: { class: { in: classIds }, deletedAt: null },
+                  select: { class: true, nombre: true },
+                })
+              : [];
+          const vehiculoByClass = new Map(
+            vehiculos.map((vehiculo) => [vehiculo.class, vehiculo.nombre])
+          );
+          const labelClass = (value: number | null) => {
+            if (value == null) return "Sin class";
+            const nombre = vehiculoByClass.get(value)?.trim();
+            return nombre ? `${value} - ${nombre}` : `Class ${value}`;
+          };
+          await NotificacionLogRepository.create({
+            destinatarioId,
+            actorId: supervisorId,
+            categoria: NotificacionCategorias.CAMBIO_CLASS,
+            descripcion: `Se cambió el class de ${colaboradorLabel} (${actividad.registroDiario.fecha}): ${labelClass(classAnterior)} → ${labelClass(classNueva ?? null)}`,
+            metadata: {
+              actividadId: dto.actividadId,
+              fecha: actividad.registroDiario.fecha,
+              actividadDescripcion,
+              empleadoId,
+              empleadoCodigo: colaborador?.codigo ?? null,
+              empleadoNombre: colaboradorLabel,
+              classAnterior,
+              classAnteriorNombre:
+                classAnterior != null
+                  ? vehiculoByClass.get(classAnterior) ?? null
+                  : null,
+              classNuevo: classNueva ?? null,
+              classNuevoNombre:
+                classNueva != null
+                  ? vehiculoByClass.get(classNueva) ?? null
+                  : null,
+            },
+          });
+        }
+      }
     }
 
     // Retornar el registro diario actualizado usando el método existente

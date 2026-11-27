@@ -9,6 +9,20 @@ import {
   type NotificacionLogRow,
 } from "../repositories/NotificacionLogRepository";
 import type { Prisma } from "@prisma/client";
+import { Roles } from "../enums/roles";
+import { hasAnyRole } from "../utils/roles";
+import { NotificacionCategorias } from "../enums/notificacionCategorias";
+
+/** CAMBIO_JOB/CLASS solo visibles para rol supervisor (no colaborador). */
+const CATEGORIAS_SOLO_SUPERVISOR: string[] = [
+  NotificacionCategorias.CAMBIO_JOB,
+  NotificacionCategorias.CAMBIO_CLASS,
+];
+
+function excluirCategoriasParaRoles(rolIds: number[] | undefined): string[] {
+  if (hasAnyRole(rolIds, Roles.SUPERVISOR)) return [];
+  return CATEGORIAS_SOLO_SUPERVISOR;
+}
 
 function toDto(row: NotificacionLogRow): NotificacionLogDto {
   return {
@@ -60,7 +74,8 @@ export class NotificacionLogService {
     destinatarioId: number,
     page: number,
     limit: number,
-    filters: { soloNoLeidas?: boolean; categoria?: string } = {}
+    filters: { soloNoLeidas?: boolean; categoria?: string } = {},
+    rolIds?: number[]
   ): Promise<PaginatedDto<NotificacionLogDto>> {
     const skip = (page - 1) * limit;
     const { total, items } = await NotificacionLogRepository.listByDestinatario(
@@ -70,6 +85,7 @@ export class NotificacionLogService {
         take: limit,
         soloNoLeidas: filters.soloNoLeidas,
         categoria: filters.categoria,
+        excluirCategorias: excluirCategoriasParaRoles(rolIds),
       }
     );
     return {
@@ -89,7 +105,12 @@ export class NotificacionLogService {
     return toDto(row);
   }
 
-  static async countNoLeidas(destinatarioId: number): Promise<number> {
-    return NotificacionLogRepository.countNoLeidas(destinatarioId);
+  static async countNoLeidas(
+    destinatarioId: number,
+    rolIds?: number[]
+  ): Promise<number> {
+    return NotificacionLogRepository.countNoLeidas(destinatarioId, {
+      excluirCategorias: excluirCategoriasParaRoles(rolIds),
+    });
   }
 }
